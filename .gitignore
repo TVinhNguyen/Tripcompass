@@ -1,0 +1,74 @@
+# =========================
+# Environment variables and secrets
+# =========================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# =========================
+# OS and editor files
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Logs and runtime artifacts
+# =========================
+*.log
+logs/
+
+# =========================
+# Python (ai-service)
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+ENV/
+.eggs/
+*.egg-info/
+build/
+dist/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# =========================
+# Go (backend)
+# =========================
+*.test
+*.out
+coverage.out
+
+# Compiled binaries
+backend/bin/
+bin/
+
+# =========================
+# Docker and local overrides
+# =========================
+docker-compose.override.yml
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.temp

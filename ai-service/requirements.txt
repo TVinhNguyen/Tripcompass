@@ -1,0 +1,8 @@
+langchain-nebius
+langchain
+langgraph
+langchain-tavily
+google-search-results
+python-dotenv
+pydantic
+rich
