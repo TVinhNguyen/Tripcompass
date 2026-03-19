@@ -359,7 +359,10 @@ func (h *Hub) removeClient(c *Client) {
 		delete(h.Rooms, c.RoomID)
 		h.mu.Unlock()
 
-		// Unsubscribe from Redis channel (optional - can keep subscription)
+		// Cancel per-room Redis subscription
+		if h.redisPubSub != nil {
+			h.redisPubSub.UnsubscribeRoom(c.RoomID)
+		}
 		h.subscribeMu.Lock()
 		delete(h.subscribedRooms, c.RoomID)
 		h.subscribeMu.Unlock()

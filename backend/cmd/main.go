@@ -23,11 +23,15 @@ func main() {
 	if err != nil {
 		log.Fatal("Không kết nối được Redis:", err)
 	}
-	log.Println("Kết nối Redis thành công:", cfg.RedisAddr)
-	_ = rdb // sẽ dùng khi scale multi-instance
-
+	log.Printf("Kết nối Redis thành công: %s", cfg.RedisAddr)
 	// WebSocket Hub
 	hub := ws.NewHub()
+
+	// Redis PubSub - connect to hub
+	redisPubSub := ws.NewRedisPubSub(rdb, hub)
+	hub.SetRedisPubSub(redisPubSub)
+
+	// Start hub in background
 	go hub.Run()
 
 	r := gin.Default()
@@ -84,5 +88,12 @@ func main() {
 	}
 
 	log.Printf("Server chạy tại port %s", cfg.Port)
-	r.Run(":" + cfg.Port)
+	err = r.Run(":" + cfg.Port)
+	if err != nil {
+		log.Println("Lỗi khi chạy server:", err)
+	}
+
+	// Cleanup on exit
+	redisPubSub.Close()
 }
+

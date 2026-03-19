@@ -14,6 +14,7 @@ type Config struct {
 	DBName     string
 	DBSchema   string
 	RedisAddr  string
+	RedisPassword string
 	JWTSecret  string
 	Port       string
 }
@@ -28,6 +29,7 @@ func Load() *Config {
 		DBName:     os.Getenv("DB_NAME"),
 		DBSchema:   os.Getenv("DB_SCHEMA"),
 		RedisAddr:  os.Getenv("REDIS_ADDR"),
+		RedisPassword: os.Getenv("REDIS_PASSWORD"),
 		JWTSecret:  os.Getenv("JWT_SECRET"),
 		Port:       os.Getenv("PORT"),
 	}
