@@ -1,4 +1,5 @@
 langchain-nebius
+langchain-openai
 langchain
 langgraph
 langchain-tavily
