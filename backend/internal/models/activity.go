@@ -17,8 +17,8 @@ type Activity struct {
 	Lat           *float64  `json:"lat"`
 	Lng           *float64  `json:"lng"`
 	EstimatedCost float64   `gorm:"column:estimated_cost;default:0" json:"estimated_cost"`
-	StartTime     *string   `gorm:"column:start_time;type:time" json:"start_time"`
-	EndTime       *string   `gorm:"column:end_time;type:time" json:"end_time"`
+	StartTime     *string   `gorm:"column:start_time;type:time without time zone" json:"start_time"`
+	EndTime       *string   `gorm:"column:end_time;type:time without time zone" json:"end_time"`
 	ImageURL      *string   `gorm:"column:image_url" json:"image_url"`
 	Notes         *string   `json:"notes"`
 	CreatedAt     time.Time `json:"created_at"`
