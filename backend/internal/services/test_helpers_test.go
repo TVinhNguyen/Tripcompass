@@ -1,6 +1,8 @@
 package services
 
 import (
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -8,19 +10,29 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/sqlite"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// setupTestDB creates an in-memory SQLite database with all models auto-migrated.
+// setupTestDB connects to a PostgreSQL test database with all models auto-migrated.
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+
+	host := envOrDefault("TEST_DB_HOST", "localhost")
+	port := envOrDefault("TEST_DB_PORT", "5432")
+	user := envOrDefault("TEST_DB_USER", "postgres")
+	password := envOrDefault("TEST_DB_PASSWORD", "postgres")
+	dbname := envOrDefault("TEST_DB_NAME", "tripcompass_test")
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
+		t.Fatalf("failed to connect to test database: %v", err)
 	}
 
 	err = db.AutoMigrate(
@@ -34,7 +46,19 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
 
+	// Clean tables before each test for isolation
+	t.Cleanup(func() {
+		db.Exec("TRUNCATE TABLE activities, collaborators, ai_chat_messages, itineraries, users CASCADE")
+	})
+
 	return db
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 // createTestUser inserts a user with a bcrypt-hashed password into the database.

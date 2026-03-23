@@ -100,7 +100,7 @@ func TestAuthService_Login(t *testing.T) {
 			FullName:     "Social User",
 			Provider:     "google",
 		}
-		db.Exec("INSERT INTO users (id, email, password_hash, full_name, provider) VALUES (?, ?, ?, ?, ?)",
+		db.Exec("INSERT INTO users (id, email, password_hash, full_name, provider) VALUES ($1, $2, $3, $4, $5)",
 			"550e8400-e29b-41d4-a716-446655440000", socialUser.Email, socialUser.PasswordHash, socialUser.FullName, socialUser.Provider)
 
 		input := LoginInput{

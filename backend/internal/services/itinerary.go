@@ -294,7 +294,7 @@ func (s *ItineraryService) Explore(filter ExploreFilter) ([]models.Itinerary, in
 		Where("status = ?", "PUBLISHED")
 
 	if filter.Destination != "" {
-		query = query.Where("LOWER(destination) LIKE LOWER(?)", "%"+strings.TrimSpace(filter.Destination)+"%")
+		query = query.Where("destination ILIKE ?", "%"+strings.TrimSpace(filter.Destination)+"%")
 	}
 	if filter.BudgetCategory != "" {
 		query = query.Where("budget_category = ?", filter.BudgetCategory)
