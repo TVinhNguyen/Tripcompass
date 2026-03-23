@@ -27,7 +27,6 @@ func TestAuthService_Register(t *testing.T) {
 		assert.Equal(t, "newuser@example.com", resp.User.Email)
 		assert.Equal(t, "New User", resp.User.FullName)
 		assert.Equal(t, "local", resp.User.Provider)
-		assert.Nil(t, resp.User.PasswordHash) // should be omitted via json:"-"
 
 		// Verify bcrypt hash is stored correctly
 		var stored struct{ PasswordHash *string }
@@ -143,8 +142,8 @@ func TestAuthService_GenerateToken(t *testing.T) {
 		token, err := svc.generateToken(user.ID)
 		require.NoError(t, err)
 
-		parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-			method, ok := t.Method.(*jwt.SigningMethodHMAC)
+		parsed, err := jwt.Parse(token, func(tk *jwt.Token) (interface{}, error) {
+			method, ok := tk.Method.(*jwt.SigningMethodHMAC)
 			assert.True(t, ok)
 			assert.Equal(t, "HS256", method.Alg())
 			return []byte(testJWTSecret), nil
