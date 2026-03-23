@@ -3,6 +3,8 @@ module tripcompass-backend
 go 1.25.0
 
 require (
+	github.com/stretchr/testify v1.10.0
+	gorm.io/driver/sqlite v1.5.7
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
