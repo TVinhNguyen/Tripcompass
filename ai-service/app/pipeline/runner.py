@@ -13,7 +13,8 @@ def dispatch_research_node(state: TravelPipelineState) -> dict:
 
 
 def dispatch_research(state: TravelPipelineState) -> list[Send]:
-    trip = state["trip"]
+    trip         = state["trip"]
+    skip_research = state.get("skip_research", False)
     ctx  = {
         "destination":    trip["destination"],
         "origin":         trip.get("origin", ""),
@@ -24,21 +25,22 @@ def dispatch_research(state: TravelPipelineState) -> list[Send]:
         "travel_style":   trip.get("travel_style", "exploration"),
         "today":          TODAY,
     }
+
+    if skip_research:
+        console.print("[cyan]  DB hit — skipping all web research agents[/cyan]")
+        return [Send("collect_research", {})]
+
     return [
         Send("attractions_agent", {"context": ctx, "messages": [], "research": {}}),
         Send("food_agent",        {"context": ctx, "messages": [], "research": {}}),
-        Send("hotels_agent",      {"context": ctx, "messages": [], "research": {}}),
         Send("combos_agent",      {"context": ctx, "messages": [], "research": {}}),
-        Send("transport_agent",   {"context": ctx, "messages": [], "research": {}}),
     ]
 
 
 def collect_research(state: TravelPipelineState) -> dict:
     console.print("\n[bold]━━━ Research collected ━━━[/bold]")
     r = state.get("research", {})
-    for d in ["attractions", "food", "hotels", "combos", "transport"]:
+    for d in ["attractions", "food", "combos"]:
         icon = "[green]✓[/green]" if r.get(d) else "[red]✗[/red]"
         console.print(f"  {d:12}: {icon}")
-    if not r.get("transport"):
-        console.print("[yellow]  ⚠ Transport missing — transport cost = 0[/yellow]")
     return {}

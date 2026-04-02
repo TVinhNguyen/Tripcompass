@@ -18,6 +18,7 @@ func NewActivityService(db *gorm.DB) *ActivityService {
 
 type CreateActivityInput struct {
 	ItineraryID   string   `json:"itinerary_id" binding:"required"`
+	PlaceID       *string  `json:"place_id"`
 	DayNumber     int      `json:"day_number" binding:"required,min=1"`
 	OrderIndex    int      `json:"order_index"`
 	Title         string   `json:"title" binding:"required"`
@@ -32,6 +33,7 @@ type CreateActivityInput struct {
 }
 
 type UpdateActivityInput struct {
+	PlaceID       *string  `json:"place_id"`
 	DayNumber     *int     `json:"day_number"`
 	OrderIndex    *int     `json:"order_index"`
 	Title         *string  `json:"title"`
@@ -75,6 +77,26 @@ func (s *ActivityService) Create(ownerID string, input CreateActivityInput) (*mo
 		return nil, errors.New("invalid itinerary_id")
 	}
 
+	var placeUUID *uuid.UUID
+	if input.PlaceID != nil {
+		pid := *input.PlaceID
+		if pid != "" {
+			parsedPlaceID, err := uuid.Parse(pid)
+			if err != nil {
+				return nil, errors.New("invalid place_id")
+			}
+
+			var count int64
+			if err := s.db.Model(&models.Place{}).Where("id = ?", parsedPlaceID).Count(&count).Error; err != nil {
+				return nil, err
+			}
+			if count == 0 {
+				return nil, errors.New("place not found")
+			}
+			placeUUID = &parsedPlaceID
+		}
+	}
+
 	// Verify ownership
 	var it models.Itinerary
 	if err := s.db.First(&it, "id = ? AND owner_id = ?", itID, ownerID).Error; err != nil {
@@ -83,6 +105,7 @@ func (s *ActivityService) Create(ownerID string, input CreateActivityInput) (*mo
 
 	act := models.Activity{
 		ItineraryID:   itID,
+		PlaceID:       placeUUID,
 		DayNumber:     input.DayNumber,
 		OrderIndex:    input.OrderIndex,
 		Title:         input.Title,
@@ -109,6 +132,26 @@ func (s *ActivityService) Update(id, ownerID string, input UpdateActivityInput) 
 	}
 
 	updates := map[string]interface{}{}
+	if input.PlaceID != nil {
+		if *input.PlaceID == "" {
+			updates["place_id"] = nil
+		} else {
+			parsedPlaceID, err := uuid.Parse(*input.PlaceID)
+			if err != nil {
+				return nil, errors.New("invalid place_id")
+			}
+
+			var count int64
+			if err := s.db.Model(&models.Place{}).Where("id = ?", parsedPlaceID).Count(&count).Error; err != nil {
+				return nil, err
+			}
+			if count == 0 {
+				return nil, errors.New("place not found")
+			}
+
+			updates["place_id"] = parsedPlaceID
+		}
+	}
 	if input.DayNumber != nil {
 		updates["day_number"] = *input.DayNumber
 	}

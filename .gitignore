@@ -1,4 +1,17 @@
 # =========================
+# Editor/Tool directories
+# =========================
+.claude/
+.gitnexus/
+.kilo/
+
+# =========================
+# Markdown files (keep README.md)
+# =========================
+*.md
+!README.md
+
+# =========================
 # Environment variables and secrets
 # =========================
 .env

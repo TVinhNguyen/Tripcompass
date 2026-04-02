@@ -38,25 +38,15 @@ def merge_dict(left: dict, right: dict) -> dict:
 
 
 class BudgetBreakdown(TypedDict, total=False):
-    hotel_per_night_vnd:     int
-    total_hotel_vnd:         int
-    attractions_total_vnd:   int
-    food_per_day_vnd:        int
-    total_food_vnd:          int
-    transport_intercity_vnd: int
-    transport_local_vnd:     int
-    transport_vnd:           int
-    combos_available:        list
-    grand_total_vnd:         int
-    within_budget:           bool
-    savings_or_over_vnd:     int
-    combo_override:          bool
-    combo_price_vnd:         int
-    # SerpAPI data
-    serpapi_hotel_name:      str
-    serpapi_hotel_price_vnd: int
-    serpapi_flight_price_vnd: int
-    serpapi_data_available:  bool
+    attractions_total_vnd: int
+    food_per_day_vnd:      int
+    total_food_vnd:        int
+    combos_available:      list
+    grand_total_vnd:       int
+    within_budget:         bool
+    savings_or_over_vnd:   int
+    combo_override:        bool
+    combo_price_vnd:       int
 
 
 class TravelPipelineState(TypedDict):
@@ -64,6 +54,7 @@ class TravelPipelineState(TypedDict):
     trip:                   TripRequirements
     research:               Annotated[ResearchResults, merge_dict]
     budget:                 BudgetBreakdown
+    decisions:              Annotated[dict, merge_dict]
     plan_proposals:         list[str]
     user_selected_plan:     int
     final_plan:             str
@@ -71,3 +62,4 @@ class TravelPipelineState(TypedDict):
     clarification_attempts: int
     research_done:          bool
     planning_done:          bool
+    skip_research:          bool

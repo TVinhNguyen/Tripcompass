@@ -18,9 +18,10 @@ def judge_agent(state: TravelPipelineState) -> dict:
     if not proposals:
         return {"final_plan": "Lỗi pipeline.", "messages": [AIMessage(content="Lỗi pipeline.")]}
 
-    trip    = state["trip"]
-    budget  = state["budget"]
-    plan    = proposals[0]    # chỉ 1 plan
+    trip      = state["trip"]
+    budget    = state["budget"]
+    decisions = state.get("decisions", {})
+    plan      = proposals[0]    # chỉ 1 plan
 
     # Judge đánh giá và đưa ra gợi ý cải thiện
     try:
@@ -70,6 +71,37 @@ def judge_agent(state: TravelPipelineState) -> dict:
     origin      = trip.get("origin", "")
     destination = trip.get("destination", "")
 
+    # Validator violations section
+    violations_md = ""
+    remaining_viols = decisions.get("validation_violations", [])
+    repaired_list   = decisions.get("validation_repaired", [])
+    if repaired_list or remaining_viols:
+        violations_md = "\n## ⚠️ Lưu ý từ Validator\n"
+        if repaired_list:
+            violations_md += "\n".join(f"- ✅ Đã tự động sửa: {r}" for r in repaired_list) + "\n"
+        if remaining_viols:
+            violations_md += "\n".join(
+                f"- {'🔴' if v.get('severity')=='error' else '🟡'} [{v.get('rule')}] {v.get('message','')}"
+                for v in remaining_viols
+            ) + "\n"
+
+    # Metrics section from decision_engine + validator
+    metrics_md = ""
+    de_metrics  = decisions.get("metrics", {})
+    val_metrics = decisions.get("validator_metrics", {})
+    if de_metrics or val_metrics:
+        metrics_md = "\n## 📊 Chỉ số lịch trình\n\n| Metric | Giá trị |\n|--------|----------|\n"
+        if de_metrics.get("total_attractions"):
+            metrics_md += f"| Tổng điểm tham quan | {de_metrics['total_attractions']} ({de_metrics.get('free_count',0)} free + {de_metrics.get('paid_count',0)} paid) |\n"
+        if de_metrics.get("avg_travel_per_day_min") is not None:
+            metrics_md += f"| Di chuyển trung bình/ngày | ~{de_metrics['avg_travel_per_day_min']} phút |\n"
+        if de_metrics.get("food_unique_count"):
+            metrics_md += f"| Quán ăn không lặp | ✅ {de_metrics['food_unique_count']} quán |\n"
+        if de_metrics.get("budget_utilization_pct") is not None:
+            metrics_md += f"| Activity budget sử dụng | {de_metrics['budget_utilization_pct']}% |\n"
+        if val_metrics:
+            metrics_md += f"| Validator sửa tự động | {val_metrics.get('auto_repaired', 0)} lỗi |\n"
+
     final_output = f"""# 🏖️ Kế hoạch du lịch {destination} — {trip.get('departure_date','')}
 
 **{trip.get('num_people',2)} người** | {trip.get('departure_date','')} → {trip.get('return_date','')} | {trip.get('num_nights','?')} đêm
@@ -96,5 +128,5 @@ def judge_agent(state: TravelPipelineState) -> dict:
 | {'✅ Tiết kiệm được' if b.get('within_budget') else '⚠️ Vượt ngân sách'} | {abs(b.get('savings_or_over_vnd',0)):,} VND |
 
 > 💡 **Gợi ý:** {improvement}
-"""
+{violations_md}{metrics_md}"""
     return {"final_plan": final_output, "messages": [AIMessage(content=final_output)]}

@@ -76,16 +76,17 @@ def clarification_agent(state: TravelPipelineState) -> dict:
             "clarification_attempts": state.get("clarification_attempts", 0) + 1,
         }
 
-    trip["num_nights"] = num_nights
-    trip["num_days"]   = num_days
+    updated_trip = dict(trip)
+    updated_trip["num_nights"] = num_nights
+    updated_trip["num_days"]   = num_days
 
     console.print(
-        f"[green]  ✓ {trip['destination']} | "
-        f"{trip['departure_date']}→{trip['return_date']} "
-        f"({num_nights}đêm) | {trip['num_people']} người | "
-        f"{trip.get('budget_vnd',0):,} VND[/green]"
+        f"[green]  ✓ {updated_trip['destination']} | "
+        f"{updated_trip['departure_date']}→{updated_trip['return_date']} "
+        f"({num_nights}đêm) | {updated_trip['num_people']} người | "
+        f"{updated_trip.get('budget_vnd',0):,} VND[/green]"
     )
-    return {"trip": trip, "clarification_done": True}
+    return {"trip": updated_trip, "clarification_done": True}
 
 
 def should_clarify_or_proceed(state: TravelPipelineState) -> str:

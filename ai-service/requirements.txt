@@ -7,3 +7,5 @@ google-search-results
 python-dotenv
 pydantic
 rich
+httpx
+psycopg2-binary
