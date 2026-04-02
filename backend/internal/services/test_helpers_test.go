@@ -107,11 +107,17 @@ func createTestItinerary(t *testing.T, db *gorm.DB, ownerID uuid.UUID) models.It
 func createTestActivity(t *testing.T, db *gorm.DB, itineraryID uuid.UUID) models.Activity {
 	t.Helper()
 	cost := 100000.0
+	var nextOrder int
+	db.Model(&models.Activity{}).
+		Where("itinerary_id = ? AND day_number = ?", itineraryID, 1).
+		Select("COALESCE(MAX(order_index), -1) + 1").
+		Scan(&nextOrder)
+
 	act := models.Activity{
 		ID:            uuid.New(),
 		ItineraryID:   itineraryID,
 		DayNumber:     1,
-		OrderIndex:    0,
+		OrderIndex:    nextOrder,
 		Title:         "Visit Temple",
 		Category:      "attraction",
 		EstimatedCost: cost,
