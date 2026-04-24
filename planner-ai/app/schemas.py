@@ -53,6 +53,9 @@ class PlanRequest(BaseModel):
     end_date:    Optional[str] = None
     budget_vnd:  Optional[int] = Field(default=0)
     guest_count: int = 2
+    preferences: list[str] = Field(default_factory=list)
+    need_hotel:  bool = True
+    need_flight: bool = False
     raw_input:   Optional[str] = None   # free-text override for intent node
 
     class Config:
@@ -87,4 +90,3 @@ class SessionHistoryResponse(BaseModel):
     messages:      list[dict]
     message_count: int
     meta:          Optional[dict] = None
-

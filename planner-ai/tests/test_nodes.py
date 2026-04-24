@@ -51,6 +51,25 @@ def make_schedule(*days_slots) -> dict:
     return {"days": days}
 
 
+def load_fallback_schedule(monkeypatch):
+    """Import schedule fallback without requiring runtime LLM/langchain config."""
+    import sys
+    import types
+    import app
+
+    messages_mod = types.ModuleType("langchain_core.messages")
+    messages_mod.SystemMessage = object
+    messages_mod.HumanMessage = object
+    monkeypatch.setitem(sys.modules, "langchain_core.messages", messages_mod)
+
+    fake_config = types.SimpleNamespace(TOOL_TIMEOUT=5, llm=None)
+    monkeypatch.setattr(app, "config", fake_config, raising=False)
+    monkeypatch.setitem(sys.modules, "app.config", fake_config)
+
+    from app.nodes.schedule import _fallback_schedule
+    return _fallback_schedule
+
+
 # ── Node 4: Budget ────────────────────────────────────────────────────────────
 class TestNodeBudget:
 
@@ -119,6 +138,14 @@ class TestNodeValidate:
         "longitude": 108.0,
         "base_price": 40_000,
     }
+    VALID_PLACE_2 = {
+        "id": "place-2",
+        "name": "Phố cổ Hội An",
+        "hours": "08:00-22:00",
+        "latitude": 15.8794,
+        "longitude": 108.3350,
+        "base_price": 120_000,
+    }
     VALID_FOOD = {
         "id": "food-1",
         "name": "Mỳ Quảng 1A",
@@ -127,16 +154,17 @@ class TestNodeValidate:
     }
 
     def _state_with_schedule(self, schedule, attr_budget=1_000_000, extra=None):
+        extra = extra or {}
         state = make_state(
             draft_schedule=schedule,
+            num_days=extra.get("num_days", len(schedule.get("days", [])) or 3),
             attr_budget=attr_budget,
             retrieved_data={
-                "places": [self.VALID_PLACE],
+                "places": [self.VALID_PLACE, self.VALID_PLACE_2],
                 "food":   [self.VALID_FOOD],
             },
         )
-        if extra:
-            state.update(extra)
+        state.update(extra)
         return state
 
     def test_valid_schedule_passes(self):
@@ -242,6 +270,99 @@ class TestNodeValidate:
         # Food slot → should NOT trigger OVER_BUDGET
         types = [v["type"] for v in result["violations"]]
         assert "OVER_BUDGET" not in types
+
+    def test_insufficient_travel_time_detected(self):
+        schedule = make_schedule([
+            make_slot("place-1", "Ngũ Hành Sơn", 40_000, "09:00", "10:00"),
+            make_slot("place-2", "Phố cổ Hội An", 120_000, "10:15", "11:15"),
+        ])
+        state = self._state_with_schedule(schedule)
+        result = node_validate(state)
+        types = [v["type"] for v in result["violations"]]
+        assert "INSUFFICIENT_TRAVEL_TIME" in types
+
+    def test_sufficient_travel_time_passes(self):
+        schedule = make_schedule([
+            make_slot("place-1", "Ngũ Hành Sơn", 40_000, "09:00", "10:00"),
+            make_slot("place-2", "Phố cổ Hội An", 120_000, "12:00", "13:00"),
+        ])
+        state = self._state_with_schedule(schedule)
+        result = node_validate(state)
+        types = [v["type"] for v in result["violations"]]
+        assert "INSUFFICIENT_TRAVEL_TIME" not in types
+
+    def test_missing_coordinates_skip_travel_time_check(self):
+        no_coords = dict(self.VALID_PLACE_2)
+        no_coords.pop("latitude")
+        no_coords.pop("longitude")
+        schedule = make_schedule([
+            make_slot("place-1", "Ngũ Hành Sơn", 40_000, "09:00", "10:00"),
+            make_slot("place-2", "Phố cổ Hội An", 120_000, "10:15", "11:15"),
+        ])
+        state = self._state_with_schedule(
+            schedule,
+            extra={"retrieved_data": {"places": [self.VALID_PLACE, no_coords], "food": []}},
+        )
+        result = node_validate(state)
+        types = [v["type"] for v in result["violations"]]
+        assert "INSUFFICIENT_TRAVEL_TIME" not in types
+
+    def test_empty_schedule_detected(self):
+        state = self._state_with_schedule({"days": []}, extra={"num_days": 3})
+        result = node_validate(state)
+        types = [v["type"] for v in result["violations"]]
+        assert "INCOMPLETE_SCHEDULE" in types
+
+    def test_wrong_day_count_detected(self):
+        schedule = make_schedule([make_slot("place-1", "Ngũ Hành Sơn", 40_000)])
+        state = self._state_with_schedule(schedule, extra={"num_days": 3})
+        result = node_validate(state)
+        types = [v["type"] for v in result["violations"]]
+        assert "INCOMPLETE_SCHEDULE" in types
+
+
+class TestFallbackSchedule:
+
+    def test_fallback_generates_requested_day_counts(self, monkeypatch):
+        fallback_schedule = load_fallback_schedule(monkeypatch)
+        retrieved = {
+            "places": [
+                {"id": f"place-{i}", "name": f"Place {i}", "base_price": i * 10_000}
+                for i in range(1, 10)
+            ],
+            "food": [
+                {"id": f"food-{i}", "name": f"Food {i}", "base_price": i * 5_000}
+                for i in range(1, 12)
+            ],
+            "hotels": [{"name": "Hotel", "price_per_night_vnd": 800_000}],
+        }
+
+        for days in (1, 2, 5):
+            draft = fallback_schedule(
+                make_state(num_days=days, start_date="2026-05-01", end_date="2026-05-05"),
+                retrieved,
+            )
+            assert len(draft["days"]) == days
+            assert draft["days"][0]["date_str"] == "2026-05-01"
+
+    def test_fallback_avoids_duplicate_places_when_data_is_available(self, monkeypatch):
+        fallback_schedule = load_fallback_schedule(monkeypatch)
+        retrieved = {
+            "places": [
+                {"id": f"place-{i}", "name": f"Place {i}", "base_price": i * 10_000}
+                for i in range(1, 8)
+            ],
+            "food": [],
+            "hotels": [],
+        }
+        draft = fallback_schedule(make_state(num_days=4, start_date="2026-05-01"), retrieved)
+        place_ids = [
+            slot["place_id"]
+            for day in draft["days"]
+            for slot in day["slots"]
+            if slot.get("place_id")
+        ]
+        assert len(place_ids) == len(set(place_ids))
 
 
 # ── Route after validate ───────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from loguru import logger
 
 from app.schemas import PlanRequest, PlanResponse
-from app.services.plan_cache import get_cached_plan, cache_plan
+from app.services.plan_cache import build_plan_cache_key, get_cached_plan, cache_plan
 
 router = APIRouter(tags=["plan"])
 
@@ -17,19 +17,22 @@ router = APIRouter(tags=["plan"])
 async def generate_plan(req: PlanRequest):
     t0         = time.time()
     session_id = str(uuid.uuid4())
-    cache_key  = f"{req.destination}:{req.num_days}:{req.guest_count}:{req.budget_vnd}:{req.start_date}"
+    cache_key  = build_plan_cache_key(req)
 
     # Cache hit
     cached = await get_cached_plan(cache_key)
     if cached:
         logger.info(f"[/plan] cache HIT key={cache_key!r}")
         return PlanResponse(
-            session_id=session_id, destination=req.destination,
+            session_id=session_id, destination=cached.get("destination", req.destination),
             budget_tier=cached.get("budget_tier", "standard"),
             final_plan=cached.get("plan", {}),
             budget_breakdown=cached.get("budget_breakdown", {}),
-            warnings=["Kết quả từ cache."], violations=[],
-            validation_passed=True, duration_ms=int((time.time()-t0)*1000), cache_hit=True,
+            warnings=["Kết quả từ cache.", *cached.get("warnings", [])],
+            violations=cached.get("violations", []),
+            validation_passed=cached.get("validation_passed", False),
+            duration_ms=int((time.time()-t0)*1000),
+            cache_hit=True,
         )
 
     # Call tool directly
@@ -42,6 +45,9 @@ async def generate_plan(req: PlanRequest):
             "guest_count": req.guest_count,
             "start_date":  req.start_date,
             "end_date":    req.end_date,
+            "preferences": req.preferences,
+            "need_hotel":  req.need_hotel,
+            "need_flight": req.need_flight,
         })
         result = json.loads(result_json)
     except Exception as e:

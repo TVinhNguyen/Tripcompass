@@ -10,6 +10,8 @@ Catches objective errors in LLM-generated schedules:
 - TIME_OVERLAP: activities overlap within a day
 """
 from __future__ import annotations
+import math
+
 from app.state import TravelPlanState
 
 # Slots that count toward food budget (not attraction budget)
@@ -17,6 +19,7 @@ FOOD_SLOT_TYPES = {"breakfast", "lunch", "dinner"}
 
 # Slots that are pure buffer / travel time — no place attached
 BUFFER_SLOT_TYPES = {"buffer", "evening", "transit"}
+EARTH_RADIUS_KM = 6371.0
 
 
 def _parse_hours(hours_str: str) -> tuple[int, int]:
@@ -37,6 +40,42 @@ def _time_to_mins(t: str) -> int:
         return h * 60 + m
     except Exception:
         return 0
+
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance between two lat/lng points in kilometers."""
+    d_lat = math.radians(lat2 - lat1)
+    d_lng = math.radians(lng2 - lng1)
+    a = (
+        math.sin(d_lat / 2) * math.sin(d_lat / 2)
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+        * math.sin(d_lng / 2) * math.sin(d_lng / 2)
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return EARTH_RADIUS_KM * c
+
+
+def _estimate_travel_min(km: float) -> int:
+    """Estimate travel minutes at ~30km/h, with a 5-minute minimum."""
+    if km < 0.3:
+        return 5
+    return max(5, math.ceil(km / 30.0 * 60.0))
+
+
+def _coords(place: dict) -> tuple[float, float] | None:
+    lat = place.get("latitude")
+    lng = place.get("longitude")
+    if lat is None or lng is None:
+        lat = place.get("lat")
+        lng = place.get("lng")
+    try:
+        lat_f = float(lat)
+        lng_f = float(lng)
+    except (TypeError, ValueError):
+        return None
+    if lat_f == 0 and lng_f == 0:
+        return None
+    return lat_f, lng_f
 
 
 def _build_place_index(retrieved: dict) -> dict[str, dict]:
@@ -63,6 +102,25 @@ def node_validate(state: TravelPlanState) -> dict:
     days: list[dict] = schedule.get("days", [])
     place_index = _build_place_index(retrieved)
     valid_ids   = set(place_index.keys())
+    expected_days = state.get("num_days", 0)
+
+    try:
+        expected_days = int(expected_days)
+    except (TypeError, ValueError):
+        expected_days = 0
+
+    if not days:
+        violations.append({
+            "type":    "INCOMPLETE_SCHEDULE",
+            "day":     "all",
+            "message": "Schedule không có ngày nào.",
+        })
+    elif expected_days > 0 and len(days) != expected_days:
+        violations.append({
+            "type":    "INCOMPLETE_SCHEDULE",
+            "day":     "all",
+            "message": f"Schedule có {len(days)} ngày nhưng yêu cầu {expected_days} ngày.",
+        })
 
     # Track across days
     seen_place_ids: dict[str, int] = {}  # id → first day_num
@@ -72,6 +130,7 @@ def node_validate(state: TravelPlanState) -> dict:
         day_num = day.get("day_num", "?")
         slots   = day.get("slots", [])
         day_times: list[tuple[int, int, str]] = []  # (start_min, end_min, name)
+        route_slots: list[tuple[int, int, str, dict]] = []  # (start_min, end_min, name, place)
 
         for slot in slots:
             slot_type  = slot.get("slot_type", "")
@@ -131,7 +190,11 @@ def node_validate(state: TravelPlanState) -> dict:
 
             # ── 5. Collect times for overlap check ─────────────────────────
             if start_str and end_str:
-                day_times.append((_time_to_mins(start_str), _time_to_mins(end_str), place_name))
+                start_min = _time_to_mins(start_str)
+                end_min = _time_to_mins(end_str)
+                day_times.append((start_min, end_min, place_name))
+                if _coords(place):
+                    route_slots.append((start_min, end_min, place_name, place))
 
         # ── 6. TIME_OVERLAP (within day) ──────────────────────────────────
         day_times.sort(key=lambda x: x[0])
@@ -147,7 +210,30 @@ def node_validate(state: TravelPlanState) -> dict:
                                f"nhưng '{name_b}' bắt đầu lúc {start_b//60:02d}:{start_b%60:02d}.",
                 })
 
-    # ── 7. OVER_BUDGET ────────────────────────────────────────────────────
+        # ── 7. INSUFFICIENT_TRAVEL_TIME (within day) ──────────────────────
+        route_slots.sort(key=lambda x: x[0])
+        for i in range(len(route_slots) - 1):
+            _, end_a, name_a, place_a = route_slots[i]
+            start_b, _, name_b, place_b = route_slots[i + 1]
+            coords_a = _coords(place_a)
+            coords_b = _coords(place_b)
+            if not coords_a or not coords_b:
+                continue
+            distance_km = _haversine_km(coords_a[0], coords_a[1], coords_b[0], coords_b[1])
+            required_min = _estimate_travel_min(distance_km)
+            gap_min = start_b - end_a
+            if gap_min < required_min:
+                violations.append({
+                    "type":    "INSUFFICIENT_TRAVEL_TIME",
+                    "day":     day_num,
+                    "place":   f"{name_a} / {name_b}",
+                    "message": (
+                        f"'{name_a}' → '{name_b}' cần khoảng {required_min} phút di chuyển "
+                        f"({distance_km:.1f}km) nhưng lịch chỉ chừa {gap_min} phút."
+                    ),
+                })
+
+    # ── 8. OVER_BUDGET ────────────────────────────────────────────────────
     if attr_budget > 0 and total_attr_spend > attr_budget:
         violations.append({
             "type":    "OVER_BUDGET",

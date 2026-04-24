@@ -154,6 +154,7 @@ DB_SCHEMA = os.environ.get("DB_SCHEMA", "schema_travel")
 # ── Redis ─────────────────────────────────────────────────────────────────────
 REDIS_URL       = os.environ.get("REDIS_URL", "redis://redis:6379")
 CACHE_TTL       = int(os.environ.get("CACHE_TTL_SECONDS", "3600"))
+CACHE_ADMIN_TOKEN = os.environ.get("CACHE_ADMIN_TOKEN", "")
 
 # ── External APIs ─────────────────────────────────────────────────────────────
 SERPAPI_KEY     = os.environ.get("SERPAPI_API_KEY", "")
@@ -178,4 +179,3 @@ if not SERPAPI_KEY:
     console.print("[yellow]⚠ SERPAPI_API_KEY not set — hotel/flight/price search disabled.[/yellow]")
 if not WEATHER_API_KEY:
     console.print("[yellow]⚠ WEATHER_API_KEY not set — using static climate data.[/yellow]")
-

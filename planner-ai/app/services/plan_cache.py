@@ -1,9 +1,61 @@
 """
 services/plan_cache.py — Travel plan caching with granular invalidation.
 """
+import hashlib
 import json
+from typing import Any
+
 from app.services.redis import get_redis
 from app import config
+
+CACHE_KEY_VERSION = "v2"
+
+
+# ── Key building ──────────────────────────────────────────────────────────────
+
+def _normalize_destination(destination: str) -> str:
+    return " ".join((destination or "").strip().lower().split())
+
+
+def _normalize_preferences(preferences: list[str] | None) -> list[str]:
+    return sorted({
+        str(pref).strip().lower()
+        for pref in (preferences or [])
+        if str(pref).strip()
+    })
+
+
+def _hash_payload(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def destination_cache_scope(destination: str) -> str:
+    """Stable destination scope used for granular cache invalidation."""
+    normalized = _normalize_destination(destination)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def build_plan_cache_key(request: Any) -> str:
+    """Build a collision-resistant key from all plan-affecting request fields."""
+    destination = _normalize_destination(request.destination)
+    payload = {
+        "version": CACHE_KEY_VERSION,
+        "destination": destination,
+        "num_days": request.num_days,
+        "guest_count": request.guest_count,
+        "budget_vnd": request.budget_vnd or 0,
+        "start_date": request.start_date,
+        "end_date": request.end_date,
+        "preferences": _normalize_preferences(getattr(request, "preferences", None)),
+        "need_hotel": getattr(request, "need_hotel", True),
+        "need_flight": getattr(request, "need_flight", False),
+        "raw_input": getattr(request, "raw_input", None),
+        "llm_provider": config.LLM_PROVIDER,
+        "llm_model": config.LLM_MODEL,
+        "prompt_version": "schedule-v1/enrich-v1",
+    }
+    return f"{CACHE_KEY_VERSION}:{destination_cache_scope(destination)}:{_hash_payload(payload)}"
 
 
 # ── Read / write ──────────────────────────────────────────────────────────────
@@ -51,5 +103,4 @@ async def flush_all_plans() -> int:
 
 async def flush_plans_by_destination(destination: str) -> int:
     """Delete plan cache keys for a specific destination."""
-    return await _scan_and_delete(f"plan:{destination}:*")
-
+    return await _scan_and_delete(f"plan:{CACHE_KEY_VERSION}:{destination_cache_scope(destination)}:*")
