@@ -14,6 +14,8 @@ type User struct {
 	FullName     string    `gorm:"column:full_name;not null" json:"full_name"`
 	AvatarURL    *string   `gorm:"column:avatar_url" json:"avatar_url"`
 	Provider     string    `gorm:"default:local" json:"provider"`
+	IsVerified   bool      `gorm:"column:is_verified;not null;default:false" json:"is_verified"`
+	VerifyToken  *string   `gorm:"column:verify_token" json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 

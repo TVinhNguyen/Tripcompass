@@ -27,7 +27,35 @@ services:
       timeout: 5s
       retries: 5
 
-  # ---- Application Services ----
+  # ---- AI Planner Service (LangGraph) ----
+  planner-ai:
+    build:
+      context: ./planner-ai
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    env_file:
+      - ./planner-ai/.env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/tripcompass
+      REDIS_URL: redis://redis:6379
+      DB_SCHEMA: schema_travel
+    volumes:
+      - ./planner-ai/app:/app/app    # hot reload — no rebuild needed
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8090 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8090/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ---- Go API Gateway ----
   backend:
     build:
       context: ./backend
@@ -41,10 +69,15 @@ services:
       DB_PORT: 5432
       REDIS_ADDR: redis:6379
       ALLOWED_ORIGINS: http://localhost:3000
+      # Feature flag: "true" = proxy /generate to planner-ai; "false" = use Go engine
+      USE_LLM_PLANNER: "true"
+      PLANNER_AI_URL: "http://planner-ai:8090"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      planner-ai:
         condition: service_healthy
 
   frontend:

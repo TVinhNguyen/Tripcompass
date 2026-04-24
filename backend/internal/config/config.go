@@ -19,6 +19,21 @@ type Config struct {
 	JWTSecret      string
 	Port           string
 	AllowedOrigins string
+	// LLM planner proxy
+	UseLLMPlanner  bool
+	PlannerAIURL   string
+	// Email / SMTP
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
+	FrontendURL  string
+	// Social OAuth
+	GoogleClientID     string
+	GoogleClientSecret string
+	FacebookAppID      string
+	FacebookAppSecret  string
 }
 
 func Load() *Config {
@@ -38,6 +53,20 @@ func Load() *Config {
 		JWTSecret:      os.Getenv("JWT_SECRET"),
 		Port:           os.Getenv("PORT"),
 		AllowedOrigins: os.Getenv("ALLOWED_ORIGINS"),
+		UseLLMPlanner:  os.Getenv("USE_LLM_PLANNER") == "true",
+		PlannerAIURL:   os.Getenv("PLANNER_AI_URL"),
+		// Email
+		SMTPHost:     os.Getenv("SMTP_HOST"),
+		SMTPPort:     os.Getenv("SMTP_PORT"),
+		SMTPUser:     os.Getenv("SMTP_USER"),
+		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:     os.Getenv("SMTP_FROM"),
+		FrontendURL:  os.Getenv("FRONTEND_URL"),
+		// Social OAuth
+		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		FacebookAppID:      os.Getenv("FACEBOOK_APP_ID"),
+		FacebookAppSecret:  os.Getenv("FACEBOOK_APP_SECRET"),
 	}
 
 	if cfg.JWTSecret == "" {

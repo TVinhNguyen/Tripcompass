@@ -22,21 +22,32 @@ func NewPlaceService(db *gorm.DB) *PlaceService {
 // ---------- DTOs ----------
 
 type CreatePlaceInput struct {
-	Destination         string              `json:"destination" binding:"required"`
+	Destination         string               `json:"destination" binding:"required"`
 	Category            models.PlaceCategory `json:"category" binding:"required"`
-	Name                string              `json:"name" binding:"required"`
-	NameEN              *string             `json:"name_en"`
-	Address             *string             `json:"address"`
-	Area                *string             `json:"area"`
-	Latitude            *float64            `json:"latitude"`
-	Longitude           *float64            `json:"longitude"`
-	CoverImage          *string             `json:"cover_image"`
-	Rating              *float64            `json:"rating"`
-	Hours               *string             `json:"hours"`
-	RecommendedDuration *int                `json:"recommended_duration"`
-	BasePrice           *int                `json:"base_price"`
-	Metadata            datatypes.JSON      `json:"metadata"`
-	SourceURL           *string             `json:"source_url"`
+	Name                string               `json:"name" binding:"required"`
+	NameEN              *string              `json:"name_en"`
+	Description         *string              `json:"description"`
+	Address             *string              `json:"address"`
+	Area                *string              `json:"area"`
+	Latitude            *float64             `json:"latitude"`
+	Longitude           *float64             `json:"longitude"`
+	CoverImage          *string              `json:"cover_image"`
+	Images              []string             `json:"images"`
+	Rating              *float64             `json:"rating"`
+	ReviewCount         int                  `json:"review_count"`
+	Hours               *string              `json:"hours"`
+	RecommendedDuration *int                 `json:"recommended_duration"`
+	BasePrice           *int                 `json:"base_price"`
+	Phone               *string              `json:"phone"`
+	Website             *string              `json:"website"`
+	ExternalID          *string              `json:"external_id"`
+	ExternalSource      *string              `json:"external_source"`
+	Metadata            datatypes.JSON       `json:"metadata"`
+	SourceURL           *string              `json:"source_url"`
+	MustVisit           bool                 `json:"must_visit"`
+	PriorityScore       int                  `json:"priority_score"`
+	BestTimeOfDay       *string              `json:"best_time_of_day"`
+	Tags                []string             `json:"tags"`
 }
 
 type UpdatePlaceInput struct {
@@ -44,17 +55,27 @@ type UpdatePlaceInput struct {
 	Category            *models.PlaceCategory `json:"category"`
 	Name                *string              `json:"name"`
 	NameEN              *string              `json:"name_en"`
+	Description         *string              `json:"description"`
 	Address             *string              `json:"address"`
 	Area                *string              `json:"area"`
 	Latitude            *float64             `json:"latitude"`
 	Longitude           *float64             `json:"longitude"`
 	CoverImage          *string              `json:"cover_image"`
 	Rating              *float64             `json:"rating"`
+	ReviewCount         *int                 `json:"review_count"`
 	Hours               *string              `json:"hours"`
 	RecommendedDuration *int                 `json:"recommended_duration"`
 	BasePrice           *int                 `json:"base_price"`
+	Phone               *string              `json:"phone"`
+	Website             *string              `json:"website"`
+	ExternalID          *string              `json:"external_id"`
+	ExternalSource      *string              `json:"external_source"`
 	Metadata            *datatypes.JSON      `json:"metadata"`
 	SourceURL           *string              `json:"source_url"`
+	MustVisit           *bool                `json:"must_visit"`
+	PriorityScore       *int                 `json:"priority_score"`
+	BestTimeOfDay       *string              `json:"best_time_of_day"`
+	Tags                []string             `json:"tags"`
 }
 
 func validPlaceCategory(c models.PlaceCategory) bool {
@@ -68,16 +89,37 @@ func validPlaceCategory(c models.PlaceCategory) bool {
 
 // ---------- Methods ----------
 
-func (s *PlaceService) List(destination string, category string) ([]models.Place, error) {
-	var list []models.Place
-	q := s.db.Order("destination ASC, name ASC")
+// ListResult wraps paginated results.
+type PlaceListResult struct {
+	Data  []models.Place `json:"data"`
+	Total int64          `json:"total"`
+	Page  int            `json:"page"`
+	Limit int            `json:"limit"`
+}
+
+func (s *PlaceService) List(destination, category string, page, limit int) (*PlaceListResult, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	q := s.db.Model(&models.Place{}).Order("destination ASC, name ASC")
 	if destination != "" {
 		q = q.Where("destination ILIKE ?", "%"+strings.TrimSpace(destination)+"%")
 	}
 	if category != "" {
 		q = q.Where("category = ?", strings.ToUpper(strings.TrimSpace(category)))
 	}
-	return list, q.Find(&list).Error
+
+	var total int64
+	q.Count(&total)
+
+	var list []models.Place
+	err := q.Limit(limit).Offset(offset).Find(&list).Error
+	return &PlaceListResult{Data: list, Total: total, Page: page, Limit: limit}, err
 }
 
 func (s *PlaceService) GetByID(id string) (*models.Place, error) {
@@ -100,17 +142,28 @@ func (s *PlaceService) Create(input CreatePlaceInput) (*models.Place, error) {
 		Category:            category,
 		Name:                input.Name,
 		NameEN:              input.NameEN,
+		Description:         input.Description,
 		Address:             input.Address,
 		Area:                input.Area,
 		Latitude:            input.Latitude,
 		Longitude:           input.Longitude,
 		CoverImage:          input.CoverImage,
+		Images:              models.StringArray(input.Images),
 		Rating:              input.Rating,
+		ReviewCount:         input.ReviewCount,
 		Hours:               input.Hours,
 		RecommendedDuration: input.RecommendedDuration,
 		BasePrice:           input.BasePrice,
+		Phone:               input.Phone,
+		Website:             input.Website,
+		ExternalID:          input.ExternalID,
+		ExternalSource:      input.ExternalSource,
 		Metadata:            input.Metadata,
 		SourceURL:           input.SourceURL,
+		MustVisit:           input.MustVisit,
+		PriorityScore:       input.PriorityScore,
+		BestTimeOfDay:       input.BestTimeOfDay,
+		Tags:                models.StringArray(input.Tags),
 		PriceUpdatedAt:      &now,
 	}
 	if err := s.db.Create(&p).Error; err != nil {
@@ -176,6 +229,36 @@ func (s *PlaceService) Update(id string, input UpdatePlaceInput) (*models.Place,
 	}
 	if input.SourceURL != nil {
 		updates["source_url"] = *input.SourceURL
+	}
+	if input.MustVisit != nil {
+		updates["must_visit"] = *input.MustVisit
+	}
+	if input.PriorityScore != nil {
+		updates["priority_score"] = *input.PriorityScore
+	}
+	if input.BestTimeOfDay != nil {
+		updates["best_time_of_day"] = *input.BestTimeOfDay
+	}
+	if input.Tags != nil {
+		updates["tags"] = models.StringArray(input.Tags)
+	}
+	if input.Description != nil {
+		updates["description"] = *input.Description
+	}
+	if input.ReviewCount != nil {
+		updates["review_count"] = *input.ReviewCount
+	}
+	if input.Phone != nil {
+		updates["phone"] = *input.Phone
+	}
+	if input.Website != nil {
+		updates["website"] = *input.Website
+	}
+	if input.ExternalID != nil {
+		updates["external_id"] = *input.ExternalID
+	}
+	if input.ExternalSource != nil {
+		updates["external_source"] = *input.ExternalSource
 	}
 
 	if err := s.db.Model(&p).Updates(updates).Error; err != nil {

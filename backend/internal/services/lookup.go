@@ -37,12 +37,12 @@ func (s *LookupService) Lookup(destination string, staleDays int) (*LookupResult
 	cutoff := time.Now().AddDate(0, 0, -staleDays)
 
 	var places []models.Place
-	s.db.Where("destination = ? AND (price_updated_at IS NULL OR price_updated_at >= ?)", dest, cutoff).
+	s.db.Where("destination ILIKE ? AND (price_updated_at IS NULL OR price_updated_at >= ?)", dest, cutoff).
 		Order("rating DESC NULLS LAST, base_price ASC NULLS LAST").
 		Find(&places)
 
 	var combos []models.Combo
-	s.db.Where("destination = ?", dest).
+	s.db.Where("destination ILIKE ?", dest).
 		Order("price_per_person ASC NULLS LAST").
 		Find(&combos)
 

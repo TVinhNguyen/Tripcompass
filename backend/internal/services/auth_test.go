@@ -13,7 +13,7 @@ const testJWTSecret = "test-secret-key"
 
 func TestAuthService_Register(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuthService(db, testJWTSecret)
+	svc := NewAuthService(db, testJWTSecret, nil, "", "")
 
 	t.Run("success", func(t *testing.T) {
 		input := RegisterInput{
@@ -52,8 +52,10 @@ func TestAuthService_Register(t *testing.T) {
 
 func TestAuthService_Login(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuthService(db, testJWTSecret)
+	svc := NewAuthService(db, testJWTSecret, nil, "", "")
 	user := createTestUser(t, db)
+	// Mark user as verified so login works
+	db.Exec("UPDATE users SET is_verified = true WHERE id = ?", user.ID)
 
 	t.Run("success", func(t *testing.T) {
 		input := LoginInput{
@@ -116,7 +118,7 @@ func TestAuthService_Login(t *testing.T) {
 
 func TestAuthService_GenerateToken(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuthService(db, testJWTSecret)
+	svc := NewAuthService(db, testJWTSecret, nil, "", "")
 	user := createTestUser(t, db)
 
 	t.Run("token contains correct sub claim", func(t *testing.T) {

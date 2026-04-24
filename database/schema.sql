@@ -93,15 +93,28 @@ CREATE TABLE "places" (
     "category" "place_category" NOT NULL,
     "name" VARCHAR(255) NOT NULL,
     "name_en" VARCHAR(255),
+    "description" TEXT,
     "address" TEXT,
     "area" VARCHAR(255),
     "latitude" DOUBLE PRECISION,
     "longitude" DOUBLE PRECISION,
     "cover_image" TEXT,
+    "images" TEXT [] DEFAULT '{}',
     "rating" DOUBLE PRECISION,
+    "review_count" INTEGER NOT NULL DEFAULT 0,
+    "must_visit" BOOLEAN NOT NULL DEFAULT FALSE,
+    "priority_score" INTEGER NOT NULL DEFAULT 0,
+    "best_time_of_day" VARCHAR(255),
+    "tags" TEXT [] DEFAULT '{}',
+    "open_time" TIME,
+    "close_time" TIME,
     "hours" TEXT,
     "recommended_duration" INTEGER,
     "base_price" INTEGER,
+    "phone" VARCHAR(50),
+    "website" TEXT,
+    "external_id" VARCHAR(100),
+    "external_source" VARCHAR(50),
     "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb,
     "source_url" TEXT,
     "price_updated_at" TIMESTAMP,
@@ -142,6 +155,11 @@ CREATE INDEX "idx_place_area" ON "places" ("area");
 CREATE INDEX "idx_place_coords" ON "places" ("latitude", "longitude");
 
 CREATE INDEX "idx_place_rating" ON "places" ("rating");
+
+CREATE INDEX "idx_place_review_count" ON "places" ("review_count");
+
+CREATE UNIQUE INDEX "idx_place_external" ON "places" ("external_source", "external_id")
+    WHERE "external_id" IS NOT NULL;
 
 CREATE INDEX "idx_combo_dest" ON "combos" ("destination");
 

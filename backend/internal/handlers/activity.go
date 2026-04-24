@@ -42,11 +42,7 @@ func (h *ActivityHandler) Update(c *gin.Context) {
 
 	act, err := h.svc.Update(c.Param("id"), userID(c), input)
 	if err != nil {
-		if err.Error() == "forbidden" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		} else {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		}
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, act)
@@ -55,11 +51,7 @@ func (h *ActivityHandler) Update(c *gin.Context) {
 // DELETE /activities/:id
 func (h *ActivityHandler) Delete(c *gin.Context) {
 	if err := h.svc.Delete(c.Param("id"), userID(c)); err != nil {
-		if err.Error() == "forbidden" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		} else {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		}
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusNoContent, nil)
@@ -76,11 +68,7 @@ func (h *ActivityHandler) Reorder(c *gin.Context) {
 	}
 
 	if err := h.svc.Reorder(userID(c), input.Items); err != nil {
-		if err.Error() == "forbidden" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		}
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "reordered successfully"})

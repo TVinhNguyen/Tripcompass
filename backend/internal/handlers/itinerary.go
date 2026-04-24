@@ -141,3 +141,13 @@ func (h *ItineraryHandler) Explore(c *gin.Context) {
 		"limit": limit,
 	})
 }
+
+// GET /itineraries/:id/public — view a published itinerary without login
+func (h *ItineraryHandler) GetPublic(c *gin.Context) {
+	it, err := h.svc.GetPublic(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(http.StatusOK, it)
+}

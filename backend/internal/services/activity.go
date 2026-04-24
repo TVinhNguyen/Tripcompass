@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
 
 	"github.com/google/uuid"
@@ -57,16 +58,16 @@ type ReorderItem struct {
 func (s *ActivityService) isOwnerOfActivity(activityID, ownerID string) (*models.Activity, error) {
 	var act models.Activity
 	if err := s.db.First(&act, "id = ?", activityID).Error; err != nil {
-		return nil, errors.New("activity not found")
+		return nil, apperror.ErrNotFound
 	}
 
 	var it models.Itinerary
 	if err := s.db.First(&it, "id = ?", act.ItineraryID).Error; err != nil {
-		return nil, errors.New("itinerary not found")
+		return nil, apperror.ErrNotFound
 	}
 
 	if it.OwnerID.String() != ownerID {
-		return nil, errors.New("forbidden")
+		return nil, apperror.ErrForbidden
 	}
 	return &act, nil
 }

@@ -2,7 +2,12 @@
 
 import { motion } from "framer-motion";
 import { Sparkles, Users, Calendar, Wallet, ArrowRight, CheckCircle2 } from "lucide-react";
-import { features } from "@/lib/mock-data";
+const features = [
+  { icon: "sparkles", title: "AI Thông Minh", description: "Gợi ý lịch trình cá nhân hóa dựa trên sở thích của bạn" },
+  { icon: "users", title: "Cộng Đồng", description: "Khám phá và chia sẻ lịch trình với cộng đồng du lịch" },
+  { icon: "calendar", title: "Dễ Dàng Lập Kế Hoạch", description: "Kéo thả để tạo lịch trình hoàn hảo trong vài phút" },
+  { icon: "wallet", title: "Quản Lý Ngân Sách", description: "Theo dõi chi phí và tối ưu hóa ngân sách chuyến đi" },
+];
 import Image from "next/image";
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -43,7 +48,7 @@ export function FeaturesSection() {
               Tại sao chọn chúng tôi
             </span>
           </div>
-          <h2 className="font-serif text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
+          <h2 className="font-serif text-4xl lg:text-5xl font-semibold text-white mb-6 leading-tight tracking-tight">
             Công nghệ AI kết hợp
             <br />
             <span className="text-[#d4a853]">trải nghiệm địa phương</span>
@@ -76,23 +81,23 @@ export function FeaturesSection() {
               <div className="absolute bottom-6 left-6 right-6 p-5 bg-[#1a1a1a]/90 backdrop-blur-sm rounded-2xl border border-white/10">
                 <div className="flex items-center justify-between">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-[#d4a853]">50K+</p>
-                    <p className="text-xs text-white/50">Du khách</p>
+                    <p className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">50K+</p>
+                    <p className="text-[10px] text-white/50 tracking-[0.18em] uppercase mt-0.5">Du khách</p>
                   </div>
                   <div className="w-px h-10 bg-white/10" />
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-[#d4a853]">500+</p>
-                    <p className="text-xs text-white/50">Lịch trình</p>
+                    <p className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">500+</p>
+                    <p className="text-[10px] text-white/50 tracking-[0.18em] uppercase mt-0.5">Lịch trình</p>
                   </div>
                   <div className="w-px h-10 bg-white/10" />
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-[#d4a853]">63</p>
-                    <p className="text-xs text-white/50">Tỉnh thành</p>
+                    <p className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">63</p>
+                    <p className="text-[10px] text-white/50 tracking-[0.18em] uppercase mt-0.5">Tỉnh thành</p>
                   </div>
                   <div className="w-px h-10 bg-white/10" />
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-[#d4a853]">4.9</p>
-                    <p className="text-xs text-white/50">Đánh giá</p>
+                    <p className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">4.9</p>
+                    <p className="text-[10px] text-white/50 tracking-[0.18em] uppercase mt-0.5">Đánh giá</p>
                   </div>
                 </div>
               </div>
@@ -166,7 +171,7 @@ export function FeaturesSection() {
               </div>
 
               {/* Title */}
-              <h3 className="font-serif text-xl font-bold text-white mb-3">
+              <h3 className="text-lg font-semibold text-white mb-3 tracking-tight">
                 {feature.title}
               </h3>
 

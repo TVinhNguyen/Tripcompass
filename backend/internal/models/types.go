@@ -120,6 +120,55 @@ func (a *StringArray) Scan(value interface{}) error {
 	return nil
 }
 
+// IntArray là custom type để lưu []int vào PostgreSQL integer[]
+type IntArray []int
+
+func (a IntArray) Value() (driver.Value, error) {
+	if len(a) == 0 {
+		return "{}", nil
+	}
+	parts := make([]string, len(a))
+	for i, v := range a {
+		parts[i] = fmt.Sprintf("%d", v)
+	}
+	return "{" + strings.Join(parts, ",") + "}", nil
+}
+
+func (a *IntArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = IntArray{}
+		return nil
+	}
+	var str string
+	switch v := value.(type) {
+	case string:
+		str = v
+	case []byte:
+		str = string(v)
+	default:
+		return fmt.Errorf("IntArray.Scan: unsupported type %T", value)
+	}
+	str = strings.TrimSpace(str)
+	if str == "{}" || str == "" {
+		*a = IntArray{}
+		return nil
+	}
+	inner := str[1 : len(str)-1]
+	var result []int
+	for _, part := range strings.Split(inner, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		var n int
+		if _, err := fmt.Sscanf(part, "%d", &n); err == nil {
+			result = append(result, n)
+		}
+	}
+	*a = IntArray(result)
+	return nil
+}
+
 func parseElements(s string) StringArray {
 	if s == "" {
 		return StringArray{}

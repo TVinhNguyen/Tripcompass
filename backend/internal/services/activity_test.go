@@ -3,6 +3,7 @@ package services
 import (
 	"testing"
 
+	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
 
 	"github.com/google/uuid"
@@ -28,14 +29,14 @@ func TestActivityService_IsOwnerOfActivity(t *testing.T) {
 	t.Run("activity not found", func(t *testing.T) {
 		_, err := svc.isOwnerOfActivity(uuid.New().String(), user.ID.String())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "activity not found")
+		assert.ErrorIs(t, err, apperror.ErrNotFound)
 	})
 
 	t.Run("wrong owner", func(t *testing.T) {
 		otherUser := createTestUserWith(t, db, "other@example.com")
 		_, err := svc.isOwnerOfActivity(act.ID.String(), otherUser.ID.String())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "forbidden")
+		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 }
 
@@ -180,7 +181,7 @@ func TestActivityService_Update(t *testing.T) {
 		input := UpdateActivityInput{Title: &newTitle}
 		_, err := svc.Update(act.ID.String(), otherUser.ID.String(), input)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "forbidden")
+		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 }
 
@@ -207,13 +208,13 @@ func TestActivityService_Delete(t *testing.T) {
 		otherUser := createTestUserWith(t, db, "other3@example.com")
 		err := svc.Delete(act.ID.String(), otherUser.ID.String())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "forbidden")
+		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 
 	t.Run("activity not found", func(t *testing.T) {
 		err := svc.Delete(uuid.New().String(), user.ID.String())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "activity not found")
+		assert.ErrorIs(t, err, apperror.ErrNotFound)
 	})
 }
 
@@ -254,7 +255,7 @@ func TestActivityService_Reorder(t *testing.T) {
 		}
 		err := svc.Reorder(user.ID.String(), items)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "activity not found")
+		assert.ErrorIs(t, err, apperror.ErrNotFound)
 	})
 
 	t.Run("forbidden owner", func(t *testing.T) {
@@ -264,6 +265,6 @@ func TestActivityService_Reorder(t *testing.T) {
 		}
 		err := svc.Reorder(otherUser.ID.String(), items)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "forbidden")
+		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 }

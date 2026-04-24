@@ -47,13 +47,33 @@ type UpdateComboInput struct {
 
 // ---------- Methods ----------
 
-func (s *ComboService) List(destination string) ([]models.Combo, error) {
-	var list []models.Combo
-	q := s.db.Order("destination ASC, name ASC")
+type ComboListResult struct {
+	Data  []models.Combo `json:"data"`
+	Total int64          `json:"total"`
+	Page  int            `json:"page"`
+	Limit int            `json:"limit"`
+}
+
+func (s *ComboService) List(destination string, page, limit int) (*ComboListResult, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	q := s.db.Model(&models.Combo{}).Order("destination ASC, name ASC")
 	if destination != "" {
 		q = q.Where("destination ILIKE ?", "%"+strings.TrimSpace(destination)+"%")
 	}
-	return list, q.Find(&list).Error
+
+	var total int64
+	q.Count(&total)
+
+	var list []models.Combo
+	err := q.Limit(limit).Offset(offset).Find(&list).Error
+	return &ComboListResult{Data: list, Total: total, Page: page, Limit: limit}, err
 }
 
 func (s *ComboService) GetByID(id string) (*models.Combo, error) {

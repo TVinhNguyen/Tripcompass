@@ -39,7 +39,7 @@ export function CTASection() {
           </div>
 
           {/* Title */}
-          <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+          <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-semibold text-white mb-6 leading-tight tracking-tight">
             Sẵn sàng cho
             <br />
             <span className="text-[#d4a853]">cuộc phiêu lưu</span> mới?
@@ -66,8 +66,7 @@ export function CTASection() {
             <Button
               asChild
               size="lg"
-              variant="outline"
-              className="border-white/20 text-white hover:bg-white hover:text-[#1a1a1a] rounded-full px-10 py-6 text-base font-medium transition-all"
+              className="bg-white/10 hover:bg-white/20 text-white border border-white/30 hover:border-white/50 rounded-full px-10 py-6 text-base font-medium transition-all"
             >
               <Link href="/explore">Khám phá cộng đồng</Link>
             </Button>
@@ -82,19 +81,19 @@ export function CTASection() {
             className="mt-16 pt-16 border-t border-white/10"
           >
             <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6 text-sm text-white/50">
-              <div className="flex items-center gap-2">
-                <span className="font-serif text-2xl font-bold text-[#d4a853]">10,000+</span>
-                <span>Người dùng</span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">10,000+</span>
+                <span className="text-[10px] tracking-[0.2em] uppercase">Người dùng</span>
               </div>
               <div className="w-px h-6 bg-white/10 hidden sm:block" />
-              <div className="flex items-center gap-2">
-                <span className="font-serif text-2xl font-bold text-[#d4a853]">500+</span>
-                <span>Lịch trình</span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">500+</span>
+                <span className="text-[10px] tracking-[0.2em] uppercase">Lịch trình</span>
               </div>
               <div className="w-px h-6 bg-white/10 hidden sm:block" />
-              <div className="flex items-center gap-2">
-                <span className="font-serif text-2xl font-bold text-[#d4a853]">63</span>
-                <span>Tỉnh thành</span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">63</span>
+                <span className="text-[10px] tracking-[0.2em] uppercase">Tỉnh thành</span>
               </div>
             </div>
           </motion.div>

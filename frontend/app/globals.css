@@ -142,6 +142,35 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Ensure form fields always have readable contrast */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    color: var(--foreground);
+    caret-color: var(--foreground);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--stone);
+    opacity: 1;
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--foreground);
+    transition: background-color 9999s ease-in-out 0s;
+  }
+
+  /* Date / time picker indicator color */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.4);
+    cursor: pointer;
+  }
 }
 
 /* Custom scrollbar */
@@ -177,4 +206,46 @@
 ::selection {
   background: var(--accent);
   color: var(--accent-foreground);
+}
+
+/* Leaflet map popup theming */
+.leaflet-container {
+  font-family: var(--font-sans);
+}
+.leaflet-popup-content-wrapper {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(26, 26, 26, 0.15);
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+}
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+.leaflet-popup-tip {
+  background: #ffffff;
+  border: 1px solid var(--border);
+}
+.leaflet-popup-close-button {
+  display: none;
+}
+.itinerary-marker {
+  background: transparent !important;
+  border: none !important;
+}
+.leaflet-control-zoom a {
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  border-color: var(--border) !important;
+  font-family: var(--font-mono);
+}
+.leaflet-control-attribution {
+  background: rgba(245, 240, 232, 0.9) !important;
+  font-size: 10px !important;
+}
+
+/* Editorial numeric helper */
+.nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }

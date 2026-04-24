@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"tripcompass-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -16,21 +17,23 @@ func NewComboHandler(db *gorm.DB) *ComboHandler {
 	return &ComboHandler{svc: services.NewComboService(db)}
 }
 
-// GET /api/v1/combos?destination=nha+trang
+// GET /api/v1/combos?destination=nha+trang&page=1&limit=20
 func (h *ComboHandler) List(c *gin.Context) {
-	list, err := h.svc.List(c.Query("destination"))
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	result, err := h.svc.List(c.Query("destination"), page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, list)
+	c.JSON(http.StatusOK, result)
 }
 
 // GET /api/v1/combos/:id
 func (h *ComboHandler) Get(c *gin.Context) {
 	co, err := h.svc.GetByID(c.Param("id"))
 	if err != nil {
-		handleNotFound(c, err)
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, co)
@@ -60,7 +63,7 @@ func (h *ComboHandler) Update(c *gin.Context) {
 	}
 	co, err := h.svc.Update(c.Param("id"), input)
 	if err != nil {
-		handleNotFound(c, err)
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, co)
@@ -69,7 +72,7 @@ func (h *ComboHandler) Update(c *gin.Context) {
 // DELETE /api/v1/combos/:id
 func (h *ComboHandler) Delete(c *gin.Context) {
 	if err := h.svc.Delete(c.Param("id")); err != nil {
-		handleNotFound(c, err)
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusNoContent, nil)

@@ -278,6 +278,23 @@ func (s *ItineraryService) Publish(id, ownerID string) (*models.Itinerary, error
 	return &it, nil
 }
 
+// GetPublic returns a published itinerary visible to anyone (no auth required).
+func (s *ItineraryService) GetPublic(id string) (*models.Itinerary, error) {
+	var it models.Itinerary
+	err := s.db.
+		Preload("Activities", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_number ASC, order_index ASC")
+		}).
+		Preload("Owner").
+		Where("id = ? AND status = ?", id, "PUBLISHED").First(&it).Error
+	if err != nil {
+		return nil, err
+	}
+	// Increment view count
+	s.db.Model(&it).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+	return &it, nil
+}
+
 func (s *ItineraryService) Explore(filter ExploreFilter) ([]models.Itinerary, int64, error) {
 	page := filter.Page
 	if page < 1 {
@@ -291,6 +308,9 @@ func (s *ItineraryService) Explore(filter ExploreFilter) ([]models.Itinerary, in
 
 	query := s.db.Model(&models.Itinerary{}).
 		Preload("Owner").
+		Preload("Activities", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_number ASC, order_index ASC")
+		}).
 		Where("status = ?", "PUBLISHED")
 
 	if filter.Destination != "" {
