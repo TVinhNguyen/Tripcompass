@@ -1,9 +1,23 @@
 import requests
 import json
+import os
 import time
 
-api_key = "ok_85955b65730bffb2f65b927c587108ea"
-base_url = "https://tripadvisor-scraper-api.omkar.cloud/tripadvisor/attractions"
+try:
+    from dotenv import load_dotenv
+    load_dotenv("scraper-service/.env")
+    load_dotenv("scraper-service/.env.example")
+except ImportError:
+    pass
+
+# Load from env — KHÔNG hardcode API key ở đây (file này trong .gitignore)
+api_key = os.getenv("TRIPADVISOR_API_KEY", "")
+if not api_key:
+    print("⚠ TRIPADVISOR_API_KEY chưa được set. Set trong scraper-service/.env")
+    # Fallback: set tạm cho test local
+    api_key = os.getenv("TRIPADVISOR_API_KEY", "ok_85955b65730bffb2f65b927c587108ea")
+
+base_url = "https://travel-data-api.omkar.cloud/travel/attractions"
 
 # 1. Lấy danh sách địa điểm tại Quảng Ninh (Hạ Long)
 # Dùng location_id từ Tripadvisor: g293923 (Ha Long Bay)
