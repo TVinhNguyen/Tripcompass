@@ -2,7 +2,7 @@
 schemas.py — Pydantic request/response models for all API endpoints.
 """
 from typing import Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
 # ── POST /chat ────────────────────────────────────────────────────────────────
@@ -53,10 +53,22 @@ class PlanRequest(BaseModel):
     end_date:    Optional[str] = None
     budget_vnd:  Optional[int] = Field(default=0)
     guest_count: int = 2
-    preferences: list[str] = Field(default_factory=list)
+    preferences: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("preferences", "preference_tags"),
+    )
     need_hotel:  bool = True
     need_flight: bool = False
     raw_input:   Optional[str] = None   # free-text override for intent node
+
+    @field_validator("preferences")
+    @classmethod
+    def normalize_preferences(cls, value: list[str]) -> list[str]:
+        return sorted({
+            str(pref).strip().lower()
+            for pref in (value or [])
+            if str(pref).strip()
+        })
 
     class Config:
         populate_by_name = True

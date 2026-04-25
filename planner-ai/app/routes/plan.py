@@ -1,7 +1,6 @@
 """
 routes/plan.py — POST /plan endpoint (structured travel planning).
 """
-import json
 import time
 import uuid
 from fastapi import APIRouter, HTTPException
@@ -9,6 +8,7 @@ from loguru import logger
 
 from app.schemas import PlanRequest, PlanResponse
 from app.services.plan_cache import build_plan_cache_key, get_cached_plan, cache_plan
+from app.services.planning_service import generate_travel_plan
 
 router = APIRouter(tags=["plan"])
 
@@ -35,21 +35,18 @@ async def generate_plan(req: PlanRequest):
             cache_hit=True,
         )
 
-    # Call tool directly
-    from app.tools.create_plan import create_travel_plan
     try:
-        result_json = await create_travel_plan.ainvoke({
-            "destination": req.destination,
-            "num_days":    req.num_days,
-            "budget_vnd":  req.budget_vnd or 0,
-            "guest_count": req.guest_count,
-            "start_date":  req.start_date,
-            "end_date":    req.end_date,
-            "preferences": req.preferences,
-            "need_hotel":  req.need_hotel,
-            "need_flight": req.need_flight,
-        })
-        result = json.loads(result_json)
+        result = await generate_travel_plan(
+            destination=req.destination,
+            num_days=req.num_days,
+            budget_vnd=req.budget_vnd or 0,
+            guest_count=req.guest_count,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            preferences=req.preferences,
+            need_hotel=req.need_hotel,
+            need_flight=req.need_flight,
+        )
     except Exception as e:
         logger.error(f"[/plan] {e}")
         raise HTTPException(status_code=500, detail=str(e))

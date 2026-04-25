@@ -39,9 +39,11 @@ async def get_food_venues(
     if area:
         conditions.append(f"LOWER(area) ILIKE '%' || LOWER(${idx}) || '%'")
         params.append(area); idx += 1
+    preference_rank = ""
     if tags:
-        conditions.append(f"tags && ${idx}::text[]")
-        params.append(tags); idx += 1
+        preference_rank = f"(CASE WHEN tags && ${idx}::text[] THEN 0 ELSE 1 END),"
+        params.append(tags)
+        idx += 1
 
     query = f"""
         SELECT id, name, name_en, destination, area, address,
@@ -51,7 +53,7 @@ async def get_food_venues(
                hours, recommended_duration, description, base_price
         FROM {config.DB_SCHEMA}.places
         WHERE {" AND ".join(conditions)}
-        ORDER BY must_visit DESC, priority_score DESC, rating DESC NULLS LAST
+        ORDER BY {preference_rank} must_visit DESC, priority_score DESC, rating DESC NULLS LAST
         LIMIT ${idx}
     """
     params.append(limit)
