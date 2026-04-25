@@ -304,9 +304,49 @@ def fetch_existing_external_ids(destination_label: str) -> set[str]:
     return set()
 
 
-def fetch_photos_official(location_id: str, limit: int = 10) -> list[str]:
-    """Fetch photo URLs from official TripAdvisor Content API.
-    Returns list of image URLs. Empty list if API unavailable."""
+def fetch_photos_omkar_detail(entity_id: str, category: str = "attractions") -> list[str]:
+    """Fetch many photos from omkar /attractions/detail or /restaurants/detail endpoint.
+    Returns list of image_link URLs (up to 20). This is the PRIMARY photo source.
+
+    API:
+      GET https://travel-data-api.omkar.cloud/travel/attractions/detail?query={entity_id}
+      GET https://travel-data-api.omkar.cloud/travel/restaurants/detail?query={entity_id}
+
+    Response: {images: [{media_id, caption, image_link}, ...], featured_image: url, ...}
+    """
+    # Map category key to API segment
+    seg = "restaurants" if category == "food" else "attractions"
+    try:
+        r = requests.get(
+            f"{TA_BASE}/{seg}/detail",
+            params={"query": entity_id},
+            headers=HEADERS,
+            timeout=30,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            imgs = data.get("images") or []
+            urls = [img["image_link"] for img in imgs if img.get("image_link")]
+            # Also include featured_image at front if not already there
+            featured = data.get("featured_image")
+            if featured and featured not in urls:
+                urls.insert(0, featured)
+            return urls[:20]
+        elif r.status_code == 500:
+            # omkar upstream 500 is common for some IDs — silent skip
+            pass
+        else:
+            print(f"  ⚠ omkar detail HTTP {r.status_code} for id={entity_id}")
+    except Exception as e:
+        print(f"  ⚠ omkar detail fetch failed for id={entity_id}: {e}")
+    return []
+
+
+def fetch_photos_official_ta(location_id: str, limit: int = 10) -> list[str]:
+    """Fallback: official TripAdvisor Content API.
+    May return 403 depending on IP/domain whitelist — omkar detail preferred.
+    GET https://api.content.tripadvisor.com/api/v1/location/{id}/photos?key=...
+    """
     try:
         r = requests.get(
             f"{OFFICIAL_TA_BASE}/location/{location_id}/photos",
@@ -318,18 +358,15 @@ def fetch_photos_official(location_id: str, limit: int = 10) -> list[str]:
             photos = data.get("data", [])
             urls = []
             for p in photos:
-                # Official API returns images.original/large/medium
                 src = p.get("images", {})
                 url = (src.get("original") or src.get("large") or src.get("medium") or {}).get("url")
                 if url:
                     urls.append(url)
             return urls
-        else:
-            print(f"  ⚠ Official TA photos API: HTTP {r.status_code} — skipping")
-    except Exception as e:
-        print(f"  ⚠ Official TA photos fetch failed: {e}")
+        # 403 expected in most envs — silent
+    except Exception:
+        pass
     return []
-
 
 def post_seed(destination: str, places: list[dict]) -> dict:
     payload = {"destination": destination, "places": places, "combos": []}
@@ -381,20 +418,26 @@ def import_destination_category(
         print("  ℹ All places already exist in DB — nothing to seed")
         return {"destination": label_vi, "cat": cat_key, "ok": True, "places_created": 0, "places_updated": 0, "skipped_all": True}
 
-    # ── Optional: fetch extra photos from official TripAdvisor API ────────────
+    # ── Optional: fetch extra photos via omkar detail endpoint ──────────────────
     if fetch_extra_photos:
         for place in places:
             eid = place.get("external_id")
             if eid:
-                extra = fetch_photos_official(eid, limit=10)
+                # Primary: omkar detail (attractions/detail or restaurants/detail)
+                extra = fetch_photos_omkar_detail(eid, category=cat_key)
+                if not extra:
+                    # Secondary: official TA Content API (may 403 outside whitelisted domains)
+                    extra = fetch_photos_official_ta(eid, limit=10)
                 if extra:
                     existing = place.get("images") or []
-                    # Merge: cover first, then extra, deduplicate
-                    merged = list(dict.fromkeys([place["cover_image"]] + extra + existing))
+                    # Merge: cover first, then omkar detail photos, deduplicate
+                    merged = list(dict.fromkeys(
+                        ([place["cover_image"]] if place.get("cover_image") else []) + extra + existing
+                    ))
                     place["images"] = [u for u in merged if u]
                     if not place.get("cover_image") and place["images"]:
                         place["cover_image"] = place["images"][0]
-                    print(f"    📷 {place['name']}: {len(place['images'])} photos")
+                    print(f"    📷 {place['name']}: {len(place['images'])} photos") 
 
     if dry_run:
         print(json.dumps(places[0], ensure_ascii=False, indent=2)[:800])

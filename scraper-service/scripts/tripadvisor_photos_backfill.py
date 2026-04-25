@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 """
-tripadvisor_photos_backfill.py — Backfill images từ official TripAdvisor Content API.
+tripadvisor_photos_backfill.py — Backfill images từ omkar Travel Data API.
 
 Với mỗi place có external_source='tripadvisor' và external_id trong DB:
-  1. Gọi official TA GET /location/{id}/photos (key=TRIPADVISOR_OFFICIAL_API_KEY)
-  2. Lấy tối đa 10-15 ảnh (original/large URL)
+  1. Gọi omkar GET /attractions/detail hoặc /restaurants/detail (dựa vào category)
+  2. Lấy tối đa 20 ảnh từ images[].image_link
   3. Re-seed qua POST /api/v1/knowledge-base/seed để update images array
 
-API docs: https://tripadvisor-content-api.readme.io/reference/getlocationphotos
+omkar API endpoints:
+  GET https://travel-data-api.omkar.cloud/travel/attractions/detail?query={entity_id}
+  GET https://travel-data-api.omkar.cloud/travel/restaurants/detail?query={entity_id}
+
+Response format: {images: [{media_id, caption, image_link}, ...], featured_image: url}
+
+Fallback: official TripAdvisor Content API (key=TRIPADVISOR_OFFICIAL_API_KEY)
+  GET https://api.content.tripadvisor.com/api/v1/location/{id}/photos
+  (May 403 depending on IP/domain whitelist)
 
 Usage:
   python tripadvisor_photos_backfill.py --dest "An Giang"
   python tripadvisor_photos_backfill.py --bulk-all
   python tripadvisor_photos_backfill.py --dest "Đà Nẵng" --min-photos 5 --dry-run
 
-Env: TRIPADVISOR_OFFICIAL_API_KEY, BACKEND_URL, BACKEND_JWT.
-
-Note: Official API miễn phí cho non-commercial / limited use.
-      Rate limit: 5000 calls/month, cool cache 2s giữa mỗi request.
+Env: TRIPADVISOR_API_KEY, TRIPADVISOR_OFFICIAL_API_KEY, BACKEND_URL, BACKEND_JWT.
 """
 from __future__ import annotations
 
@@ -37,12 +42,15 @@ try:
 except ImportError:
     pass
 
+OMKAR_KEY      = os.getenv("TRIPADVISOR_API_KEY", "ok_85955b65730bffb2f65b927c587108ea")
 OFFICIAL_TA_KEY = os.getenv("TRIPADVISOR_OFFICIAL_API_KEY", "40A4381EA19F409482A459A25202CB03")
 BACKEND_URL     = os.getenv("BACKEND_URL", "http://localhost:8080").rstrip("/")
 PLACES_URL      = f"{BACKEND_URL}/api/v1/places"
 SEED_URL        = f"{BACKEND_URL}/api/v1/knowledge-base/seed"
 BACKEND_TOKEN   = os.getenv("BACKEND_JWT", "")
+OMKAR_BASE      = "https://travel-data-api.omkar.cloud/travel"
 OFFICIAL_BASE   = "https://api.content.tripadvisor.com/api/v1"
+OMKAR_HEADERS   = {"API-Key": OMKAR_KEY}
 AUTH_HEADERS    = {"Authorization": f"Bearer {BACKEND_TOKEN}"} if BACKEND_TOKEN else {}
 SEED_HEADERS    = {**AUTH_HEADERS}
 
@@ -80,9 +88,48 @@ def fetch_places_from_backend(destination: str) -> list[dict]:
     return []
 
 
-def fetch_photos_official(location_id: str, limit: int = 15) -> list[str]:
-    """Fetch photo URLs từ official TripAdvisor Content API.
-    Returns: list of image URL strings (original/large resolution)."""
+def fetch_photos_omkar_detail(entity_id: str, category: str = "ATTRACTION") -> list[str]:
+    """PRIMARY: Fetch photos từ omkar detail endpoint.
+
+    Dùng đúng segment dựa vào category place:
+      ATTRACTION → GET /travel/attractions/detail?query={entity_id}
+      FOOD       → GET /travel/restaurants/detail?query={entity_id}
+
+    Response: {images: [{media_id, caption, image_link}, ...], featured_image: url}
+    Trả về tối đa 20 ảnh.
+    """
+    seg = "restaurants" if category == "FOOD" else "attractions"
+    try:
+        r = requests.get(
+            f"{OMKAR_BASE}/{seg}/detail",
+            params={"query": entity_id},
+            headers=OMKAR_HEADERS,
+            timeout=30,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            imgs = data.get("images") or []
+            urls = [img["image_link"] for img in imgs if img.get("image_link")]
+            # Include featured_image at front
+            featured = data.get("featured_image")
+            if featured and featured not in urls:
+                urls.insert(0, featured)
+            return urls[:20]
+        elif r.status_code == 500:
+            # omkar upstream 500 — common for some IDs, silent skip
+            pass
+        else:
+            print(f"  ⚠ omkar detail HTTP {r.status_code} for id={entity_id}")
+    except Exception as e:
+        print(f"  ⚠ omkar detail error for id={entity_id}: {e}")
+    return []
+
+
+def fetch_photos_official_ta(location_id: str, limit: int = 10) -> list[str]:
+    """FALLBACK: official TripAdvisor Content API.
+    GET https://api.content.tripadvisor.com/api/v1/location/{id}/photos
+    May return 403 depending on IP/domain whitelist — omkar detail preferred.
+    """
     try:
         r = requests.get(
             f"{OFFICIAL_BASE}/location/{location_id}/photos",
@@ -90,57 +137,17 @@ def fetch_photos_official(location_id: str, limit: int = 15) -> list[str]:
             timeout=20,
         )
         if r.status_code == 200:
-            data = r.json()
-            photos = data.get("data", [])
+            photos = r.json().get("data", [])
             urls = []
             for p in photos:
                 src = p.get("images", {})
-                # Priority: original > large > medium > small
-                url = None
-                for size in ("original", "large", "medium", "small"):
-                    url = (src.get(size) or {}).get("url")
-                    if url:
-                        break
+                url = (src.get("original") or src.get("large") or src.get("medium") or {}).get("url")
                 if url:
                     urls.append(url)
             return urls
-        elif r.status_code == 403:
-            print(f"  ⚠ Official TA API 403 Forbidden for id={location_id} — key may need domain whitelist")
-        elif r.status_code == 429:
-            print(f"  ⚠ Rate limited — sleeping 5s")
-            time.sleep(5)
-        else:
-            print(f"  ⚠ Official TA API HTTP {r.status_code} for id={location_id}")
-    except Exception as e:
-        print(f"  ⚠ Photos fetch error for id={location_id}: {e}")
-    return []
-
-
-def fetch_photos_omkar_detail(location_id: str) -> list[str]:
-    """Fallback: fetch ảnh từ omkar detail endpoint (dùng thay official TA nếu 403)."""
-    omkar_key = os.getenv("TRIPADVISOR_API_KEY", "ok_85955b65730bffb2f65b927c587108ea")
-    try:
-        for seg in ("attractions", "restaurants"):
-            r = requests.get(
-                f"https://travel-data-api.omkar.cloud/travel/{seg}/detail",
-                params={"query": location_id},
-                headers={"API-Key": omkar_key},
-                timeout=30,
-            )
-            if r.status_code == 200:
-                data = r.json()
-                if data.get("name"):
-                    # omkar returns photos array
-                    photos = data.get("photos") or []
-                    urls = [p.get("url") or p.get("link") for p in photos if isinstance(p, dict)]
-                    urls = [u for u in urls if u]
-                    # Also grab featured_image if present
-                    featured = data.get("featured_image")
-                    if featured and featured not in urls:
-                        urls.insert(0, featured)
-                    return urls[:15]
-    except Exception as e:
-        print(f"  ⚠ Omkar detail fallback failed for id={location_id}: {e}")
+        # 403 expected outside whitelisted domains — silent
+    except Exception:
+        pass
     return []
 
 
@@ -197,7 +204,7 @@ def seed_places(destination: str, places: list[dict]) -> dict:
 # ── Main logic ─────────────────────────────────────────────────────────────────
 
 def backfill_destination(destination: str, min_photos: int = 3, dry_run: bool = False,
-                          use_omkar_fallback: bool = True, sleep: float = 2.0) -> dict:
+                          sleep: float = 2.0) -> dict:
     print(f"\n{'='*60}")
     print(f"📷 Backfill photos: {destination}")
     print(f"{'='*60}")
@@ -210,6 +217,7 @@ def backfill_destination(destination: str, min_photos: int = 3, dry_run: bool = 
     skipped = 0
     for place in places:
         ext_id = str(place["external_id"])
+        category = place.get("category", "ATTRACTION")  # ATTRACTION or FOOD
         current_imgs = place.get("images") or []
         current_count = len([u for u in current_imgs if u])
 
@@ -217,24 +225,28 @@ def backfill_destination(destination: str, min_photos: int = 3, dry_run: bool = 
             skipped += 1
             continue
 
-        print(f"\n  → {place['name']} (id={ext_id}, current images={current_count})")
+        print(f"\n  → {place['name']} (id={ext_id}, cat={category}, current images={current_count})")
 
-        # Try official API first
-        new_photos = fetch_photos_official(ext_id, limit=15)
-        if not new_photos and use_omkar_fallback:
-            print(f"    Fallback: trying omkar detail endpoint…")
-            new_photos = fetch_photos_omkar_detail(ext_id)
+        # PRIMARY: omkar detail endpoint (attractions/detail or restaurants/detail)
+        new_photos = fetch_photos_omkar_detail(ext_id, category=category)
+
+        # FALLBACK: official TripAdvisor Content API
+        if not new_photos:
+            print(f"    Fallback: trying official TA Content API…")
+            new_photos = fetch_photos_official_ta(ext_id, limit=10)
 
         if not new_photos:
             print(f"    ⚠ No photos found — keeping existing {current_count} images")
             continue
 
-        total = len(set([place.get("cover_image")] + new_photos + current_imgs) - {None})
-        print(f"    ✓ Fetched {len(new_photos)} new photos → total {total}")
+        total = len(dict.fromkeys(
+            ([place.get("cover_image")] if place.get("cover_image") else []) + new_photos + current_imgs
+        ))
+        print(f"    ✓ Fetched {len(new_photos)} photos → total ~{total}")
 
         seed_payload = build_seed_payload(place, new_photos)
         if dry_run:
-            print(f"    [dry-run] Would update images: {seed_payload['images'][:3]}…")
+            print(f"    [dry-run] images sample: {seed_payload['images'][:3]}")
         else:
             updated.append(seed_payload)
 
@@ -281,10 +293,8 @@ def main():
     ap.add_argument("--min-photos", type=int, default=3,
                     help="Chỉ update places có < N ảnh (default=3)")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--no-omkar-fallback", action="store_true",
-                    help="Không dùng omkar detail làm fallback nếu official API fail")
     ap.add_argument("--sleep", type=float, default=2.0,
-                    help="Delay giữa mỗi API call (default=2s, tránh rate limit)")
+                    help="Delay giữa mỗi API call (default=2s, tránh rate limit omkar)")
     args = ap.parse_args()
 
     if not any([args.dest, args.bulk_new, args.bulk_priority, args.bulk_all]):
@@ -300,7 +310,8 @@ def main():
         targets = [args.dest]
 
     print(f"🚀 Starting photos backfill: {len(targets)} destinations, min_photos={args.min_photos}")
-    print(f"   official_key={'****' + OFFICIAL_TA_KEY[-4:] if OFFICIAL_TA_KEY else 'MISSING'}")
+    print(f"   omkar_key={'****' + OMKAR_KEY[-4:] if OMKAR_KEY else 'MISSING'} (primary)")
+    print(f"   official_ta_key={'****' + OFFICIAL_TA_KEY[-4:] if OFFICIAL_TA_KEY else 'MISSING'} (fallback)")
     print(f"   backend={BACKEND_URL}")
     print(f"   dry_run={args.dry_run}")
 
@@ -311,7 +322,6 @@ def main():
                 dest,
                 min_photos=args.min_photos,
                 dry_run=args.dry_run,
-                use_omkar_fallback=not args.no_omkar_fallback,
                 sleep=args.sleep,
             )
         except Exception as e:
