@@ -75,6 +75,17 @@ func Load() *Config {
 	if cfg.JWTSecret == "" {
 		log.Fatal("JWT_SECRET is required")
 	}
+	// Validate required database fields — fail fast with a clear message instead of a cryptic DB error
+	for _, check := range []struct{ name, val string }{
+		{"DB_HOST", cfg.DBHost},
+		{"DB_PORT", cfg.DBPort},
+		{"DB_USER", cfg.DBUser},
+		{"DB_NAME", cfg.DBName},
+	} {
+		if check.val == "" {
+			log.Fatalf("environment variable %s is required but not set", check.name)
+		}
+	}
 	if cfg.AllowedOrigins == "" {
 		cfg.AllowedOrigins = "http://localhost:3000"
 	}

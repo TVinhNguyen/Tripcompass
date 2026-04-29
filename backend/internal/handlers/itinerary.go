@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"tripcompass-backend/internal/middleware"
+	"tripcompass-backend/internal/pagination"
 	"tripcompass-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -116,8 +117,7 @@ func (h *ItineraryHandler) Publish(c *gin.Context) {
 
 // GET /explore
 func (h *ItineraryHandler) Explore(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	page, limit, _ := pagination.Parse(c, 20, 50)
 	minBudget, _ := strconv.ParseFloat(c.DefaultQuery("min_budget", "0"), 64)
 	maxBudget, _ := strconv.ParseFloat(c.DefaultQuery("max_budget", "0"), 64)
 

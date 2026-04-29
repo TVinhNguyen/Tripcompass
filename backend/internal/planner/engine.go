@@ -112,7 +112,7 @@ func (e *Engine) Generate(req GenerateRequest) (*GenerateResponse, error) {
 	}
 
 	// ── Step 6: Cluster + assign to days (BestTimeOfDay-aware) ───────────────
-	clusters := ClusterByProximity(regular, 5.0)
+	clusters := ClusterByProximity(regular, ClusterRadiusKm)
 	dayAssignments, dayDurationMap := assignToDays(mustVisit, clusters, numDays)
 
 	// ── Step 7: Per-day route optimize ────────────────────────────────────────
@@ -224,7 +224,7 @@ func sortByTimeOfDay(places []SlotPlace) []SlotPlace {
 
 // collectStalePriceWarnings returns display strings for places with stale prices.
 func collectStalePriceWarnings(days []DayPlan) []string {
-	staleThreshold := time.Now().AddDate(0, 0, -30)
+	staleThreshold := time.Now().AddDate(0, 0, -StalePriceDays)
 	seen := map[string]bool{}
 	warnings := []string{}
 	for _, day := range days {
@@ -440,9 +440,16 @@ func fillEmptyDays(assignments map[int][]SlotPlace, selected []SlotPlace, numDay
 	if len(selected) == 0 {
 		return
 	}
+	// Iterate keys in sorted order for deterministic output (Go map iteration is random)
+	days := make([]int, 0, len(assignments))
+	for d := range assignments {
+		days = append(days, d)
+	}
+	sort.Ints(days)
+
 	usedIDs := map[string]bool{}
-	for _, places := range assignments {
-		for _, p := range places {
+	for _, d := range days {
+		for _, p := range assignments[d] {
 			usedIDs[p.ID] = true
 		}
 	}

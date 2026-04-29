@@ -15,8 +15,8 @@ const (
 	dinnerStartMin      = 18 * 60
 	dinnerEndMin        = 19*60 + 30
 	eveningEndMin       = 21 * 60
-	bufferBetweenMin    = 30  // buffer between activity and next event
-	defaultActivityDur  = 120 // fallback if place has no duration
+	// BufferBetweenMin and DefaultActivityMin come from planner/config.go
+	// and are used via the package-level constants: BufferBetweenMin, DefaultActivityMin.
 )
 
 // minsToTime converts minutes-since-midnight to "HH:MM".
@@ -32,7 +32,7 @@ func activityDuration(p SlotPlace) int {
 	if p.Duration > 0 {
 		return p.Duration
 	}
-	return defaultActivityDur
+	return DefaultActivityMin
 }
 
 // BuildDayPlan constructs a DayPlan for one day with dynamic slot timing.
@@ -169,7 +169,7 @@ func buildStandardDay(places, food []SlotPlace, comboIncludesLunch bool, templat
 			SlotType: "morning_activity",
 			Place:    &p,
 		})
-		cur = end + bufferBetweenMin
+		cur = end + BufferBetweenMin
 	}
 
 	// ── Lunch ─────────────────────────────────────────────────────────────────
@@ -205,7 +205,7 @@ func buildStandardDay(places, food []SlotPlace, comboIncludesLunch bool, templat
 			next := places[placeIdx]
 			if prev.Lat != 0 && next.Lat != 0 {
 				travelMin := EstimateTravelMin(HaversineKm(prev.Lat, prev.Lng, next.Lat, next.Lng))
-				if travelMin > bufferBetweenMin {
+				if travelMin > BufferBetweenMin {
 					slots = append(slots, TimeSlot{
 						Start:    minsToTime(cur),
 						End:      minsToTime(cur + travelMin),
@@ -390,7 +390,7 @@ func buildArrivalDay(places, food []SlotPlace, comboIncludesLunch bool, arrivalT
 				SlotType: "afternoon_activity",
 				Place:    &p,
 			})
-			cur = end + bufferBetweenMin
+			cur = end + BufferBetweenMin
 		}
 	} else {
 		// Standard late arrival: 1 activity capped at 2h
@@ -559,7 +559,7 @@ func buildFullDay(places, food []SlotPlace, comboIncludesLunch bool) []TimeSlot 
 			SlotType: "full_day_activity",
 			Place:    &p,
 		})
-		cur = end + bufferBetweenMin
+		cur = end + BufferBetweenMin
 
 		// If primary ends before 15:30 and there's a short secondary place, add it
 		if cur < 15*60+30 && len(places) > 1 {

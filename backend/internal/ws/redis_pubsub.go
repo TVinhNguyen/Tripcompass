@@ -67,21 +67,7 @@ func (ps *RedisPubSub) GetOnlineUsers(ctx context.Context, roomID string) ([]str
 	return ps.rdb.SMembers(ctx, onlineKey(roomID)).Result()
 }
 
-// GetOnlineUsersWithDetails retrieves online users with full details
-func (ps *RedisPubSub) GetOnlineUsersWithDetails(ctx context.Context, roomID string, userMap map[string]SenderInfo) ([]SenderInfo, error) {
-	userIDs, err := ps.GetOnlineUsers(ctx, roomID)
-	if err != nil {
-		return nil, err
-	}
 
-	var users []SenderInfo
-	for _, userID := range userIDs {
-		if user, ok := userMap[userID]; ok {
-			users = append(users, user)
-		}
-	}
-	return users, nil
-}
 
 // pubEnvelope is the cross-server message wrapper used to deduplicate broadcasts.
 // Messages published by this instance are ignored when received via the subscription.
@@ -180,33 +166,4 @@ func (ps *RedisPubSub) UnsubscribeRoom(roomID string) {
 	}
 }
 
-// HealthCheck verifies Redis connection
-func (ps *RedisPubSub) HealthCheck() error {
-	return ps.rdb.Ping(ps.ctx).Err()
-}
 
-// PublishUserStatus broadcasts user status changes (login/logout from anywhere)
-func (ps *RedisPubSub) PublishUserStatus(ctx context.Context, userID string, status string, details string) {
-	payload, _ := json.Marshal(map[string]interface{}{
-		"type":      "user_status",
-		"user_id":   userID,
-		"status":    status,
-		"details":   details,
-		"timestamp": time.Now().Unix(),
-	})
-	if err := ps.rdb.Publish(ctx, "ws:user_status", payload).Err(); err != nil {
-		log.Printf("[Redis PubSub] Error publishing user status user=%s: %v", userID, err)
-	}
-}
-
-// SendTypingIndicator sends typing indicator for a specific itinerary
-func (ps *RedisPubSub) SendTypingIndicator(ctx context.Context, roomID, userID string, isTyping bool) {
-	payload, _ := json.Marshal(map[string]interface{}{
-		"type":    "typing",
-		"user_id": userID,
-		"typing":  isTyping,
-	})
-	if err := ps.rdb.Publish(ctx, channelKey(roomID), payload).Err(); err != nil {
-		log.Printf("[Redis PubSub] Error sending typing indicator room=%s user=%s: %v", roomID, userID, err)
-	}
-}

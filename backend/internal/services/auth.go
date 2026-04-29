@@ -396,6 +396,9 @@ func (s *AuthService) generateToken(userID uuid.UUID, email string) (string, err
 
 func generateToken32() string {
 	b := make([]byte, 32)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failure is catastrophic — an all-zero token would be a silent security hole.
+		panic("crypto/rand is unavailable: " + err.Error())
+	}
 	return hex.EncodeToString(b)
 }

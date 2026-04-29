@@ -1,7 +1,6 @@
 package ws
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"sync"
@@ -34,13 +33,14 @@ const (
 )
 
 type Client struct {
-	ID       string
-	UserID   string
-	FullName string
-	RoomID   string
-	Hub      *Hub
-	Conn     *websocket.Conn
-	Send     chan []byte
+	ID        string
+	UserID    string
+	FullName  string
+	RoomID    string
+	Hub       *Hub
+	Conn      *websocket.Conn
+	Send      chan []byte
+	closeOnce sync.Once
 }
 
 func NewClient(hub *Hub, conn *websocket.Conn, roomID, userID, fullName string) *Client {
@@ -98,7 +98,7 @@ func (c *Client) ReadPump() {
 
 		// Publish to Redis for cross-server broadcasting
 		if c.Hub.redisPubSub != nil {
-			c.Hub.redisPubSub.Publish(context.TODO(), c.RoomID, data)
+			c.Hub.redisPubSub.Publish(c.Hub.redisPubSub.ctx, c.RoomID, data)
 		}
 	}
 }
@@ -144,10 +144,10 @@ func (c *Client) sendError(msg string) {
 	}
 }
 
-// safeClose closes a channel without panicking if already closed
-func safeClose(ch chan []byte) {
-	defer func() { recover() }()
-	close(ch)
+// closeSend closes the Client.Send channel exactly once, preventing double-close panics.
+// Use this instead of close(c.Send) everywhere.
+func (c *Client) closeSend() {
+	c.closeOnce.Do(func() { close(c.Send) })
 }
 
 // ─── Room ────────────────────────────────────────────────────────────────────
@@ -197,8 +197,8 @@ func (r *Room) Broadcast(data []byte, exclude *Client) {
 		select {
 		case client.Send <- data:
 		default:
-			// Buffer full, mark for closure
-			safeClose(client.Send)
+			// Buffer full — close send channel and evict
+			client.closeSend()
 			toClose = append(toClose, client)
 		}
 	}
@@ -285,19 +285,19 @@ func (h *Hub) addClient(c *Client) {
 		h.Rooms[c.RoomID] = room
 		// Subscribe to Redis channel for this room (cross-server messages)
 		if h.redisPubSub != nil {
-			h.redisPubSub.SubscribeRoom(context.TODO(), c.RoomID)
+			h.redisPubSub.SubscribeRoom(h.redisPubSub.ctx, c.RoomID)
 			h.subscribeMu.Lock()
 			h.subscribedRooms[c.RoomID] = true
 			h.subscribeMu.Unlock()
 		}
 	}
-	h.mu.Unlock()
-
+	// M5: AddClient inside hub lock — prevents room deletion race between Unlock and AddClient
 	room.AddClient(c)
+	h.mu.Unlock()
 
 	// Track user online in Redis
 	if h.redisPubSub != nil {
-		h.redisPubSub.TrackOnline(context.TODO(), c.RoomID, c.UserID)
+		h.redisPubSub.TrackOnline(h.redisPubSub.ctx, c.RoomID, c.UserID)
 	}
 
 	// Notify room: user joined
@@ -313,7 +313,7 @@ func (h *Hub) addClient(c *Client) {
 
 	// Also publish to Redis for cross-server
 	if h.redisPubSub != nil {
-		h.redisPubSub.Publish(context.TODO(), c.RoomID, data)
+		h.redisPubSub.Publish(h.redisPubSub.ctx, c.RoomID, data)
 	}
 
 	// Send online users list to the new client
@@ -341,11 +341,11 @@ func (h *Hub) removeClient(c *Client) {
 	}
 
 	room.RemoveClient(c)
-	safeClose(c.Send)
+	c.closeSend()
 
 	// Track user offline in Redis
 	if h.redisPubSub != nil {
-		h.redisPubSub.TrackOffline(context.TODO(), c.RoomID, c.UserID)
+		h.redisPubSub.TrackOffline(h.redisPubSub.ctx, c.RoomID, c.UserID)
 	}
 
 	// Notify room: user left
@@ -361,7 +361,7 @@ func (h *Hub) removeClient(c *Client) {
 
 	// Also publish to Redis for cross-server
 	if h.redisPubSub != nil {
-		h.redisPubSub.Publish(context.TODO(), c.RoomID, data)
+		h.redisPubSub.Publish(h.redisPubSub.ctx, c.RoomID, data)
 	}
 
 	// Cleanup empty rooms
