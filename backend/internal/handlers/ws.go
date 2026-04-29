@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 	"tripcompass-backend/internal/models"
 	"tripcompass-backend/internal/ws"
 
@@ -11,22 +12,35 @@ import (
 	"gorm.io/gorm"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Cho phép tất cả origins (production nên restrict)
-	},
-}
-
 type WSHandler struct {
-	db        *gorm.DB
-	hub       *ws.Hub
-	jwtSecret string
+	db             *gorm.DB
+	hub            *ws.Hub
+	jwtSecret      string
+	allowedOrigins []string
 }
 
-func NewWSHandler(db *gorm.DB, hub *ws.Hub, jwtSecret string) *WSHandler {
-	return &WSHandler{db: db, hub: hub, jwtSecret: jwtSecret}
+func NewWSHandler(db *gorm.DB, hub *ws.Hub, jwtSecret, allowedOrigins string) *WSHandler {
+	origins := strings.Split(allowedOrigins, ",")
+	for i, o := range origins {
+		origins[i] = strings.TrimSpace(o)
+	}
+	return &WSHandler{db: db, hub: hub, jwtSecret: jwtSecret, allowedOrigins: origins}
+}
+
+func (h *WSHandler) newUpgrader() *websocket.Upgrader {
+	return &websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			for _, allowed := range h.allowedOrigins {
+				if allowed == origin {
+					return true
+				}
+			}
+			return false
+		},
+	}
 }
 
 // HandleWebSocket xử lý upgrade HTTP → WebSocket
@@ -93,7 +107,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	}
 
 	// Upgrade HTTP → WebSocket
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := h.newUpgrader().Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return
 	}

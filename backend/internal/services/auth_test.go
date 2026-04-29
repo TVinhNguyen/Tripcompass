@@ -122,7 +122,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 	user := createTestUser(t, db)
 
 	t.Run("token contains correct sub claim", func(t *testing.T) {
-		token, err := svc.generateToken(user.ID)
+		token, err := svc.generateToken(user.ID, user.Email)
 		require.NoError(t, err)
 		assert.NotEmpty(t, token)
 
@@ -136,12 +136,13 @@ func TestAuthService_GenerateToken(t *testing.T) {
 		claims, ok := parsed.Claims.(jwt.MapClaims)
 		require.True(t, ok)
 		assert.Equal(t, user.ID.String(), claims["sub"])
+		assert.Equal(t, user.Email, claims["email"])
 		assert.NotNil(t, claims["exp"])
 		assert.NotNil(t, claims["iat"])
 	})
 
 	t.Run("token is signed with HS256", func(t *testing.T) {
-		token, err := svc.generateToken(user.ID)
+		token, err := svc.generateToken(user.ID, user.Email)
 		require.NoError(t, err)
 
 		parsed, err := jwt.Parse(token, func(tk *jwt.Token) (interface{}, error) {

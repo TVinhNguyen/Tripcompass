@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"tripcompass-backend/internal/apperror"
 
@@ -16,6 +17,7 @@ func handleServiceError(c *gin.Context, err error) {
 	case errors.Is(err, apperror.ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Printf("[ERROR] unhandled service error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 	}
 }

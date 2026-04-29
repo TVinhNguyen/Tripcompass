@@ -34,6 +34,8 @@ type Config struct {
 	GoogleClientSecret string
 	FacebookAppID      string
 	FacebookAppSecret  string
+	// Admin access control
+	AdminEmails string
 }
 
 func Load() *Config {
@@ -67,6 +69,7 @@ func Load() *Config {
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		FacebookAppID:      os.Getenv("FACEBOOK_APP_ID"),
 		FacebookAppSecret:  os.Getenv("FACEBOOK_APP_SECRET"),
+		AdminEmails:        os.Getenv("ADMIN_EMAILS"),
 	}
 
 	if cfg.JWTSecret == "" {

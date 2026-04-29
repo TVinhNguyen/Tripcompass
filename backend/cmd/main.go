@@ -80,7 +80,7 @@ func main() {
 	lookupHandler := handlers.NewLookupHandler(db)
 	seedHandler := handlers.NewSeedHandler(db)
 	plannerHandler := handlers.NewPlannerHandler(db, rdb, cfg)
-	wsHandler := handlers.NewWSHandler(db, hub, cfg.JWTSecret)
+	wsHandler := handlers.NewWSHandler(db, hub, cfg.JWTSecret, cfg.AllowedOrigins)
 
 	// Health check — public (for monitoring/ALB)
 	r.GET("/health", func(c *gin.Context) {
@@ -94,10 +94,10 @@ func main() {
 
 		// Auth — public
 		auth := api.Group("/auth")
-		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login)
-		auth.POST("/verify", authHandler.VerifyEmail)
-		auth.POST("/resend-verification", authHandler.ResendVerification)
+		auth.POST("/register", middleware.RateLimit(5, 60), authHandler.Register)
+		auth.POST("/login", middleware.RateLimit(10, 60), authHandler.Login)
+		auth.POST("/verify", middleware.RateLimit(20, 60), authHandler.VerifyEmail)
+		auth.POST("/resend-verification", middleware.RateLimit(3, 300), authHandler.ResendVerification)
 		auth.POST("/google", authHandler.GoogleLogin)
 		auth.POST("/facebook", authHandler.FacebookLogin)
 
@@ -168,9 +168,9 @@ func main() {
 			protected.POST("/knowledge-base/seed", seedHandler.BulkSeed)
 		}
 
-		// ── Admin routes (JWT + future role check) ──────────────────
+		// ── Admin routes (JWT + email allowlist) ────────────────────
 		admin := api.Group("/admin")
-		admin.Use(middleware.JWTAuth(cfg.JWTSecret))
+		admin.Use(middleware.JWTAuth(cfg.JWTSecret), middleware.RequireAdminEmail(cfg.AdminEmails))
 		{
 			admin.DELETE("/planner/cache", plannerHandler.FlushCache)
 		}

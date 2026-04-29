@@ -8,7 +8,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const UserIDKey = "userID"
+const (
+	UserIDKey    = "userID"
+	AdminEmailKey = "adminEmail"
+)
 
 func JWTAuth(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -45,6 +48,12 @@ func JWTAuth(secret string) gin.HandlerFunc {
 		}
 
 		c.Set(UserIDKey, userID)
+
+		// Set email claim if present (used by admin middleware)
+		if email, ok := claims["email"].(string); ok && email != "" {
+			c.Set(AdminEmailKey, email)
+		}
+
 		c.Next()
 	}
 }

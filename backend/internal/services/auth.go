@@ -112,7 +112,7 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 		}
 	}
 
-	token, err := s.generateToken(user.ID)
+	token, err := s.generateToken(user.ID, user.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (s *AuthService) Login(input LoginInput) (*AuthResponse, error) {
 		return nil, errors.New("please verify your email before logging in")
 	}
 
-	token, err := s.generateToken(user.ID)
+	token, err := s.generateToken(user.ID, user.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +333,7 @@ func (s *AuthService) findOrCreateSocialUser(email, name, avatarURL, provider, p
 		s.db.Model(&user).Updates(updates)
 	}
 
-	token, err := s.generateToken(user.ID)
+	token, err := s.generateToken(user.ID, user.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -357,11 +357,12 @@ func (s *AuthService) GetByID(id string) (*models.User, error) {
 // Token helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-func (s *AuthService) generateToken(userID uuid.UUID) (string, error) {
+func (s *AuthService) generateToken(userID uuid.UUID, email string) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": userID.String(),
-		"exp": time.Now().Add(time.Duration(s.jwtExpire) * time.Hour).Unix(),
-		"iat": time.Now().Unix(),
+		"sub":   userID.String(),
+		"email": email,
+		"exp":   time.Now().Add(time.Duration(s.jwtExpire) * time.Hour).Unix(),
+		"iat":   time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.jwtSecret))
