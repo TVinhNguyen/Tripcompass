@@ -110,8 +110,28 @@ func (s *SeedService) BulkUpsert(input SeedInput) (*SeedResult, error) {
 			var existing models.Place
 			err := tx.Where("destination = ? AND category = ? AND name = ?", dest, place.Category, place.Name).First(&existing).Error
 			if err == gorm.ErrRecordNotFound {
-				if err := tx.Create(&place).Error; err != nil {
-					return fmt.Errorf("create place '%s': %w", place.Name, err)
+				// Use a savepoint so a constraint violation doesn't abort the whole transaction.
+				saveptID := "x"
+				if place.ExternalID != nil {
+					saveptID = strings.ReplaceAll(*place.ExternalID, "-", "")
+					if len(saveptID) > 20 { saveptID = saveptID[:20] }
+				}
+				savept := "sp_p" + saveptID
+				tx.Exec("SAVEPOINT " + savept)
+				if createErr := tx.Create(&place).Error; createErr != nil {
+					tx.Exec("ROLLBACK TO SAVEPOINT " + savept)
+					// If it's a unique constraint on external_id (cross-province duplicate),
+					// retry without external_id so the place is still created.
+					if strings.Contains(createErr.Error(), "23505") || strings.Contains(createErr.Error(), "unique constraint") {
+						place.ExternalID = nil
+						if err2 := tx.Create(&place).Error; err2 != nil {
+							return fmt.Errorf("create place '%s' (dedup retry): %w", place.Name, err2)
+						}
+					} else {
+						return fmt.Errorf("create place '%s': %w", place.Name, createErr)
+					}
+				} else {
+					tx.Exec("RELEASE SAVEPOINT " + savept)
 				}
 				result.PlacesCreated++
 			} else if err == nil {
