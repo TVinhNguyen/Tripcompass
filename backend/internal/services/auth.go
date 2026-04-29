@@ -106,12 +106,14 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	// Send verification email (non-blocking failure)
+	// Send verification email asynchronously — don't block registration response
 	if s.email != nil {
-		if err := s.email.SendVerificationEmail(user.Email, user.FullName, verifyToken); err != nil {
-			// Log but don't fail registration
-			log.Printf("[WARN] Failed to send verification email to %s: %v", user.Email, err)
-		}
+		emailSvc := s.email
+		go func() {
+			if err := emailSvc.SendVerificationEmail(user.Email, user.FullName, verifyToken); err != nil {
+				log.Printf("[WARN] Failed to send verification email to %s: %v", user.Email, err)
+			}
+		}()
 	}
 
 	token, err := s.generateToken(user.ID, user.Email)

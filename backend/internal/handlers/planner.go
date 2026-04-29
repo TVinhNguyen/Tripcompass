@@ -57,7 +57,7 @@ func cacheKey(req planner.GenerateRequest) string {
 		prefs,
 	)
 	h := sha256.Sum256([]byte(raw))
-	return plannerCachePrefix + fmt.Sprintf("%x", h[:8])
+	return plannerCachePrefix + fmt.Sprintf("%x", h[:]) // full 128-bit hash; h[:8] collides at ~5B keys
 }
 
 // POST /api/v1/planner/generate
@@ -68,7 +68,7 @@ func (h *PlannerHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// ── Cache read (Go-engine only — planner-ai manages its own cache) ───
 	if h.redis != nil && !h.useLLM {
@@ -152,7 +152,7 @@ func (h *PlannerHandler) runGoEngine(req planner.GenerateRequest) (json.RawMessa
 }
 
 func (h *PlannerHandler) mode() string {
-	if h.useLLM {
+	if h.useLLM && h.plannerAIURL != "" {
 		return "llm"
 	}
 	return "go-engine"
@@ -166,7 +166,7 @@ func (h *PlannerHandler) FlushCache(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	pattern := plannerCachePrefix + "*"
 	var deleted int64
 

@@ -81,6 +81,9 @@ func Load() *Config {
 	if cfg.Port == "" {
 		cfg.Port = "8080"
 	}
+	if cfg.UseLLMPlanner && cfg.PlannerAIURL == "" {
+		log.Fatal("USE_LLM_PLANNER=true requires PLANNER_AI_URL to be set")
+	}
 
 	return cfg
 }
