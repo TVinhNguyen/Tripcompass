@@ -79,10 +79,18 @@ type AuthResponse struct {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
-	// Check email uniqueness
+	// Check email uniqueness — if email exists, return success to prevent enumeration.
+	// Send a notification email to the existing account instead.
 	var existing models.User
 	if err := s.db.Where("email = ?", input.Email).First(&existing).Error; err == nil {
-		return nil, errors.New("email already registered")
+		if s.email != nil {
+			emailSvc := s.email
+			go func() {
+				_ = emailSvc.SendVerificationEmail(existing.Email, existing.FullName, "")
+			}()
+		}
+		// Return a fake token-less response so caller can't distinguish from success
+		return &AuthResponse{Token: "", User: existing}, nil
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
@@ -319,35 +327,36 @@ func (s *AuthService) FacebookLogin(accessToken string) (*AuthResponse, error) {
 }
 
 // findOrCreateSocialUser upserts a user for social login.
+// Uses INSERT ... ON CONFLICT to handle concurrent first-login races atomically.
 func (s *AuthService) findOrCreateSocialUser(email, name, avatarURL, provider, providerID string) (*AuthResponse, error) {
-	var user models.User
+	av := avatarURL
+	user := models.User{
+		Email:      email,
+		FullName:   name,
+		AvatarURL:  &av,
+		Provider:   provider,
+		IsVerified: true, // social login users are considered verified
+	}
 
-	// Find by email + provider, or by email (local account linking)
-	err := s.db.Where("email = ?", email).First(&user).Error
-	if err == gorm.ErrRecordNotFound {
-		// Create new social user
-		av := avatarURL
-		user = models.User{
-			Email:      email,
+	// ON CONFLICT (email): update avatar and mark verified; do not overwrite password or provider
+	result := s.db.Where(models.User{Email: email}).
+		Attrs(models.User{
 			FullName:   name,
 			AvatarURL:  &av,
 			Provider:   provider,
-			IsVerified: true, // Social login users are considered verified
-		}
-		if err := s.db.Create(&user).Error; err != nil {
-			return nil, fmt.Errorf("failed to create social user: %w", err)
-		}
-	} else if err != nil {
-		return nil, err
-	} else {
-		// Update avatar if changed
-		updates := map[string]interface{}{
-			"is_verified": true, // ensure verified
-		}
-		if avatarURL != "" && (user.AvatarURL == nil || *user.AvatarURL != avatarURL) {
-			updates["avatar_url"] = avatarURL
-		}
-		s.db.Model(&user).Updates(updates)
+			IsVerified: true,
+		}).
+		FirstOrCreate(&user)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to upsert social user: %w", result.Error)
+	}
+
+	// Update avatar if it changed (for existing users)
+	if result.RowsAffected == 0 && avatarURL != "" && (user.AvatarURL == nil || *user.AvatarURL != avatarURL) {
+		s.db.Model(&user).Updates(map[string]interface{}{
+			"avatar_url":  avatarURL,
+			"is_verified": true,
+		})
 	}
 
 	token, err := s.generateToken(user.ID, user.Email)

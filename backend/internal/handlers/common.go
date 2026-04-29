@@ -16,6 +16,12 @@ func handleServiceError(c *gin.Context, err error) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 	case errors.Is(err, apperror.ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	case errors.Is(err, apperror.ErrConflict):
+		c.JSON(http.StatusConflict, gin.H{"error": "conflict"})
+	case errors.Is(err, apperror.ErrInvalidInput):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, apperror.ErrUnauthorized):
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 	default:
 		log.Printf("[ERROR] unhandled service error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})

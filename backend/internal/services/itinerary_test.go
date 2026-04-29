@@ -372,25 +372,30 @@ func TestItineraryService_Publish(t *testing.T) {
 	svc := NewItineraryService(db)
 	user := createTestUser(t, db)
 
-	t.Run("toggle DRAFT to PUBLISHED", func(t *testing.T) {
+	t.Run("set DRAFT to PUBLISHED", func(t *testing.T) {
 		it := createTestItinerary(t, db, user.ID)
-		result, err := svc.Publish(it.ID.String(), user.ID.String())
+		result, err := svc.Publish(it.ID.String(), user.ID.String(), "PUBLISHED")
 		require.NoError(t, err)
 		assert.Equal(t, "PUBLISHED", result.Status)
 	})
 
-	t.Run("toggle PUBLISHED to DRAFT", func(t *testing.T) {
+	t.Run("set PUBLISHED to DRAFT", func(t *testing.T) {
 		it := createTestItinerary(t, db, user.ID)
 		db.Model(&it).Update("status", "PUBLISHED")
-		result, err := svc.Publish(it.ID.String(), user.ID.String())
+		result, err := svc.Publish(it.ID.String(), user.ID.String(), "DRAFT")
 		require.NoError(t, err)
 		assert.Equal(t, "DRAFT", result.Status)
 	})
 
-	t.Run("not found or forbidden", func(t *testing.T) {
-		_, err := svc.Publish(uuid.New().String(), user.ID.String())
+	t.Run("invalid status returns error", func(t *testing.T) {
+		it := createTestItinerary(t, db, user.ID)
+		_, err := svc.Publish(it.ID.String(), user.ID.String(), "INVALID")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "itinerary not found or forbidden")
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := svc.Publish(uuid.New().String(), user.ID.String(), "PUBLISHED")
+		assert.Error(t, err)
 	})
 }
 

@@ -55,11 +55,7 @@ func (h *ItineraryHandler) Create(c *gin.Context) {
 func (h *ItineraryHandler) GetOne(c *gin.Context) {
 	it, err := h.svc.GetOne(c.Param("id"), userID(c))
 	if err != nil {
-		if err.Error() == "forbidden" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		} else {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-		}
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, it)
@@ -101,10 +97,18 @@ func (h *ItineraryHandler) Clone(c *gin.Context) {
 }
 
 // PATCH /itineraries/:id/publish
+// Body: {"status": "PUBLISHED"|"DRAFT"}
 func (h *ItineraryHandler) Publish(c *gin.Context) {
-	it, err := h.svc.Publish(c.Param("id"), userID(c))
+	var body struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status field required (PUBLISHED or DRAFT)"})
+		return
+	}
+	it, err := h.svc.Publish(c.Param("id"), userID(c), body.Status)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, it)

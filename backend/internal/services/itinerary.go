@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
 
 	"github.com/google/uuid"
@@ -135,7 +136,7 @@ func (s *ItineraryService) GetOne(id, ownerID string) (*models.Itinerary, error)
 	}
 	// Allow owner or collaborators – for now allow if owner or itinerary is published
 	if it.OwnerID.String() != ownerID && it.Status != "PUBLISHED" {
-		return nil, errors.New("forbidden")
+		return nil, apperror.ErrForbidden
 	}
 	return &it, nil
 }
@@ -213,7 +214,7 @@ func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, err
 		return nil, errors.New("itinerary not found")
 	}
 	if original.Status != "PUBLISHED" && original.OwnerID.String() != requesterID {
-		return nil, errors.New("forbidden")
+		return nil, apperror.ErrForbidden
 	}
 
 	uid, _ := uuid.Parse(requesterID)
@@ -233,48 +234,55 @@ func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, err
 		ClonedFromID:   &clonedFrom,
 	}
 
-	if err := s.db.Create(&clone).Error; err != nil {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&clone).Error; err != nil {
+			return err
+		}
+		newActs := make([]models.Activity, 0, len(original.Activities))
+		for _, act := range original.Activities {
+			newActs = append(newActs, models.Activity{
+				ItineraryID:   clone.ID,
+				DayNumber:     act.DayNumber,
+				OrderIndex:    act.OrderIndex,
+				Title:         act.Title,
+				Category:      act.Category,
+				Lat:           act.Lat,
+				Lng:           act.Lng,
+				EstimatedCost: act.EstimatedCost,
+				StartTime:     act.StartTime,
+				EndTime:       act.EndTime,
+				ImageURL:      act.ImageURL,
+				Notes:         act.Notes,
+			})
+		}
+		if len(newActs) > 0 {
+			if err := tx.CreateInBatches(newActs, 50).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Model(&original).UpdateColumn("clone_count", gorm.Expr("clone_count + 1")).Error
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	// Clone activities
-	for _, act := range original.Activities {
-		newAct := models.Activity{
-			ItineraryID:   clone.ID,
-			DayNumber:     act.DayNumber,
-			OrderIndex:    act.OrderIndex,
-			Title:         act.Title,
-			Category:      act.Category,
-			Lat:           act.Lat,
-			Lng:           act.Lng,
-			EstimatedCost: act.EstimatedCost,
-			StartTime:     act.StartTime,
-			EndTime:       act.EndTime,
-			ImageURL:      act.ImageURL,
-			Notes:         act.Notes,
-		}
-		s.db.Create(&newAct)
-	}
-
-	// increment clone count on original
-	s.db.Model(&original).UpdateColumn("clone_count", gorm.Expr("clone_count + 1"))
-
-	// reload
 	s.db.Preload("Activities").First(&clone, "id = ?", clone.ID)
 	return &clone, nil
 }
 
-func (s *ItineraryService) Publish(id, ownerID string) (*models.Itinerary, error) {
+// Publish sets itinerary status explicitly. Accepted statuses: "PUBLISHED", "DRAFT".
+func (s *ItineraryService) Publish(id, ownerID, status string) (*models.Itinerary, error) {
+	if status != "PUBLISHED" && status != "DRAFT" {
+		return nil, fmt.Errorf("%w: status must be PUBLISHED or DRAFT", apperror.ErrInvalidInput)
+	}
 	var it models.Itinerary
 	if err := s.db.Where("id = ? AND owner_id = ?", id, ownerID).First(&it).Error; err != nil {
-		return nil, errors.New("itinerary not found or forbidden")
+		return nil, apperror.ErrNotFound
 	}
-	newStatus := "PUBLISHED"
-	if it.Status == "PUBLISHED" {
-		newStatus = "DRAFT"
+	if err := s.db.Model(&it).UpdateColumn("status", status).Error; err != nil {
+		return nil, fmt.Errorf("update status: %w", err)
 	}
-	s.db.Model(&it).UpdateColumn("status", newStatus)
-	it.Status = newStatus
+	it.Status = status
 	return &it, nil
 }
 
