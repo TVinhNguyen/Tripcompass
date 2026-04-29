@@ -10,8 +10,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 	"tripcompass-backend/internal/models"
 
@@ -219,9 +221,22 @@ type googleTokenInfo struct {
 }
 
 func (s *AuthService) GoogleLogin(idToken string) (*AuthResponse, error) {
-	// Verify token with Google's tokeninfo endpoint
-	url := "https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken
-	resp, err := http.Get(url)
+	if s.googleClientID == "" {
+		return nil, errors.New("Google login is not configured")
+	}
+
+	// Verify token via POST (keeps id_token out of URL/logs)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	body := strings.NewReader("id_token=" + url.QueryEscape(idToken))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/tokeninfo", body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build Google tokeninfo request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify Google token: %w", err)
 	}
@@ -231,14 +246,14 @@ func (s *AuthService) GoogleLogin(idToken string) (*AuthResponse, error) {
 		return nil, errors.New("invalid Google token")
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	var info googleTokenInfo
-	if err := json.Unmarshal(body, &info); err != nil {
+	if err := json.Unmarshal(respBody, &info); err != nil {
 		return nil, errors.New("failed to parse Google token info")
 	}
 
-	// Validate audience matches our client ID (if configured)
-	if s.googleClientID != "" && info.Aud != s.googleClientID {
+	// Always validate audience
+	if info.Aud != s.googleClientID {
 		return nil, errors.New("Google token audience mismatch")
 	}
 

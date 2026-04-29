@@ -74,19 +74,25 @@ func (e *Engine) Generate(req GenerateRequest) (*GenerateResponse, error) {
 				  AND ? != ALL(ps.open_months)
 			)`, req.TravelMonth)
 	}
-	q.Find(&attractions)
+	if err := q.Find(&attractions).Error; err != nil {
+		return nil, fmt.Errorf("query attractions: %w", err)
+	}
 
 	var foodPlaces []models.Place
-	e.db.Table("schema_travel.places").
+	if err := e.db.Table("schema_travel.places").
 		Where("destination = ? AND category = ?", dest, models.CategoryFood).
 		Order("priority_score DESC, rating DESC NULLS LAST").
-		Find(&foodPlaces)
+		Find(&foodPlaces).Error; err != nil {
+		return nil, fmt.Errorf("query food places: %w", err)
+	}
 
 	var combos []models.Combo
-	e.db.Table("schema_travel.combos").
+	if err := e.db.Table("schema_travel.combos").
 		Where("destination = ?", dest).
 		Order("price_per_person ASC NULLS LAST").
-		Find(&combos)
+		Find(&combos).Error; err != nil {
+		return nil, fmt.Errorf("query combos: %w", err)
+	}
 
 	// ── Step 3: Select attractions within budget + tier constraints ───────────
 	selected := SelectAttractions(attractions, req.BudgetVND, req.GuestCount, req.PreferenceTags, strategy.Budget)

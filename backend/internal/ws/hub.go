@@ -235,6 +235,8 @@ type Hub struct {
 	Unregister  chan *Client
 	mu          sync.RWMutex
 	redisPubSub *RedisPubSub
+	instanceID  string
+	stop        chan struct{}
 
 	// Track which rooms have Redis subscriptions
 	subscribedRooms map[string]bool
@@ -246,6 +248,8 @@ func NewHub() *Hub {
 		Rooms:           make(map[string]*Room),
 		Register:        make(chan *Client),
 		Unregister:      make(chan *Client),
+		instanceID:      uuid.New().String(),
+		stop:            make(chan struct{}),
 		subscribedRooms: make(map[string]bool),
 	}
 }
@@ -262,8 +266,15 @@ func (h *Hub) Run() {
 			h.addClient(client)
 		case client := <-h.Unregister:
 			h.removeClient(client)
+		case <-h.stop:
+			return
 		}
 	}
+}
+
+// Stop signals the Hub.Run goroutine to exit.
+func (h *Hub) Stop() {
+	close(h.stop)
 }
 
 func (h *Hub) addClient(c *Client) {

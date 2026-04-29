@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 	"tripcompass-backend/internal/config"
 	"tripcompass-backend/internal/database"
 	"tripcompass-backend/internal/handlers"
@@ -180,15 +182,24 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
+	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 	go func() {
 		log.Printf("Server chạy tại port %s", cfg.Port)
-		if err := r.Run(":" + cfg.Port); err != nil {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Lỗi khi chạy server:", err)
 		}
 	}()
 
 	<-quit
 	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+
+	hub.Stop()
 	redisPubSub.Close()
 	log.Println("Cleanup complete.")
 }

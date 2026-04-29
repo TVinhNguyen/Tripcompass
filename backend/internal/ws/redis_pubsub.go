@@ -83,6 +83,13 @@ func (ps *RedisPubSub) GetOnlineUsersWithDetails(ctx context.Context, roomID str
 	return users, nil
 }
 
+// pubEnvelope is the cross-server message wrapper used to deduplicate broadcasts.
+// Messages published by this instance are ignored when received via the subscription.
+type pubEnvelope struct {
+	InstanceID string          `json:"_iid"`
+	Data       json.RawMessage `json:"d"`
+}
+
 // ─── Pub/Sub ──────────────────────────────────────────────────────────────────
 // Dùng để scale nhiều server instances — mỗi server subscribe channel của room
 
@@ -92,9 +99,19 @@ func channelKey(roomID string) string {
 	return channelKeyPrefix + roomID
 }
 
-// Publish gửi message vào Redis channel
+// Publish wraps data with the hub's instanceID and publishes to Redis.
+// The subscriber on the same instance will skip this message to avoid duplicates.
 func (ps *RedisPubSub) Publish(ctx context.Context, roomID string, data []byte) {
-	if err := ps.rdb.Publish(ctx, channelKey(roomID), data).Err(); err != nil {
+	envelope := pubEnvelope{
+		InstanceID: ps.hub.instanceID,
+		Data:       json.RawMessage(data),
+	}
+	payload, err := json.Marshal(envelope)
+	if err != nil {
+		log.Printf("[Redis PubSub] Error marshalling envelope room=%s: %v", roomID, err)
+		return
+	}
+	if err := ps.rdb.Publish(ctx, channelKey(roomID), payload).Err(); err != nil {
 		log.Printf("[Redis PubSub] Error publishing to room=%s: %v", roomID, err)
 	}
 }
@@ -133,12 +150,22 @@ func (ps *RedisPubSub) SubscribeRoom(ctx context.Context, roomID string) {
 				if len(msg.Payload) == 0 {
 					continue
 				}
-				room := ps.hub.GetRoom(roomID)
-				if room == nil {
-					log.Printf("[Redis PubSub] Room %s not found locally, skipping", roomID)
+
+				// Unwrap envelope and skip messages from this instance (already broadcast locally)
+				var envelope pubEnvelope
+				if err := json.Unmarshal([]byte(msg.Payload), &envelope); err != nil {
+					log.Printf("[Redis PubSub] Invalid envelope room=%s: %v", roomID, err)
 					continue
 				}
-				room.Broadcast([]byte(msg.Payload), nil)
+				if envelope.InstanceID == ps.hub.instanceID {
+					continue // own-instance message: already broadcast in ReadPump
+				}
+
+				room := ps.hub.GetRoom(roomID)
+				if room == nil {
+					continue
+				}
+				room.Broadcast([]byte(envelope.Data), nil)
 			}
 		}
 	}()

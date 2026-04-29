@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 	"tripcompass-backend/internal/models"
@@ -37,14 +38,18 @@ func (s *LookupService) Lookup(destination string, staleDays int) (*LookupResult
 	cutoff := time.Now().AddDate(0, 0, -staleDays)
 
 	var places []models.Place
-	s.db.Where("destination ILIKE ? AND (price_updated_at IS NULL OR price_updated_at >= ?)", dest, cutoff).
+	if err := s.db.Where("destination ILIKE ? AND (price_updated_at IS NULL OR price_updated_at >= ?)", dest, cutoff).
 		Order("rating DESC NULLS LAST, base_price ASC NULLS LAST").
-		Find(&places)
+		Find(&places).Error; err != nil {
+		return nil, fmt.Errorf("query places: %w", err)
+	}
 
 	var combos []models.Combo
-	s.db.Where("destination ILIKE ?", dest).
+	if err := s.db.Where("destination ILIKE ?", dest).
 		Order("price_per_person ASC NULLS LAST").
-		Find(&combos)
+		Find(&combos).Error; err != nil {
+		return nil, fmt.Errorf("query combos: %w", err)
+	}
 
 	return &LookupResult{
 		Places: places,
