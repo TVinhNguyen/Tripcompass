@@ -37,6 +37,9 @@ func TestAuthService_Register(t *testing.T) {
 	})
 
 	t.Run("duplicate email", func(t *testing.T) {
+		// B1 anti-enumeration: Register with an existing email returns an empty
+		// success response (no error, no token, no user) so callers cannot
+		// distinguish registered vs unregistered emails.
 		_ = createTestUser(t, db)
 		input := RegisterInput{
 			Email:    "test@example.com",
@@ -44,9 +47,10 @@ func TestAuthService_Register(t *testing.T) {
 			FullName: "Duplicate",
 		}
 		resp, err := svc.Register(input)
-		assert.Nil(t, resp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "email already registered")
+		assert.NoError(t, err)                   // no error — prevents enumeration
+		require.NotNil(t, resp)                  // returns empty response, not nil
+		assert.Empty(t, resp.Token)              // no token leaked
+		assert.Empty(t, resp.User.Email)         // no user data leaked
 	})
 }
 
