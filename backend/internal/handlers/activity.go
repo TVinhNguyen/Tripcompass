@@ -18,12 +18,16 @@ func NewActivityHandler(db *gorm.DB) *ActivityHandler {
 
 // POST /activities
 func (h *ActivityHandler) Create(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var input services.CreateActivityInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	act, err := h.svc.Create(userID(c), input)
+	act, err := h.svc.Create(uid, input)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -33,12 +37,16 @@ func (h *ActivityHandler) Create(c *gin.Context) {
 
 // PATCH /activities/:id
 func (h *ActivityHandler) Update(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var input services.UpdateActivityInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	act, err := h.svc.Update(c.Param("id"), userID(c), input)
+	act, err := h.svc.Update(c.Param("id"), uid, input)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -48,7 +56,11 @@ func (h *ActivityHandler) Update(c *gin.Context) {
 
 // DELETE /activities/:id
 func (h *ActivityHandler) Delete(c *gin.Context) {
-	if err := h.svc.Delete(c.Param("id"), userID(c)); err != nil {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.Delete(c.Param("id"), uid); err != nil {
 		handleServiceError(c, err)
 		return
 	}
@@ -57,6 +69,10 @@ func (h *ActivityHandler) Delete(c *gin.Context) {
 
 // PATCH /activities/reorder
 func (h *ActivityHandler) Reorder(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var input struct {
 		Items []services.ReorderItem `json:"items" binding:"required"`
 	}
@@ -64,7 +80,7 @@ func (h *ActivityHandler) Reorder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.svc.Reorder(userID(c), input.Items); err != nil {
+	if err := h.svc.Reorder(uid, input.Items); err != nil {
 		handleServiceError(c, err)
 		return
 	}

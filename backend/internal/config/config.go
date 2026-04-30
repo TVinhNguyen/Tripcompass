@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -17,6 +18,7 @@ type Config struct {
 	RedisAddr      string
 	RedisPassword  string
 	JWTSecret      string
+	JWTExpireHours int    // L5: parsed at startup, default 72h
 	Port           string
 	AllowedOrigins string
 	// LLM planner proxy
@@ -74,6 +76,15 @@ func Load() *Config {
 
 	if cfg.JWTSecret == "" {
 		log.Fatal("JWT_SECRET is required")
+	}
+	// L5: parse JWT_EXPIRE_HOURS at startup (fail-fast, consistent with other int config)
+	cfg.JWTExpireHours = 72 // default 72h
+	if e := os.Getenv("JWT_EXPIRE_HOURS"); e != "" {
+		if v, err := strconv.Atoi(e); err == nil && v > 0 {
+			cfg.JWTExpireHours = v
+		} else {
+			log.Fatalf("JWT_EXPIRE_HOURS must be a positive integer, got %q", e)
+		}
 	}
 	// Validate required database fields — fail fast with a clear message instead of a cryptic DB error
 	for _, check := range []struct{ name, val string }{

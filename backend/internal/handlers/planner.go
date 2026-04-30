@@ -52,7 +52,8 @@ func cacheKey(req planner.GenerateRequest) string {
 	prefs := strings.Join(req.PreferenceTags, ",")
 	raw := fmt.Sprintf("%s|%s|%s|%d|%d|%s",
 		dest, req.StartDate, req.EndDate,
-		req.BudgetVND/100_000, // bucket to 100K
+		req.BudgetVND/100_000, // bucket to 100K VND increments — prevents cache fragmentation
+		// (e.g. 1_234_567 and 1_280_000 map to the same bucket 12, same plan)
 		req.GuestCount,
 		prefs,
 	)

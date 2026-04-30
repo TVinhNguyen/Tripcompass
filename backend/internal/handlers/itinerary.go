@@ -20,15 +20,29 @@ func NewItineraryHandler(db *gorm.DB) *ItineraryHandler {
 	return &ItineraryHandler{svc: services.NewItineraryService(db)}
 }
 
-func userID(c *gin.Context) string {
-	v, _ := c.Get(middleware.UserIDKey)
-	s, _ := v.(string)
-	return s
+// mustUserID extracts the authenticated user ID from gin context.
+// It aborts with 401 and returns false if the key is missing (middleware misconfiguration).
+func mustUserID(c *gin.Context) (string, bool) {
+	v, exists := c.Get(middleware.UserIDKey)
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return "", false
+	}
+	s, ok := v.(string)
+	if !ok || s == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return "", false
+	}
+	return s, true
 }
 
 // GET /itineraries
 func (h *ItineraryHandler) GetMyItineraries(c *gin.Context) {
-	list, err := h.svc.GetMyItineraries(userID(c))
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	list, err := h.svc.GetMyItineraries(uid)
 	if err != nil {
 		respondInternalError(c, err)
 		return
@@ -38,12 +52,16 @@ func (h *ItineraryHandler) GetMyItineraries(c *gin.Context) {
 
 // POST /itineraries
 func (h *ItineraryHandler) Create(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var input services.CreateItineraryInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	it, err := h.svc.Create(userID(c), input)
+	it, err := h.svc.Create(uid, input)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -53,7 +71,11 @@ func (h *ItineraryHandler) Create(c *gin.Context) {
 
 // GET /itineraries/:id
 func (h *ItineraryHandler) GetOne(c *gin.Context) {
-	it, err := h.svc.GetOne(c.Param("id"), userID(c))
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	it, err := h.svc.GetOne(c.Param("id"), uid)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -63,12 +85,16 @@ func (h *ItineraryHandler) GetOne(c *gin.Context) {
 
 // PATCH /itineraries/:id
 func (h *ItineraryHandler) Update(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var input services.UpdateItineraryInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	it, err := h.svc.Update(c.Param("id"), userID(c), input)
+	it, err := h.svc.Update(c.Param("id"), uid, input)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -78,7 +104,11 @@ func (h *ItineraryHandler) Update(c *gin.Context) {
 
 // DELETE /itineraries/:id
 func (h *ItineraryHandler) Delete(c *gin.Context) {
-	if err := h.svc.Delete(c.Param("id"), userID(c)); err != nil {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.Delete(c.Param("id"), uid); err != nil {
 		handleServiceError(c, err)
 		return
 	}
@@ -87,7 +117,11 @@ func (h *ItineraryHandler) Delete(c *gin.Context) {
 
 // POST /itineraries/:id/clone
 func (h *ItineraryHandler) Clone(c *gin.Context) {
-	it, err := h.svc.Clone(c.Param("id"), userID(c))
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	it, err := h.svc.Clone(c.Param("id"), uid)
 	if err != nil {
 		handleServiceError(c, err)
 		return
@@ -98,6 +132,10 @@ func (h *ItineraryHandler) Clone(c *gin.Context) {
 // PATCH /itineraries/:id/publish
 // Body: {"status": "PUBLISHED"|"DRAFT"}
 func (h *ItineraryHandler) Publish(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var body struct {
 		Status string `json:"status" binding:"required"`
 	}
@@ -105,7 +143,7 @@ func (h *ItineraryHandler) Publish(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "status field required (PUBLISHED or DRAFT)"})
 		return
 	}
-	it, err := h.svc.Publish(c.Param("id"), userID(c), body.Status)
+	it, err := h.svc.Publish(c.Param("id"), uid, body.Status)
 	if err != nil {
 		handleServiceError(c, err)
 		return

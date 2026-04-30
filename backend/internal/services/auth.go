@@ -11,8 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 	"tripcompass-backend/internal/apperror"
@@ -38,17 +36,11 @@ type AuthService struct {
 	facebookAppSecret string
 }
 
-func NewAuthService(db *gorm.DB, jwtSecret string, emailSvc *EmailService, googleClientID, facebookAppSecret string) *AuthService {
-	expire := 72
-	if e := os.Getenv("JWT_EXPIRE_HOURS"); e != "" {
-		if v, err := strconv.Atoi(e); err == nil {
-			expire = v
-		}
-	}
+func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc *EmailService, googleClientID, facebookAppSecret string) *AuthService {
 	return &AuthService{
 		db:                db,
 		jwtSecret:         jwtSecret,
-		jwtExpire:         expire,
+		jwtExpire:         jwtExpireHours,
 		email:             emailSvc,
 		googleClientID:    googleClientID,
 		facebookAppSecret: facebookAppSecret,

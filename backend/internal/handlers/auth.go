@@ -15,7 +15,7 @@ type AuthHandler struct {
 
 func NewAuthHandler(db *gorm.DB, cfg *config.Config) *AuthHandler {
 	emailSvc := services.NewEmailService(cfg)
-	authSvc := services.NewAuthService(db, cfg.JWTSecret, emailSvc, cfg.GoogleClientID, cfg.FacebookAppSecret)
+	authSvc := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpireHours, emailSvc, cfg.GoogleClientID, cfg.FacebookAppSecret)
 	return &AuthHandler{svc: authSvc}
 }
 
@@ -51,9 +51,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 // GET /api/v1/auth/me — return current user
 func (h *AuthHandler) Me(c *gin.Context) {
-	uid := userID(c)
-	if uid == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+	uid, ok := mustUserID(c)
+	if !ok {
 		return
 	}
 	user, err := h.svc.GetByID(uid)
