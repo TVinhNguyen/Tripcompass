@@ -3,7 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -52,14 +52,14 @@ func (ps *RedisPubSub) TrackOnline(ctx context.Context, roomID, userID string) {
 	// TTL 24h: tự expire nếu server crash mà không cleanup được
 	pipe.Expire(ctx, onlineKey(roomID), 24*time.Hour)
 	if _, err := pipe.Exec(ctx); err != nil {
-		log.Printf("[Redis PubSub] Error tracking online room=%s user=%s: %v", roomID, userID, err)
+		slog.Warn("pubsub: error tracking online", "room", roomID, "user", userID, "err", err)
 	}
 }
 
 func (ps *RedisPubSub) TrackOffline(ctx context.Context, roomID, userID string) {
 	// SRem only — không cần SCard+Del vì TTL sẽ tự cleanup
 	if err := ps.rdb.SRem(ctx, onlineKey(roomID), userID).Err(); err != nil {
-		log.Printf("[Redis PubSub] Error tracking offline room=%s user=%s: %v", roomID, userID, err)
+		slog.Warn("pubsub: error tracking offline", "room", roomID, "user", userID, "err", err)
 	}
 }
 
@@ -94,11 +94,11 @@ func (ps *RedisPubSub) Publish(ctx context.Context, roomID string, data []byte) 
 	}
 	payload, err := json.Marshal(envelope)
 	if err != nil {
-		log.Printf("[Redis PubSub] Error marshalling envelope room=%s: %v", roomID, err)
+		slog.Warn("pubsub: marshal error", "room", roomID, "err", err)
 		return
 	}
 	if err := ps.rdb.Publish(ctx, channelKey(roomID), payload).Err(); err != nil {
-		log.Printf("[Redis PubSub] Error publishing to room=%s: %v", roomID, err)
+		slog.Warn("pubsub: publish error", "room", roomID, "err", err)
 	}
 }
 
@@ -121,16 +121,16 @@ func (ps *RedisPubSub) SubscribeRoom(ctx context.Context, roomID string) {
 			delete(ps.roomCancels, roomID)
 			ps.roomMu.Unlock()
 		}()
-		log.Printf("[Redis PubSub] Subscribed to room %s (channel: %s)", roomID, channelKey(roomID))
+		slog.Info("pubsub: subscribed", "room", roomID, "channel", channelKey(roomID))
 
 		for {
 			select {
 			case <-roomCtx.Done():
-				log.Printf("[Redis PubSub] Stopped subscribing to room %s", roomID)
+				slog.Info("pubsub: unsubscribed", "room", roomID)
 				return
 			case msg, ok := <-ch:
 				if !ok {
-					log.Printf("[Redis PubSub] Channel closed for room %s", roomID)
+					slog.Info("pubsub: channel closed", "room", roomID)
 					return
 				}
 				if len(msg.Payload) == 0 {
@@ -140,7 +140,7 @@ func (ps *RedisPubSub) SubscribeRoom(ctx context.Context, roomID string) {
 				// Unwrap envelope and skip messages from this instance (already broadcast locally)
 				var envelope pubEnvelope
 				if err := json.Unmarshal([]byte(msg.Payload), &envelope); err != nil {
-					log.Printf("[Redis PubSub] Invalid envelope room=%s: %v", roomID, err)
+					slog.Warn("pubsub: invalid envelope", "room", roomID, "err", err)
 					continue
 				}
 				if envelope.InstanceID == ps.hub.instanceID {

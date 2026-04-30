@@ -3,7 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"tripcompass-backend/internal/config"
 
 	"github.com/redis/go-redis/v9"
@@ -18,13 +18,13 @@ func ConnectRedis(cfg *config.Config) (*redis.Client, error) {
 	}
 	if opts.Addr == "" {
 		opts.Addr = "localhost:6379"
-		log.Printf("[Redis] Using default address: %s", opts.Addr)
+		slog.Info("redis addr not set, using default", "addr", opts.Addr)
 	}
 
 	client := redis.NewClient(opts)
 	if err := client.Ping(context.Background()).Err(); err != nil {
-		return nil, fmt.Errorf("không kết nối được Redis: %w", err)
+		return nil, fmt.Errorf("redis connection failed: %w", err)
 	}
-	log.Printf("[Redis] Connected to %s", opts.Addr)
+	slog.Info("redis connected", "addr", opts.Addr)
 	return client, nil
 }

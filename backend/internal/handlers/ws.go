@@ -24,15 +24,20 @@ type WSHandler struct {
 // NewWSHandler injects service layer dependencies instead of raw DB (M1: no direct DB access from handler).
 func NewWSHandler(db *gorm.DB, hub *ws.Hub, jwtSecret, allowedOrigins string) *WSHandler {
 	origins := strings.Split(allowedOrigins, ",")
-	for i, o := range origins {
-		origins[i] = strings.TrimSpace(o)
+	// B5: filter empty entries — ALLOWED_ORIGINS="" would otherwise produce [""]
+	// which matches a browser tool sending no Origin header, bypassing the check.
+	filtered := origins[:0]
+	for _, o := range origins {
+		if o = strings.TrimSpace(o); o != "" {
+			filtered = append(filtered, o)
+		}
 	}
 	return &WSHandler{
 		itinerarySvc:   services.NewItineraryService(db),
 		userSvc:        services.NewUserService(db),
 		hub:            hub,
 		jwtSecret:      jwtSecret,
-		allowedOrigins: origins,
+		allowedOrigins: filtered,
 	}
 }
 

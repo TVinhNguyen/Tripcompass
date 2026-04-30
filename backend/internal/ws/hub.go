@@ -2,7 +2,7 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -73,7 +73,7 @@ func (c *Client) ReadPump() {
 		_, raw, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Printf("[WS] Read error client=%s: %v", c.UserID, err)
+				slog.Warn("ws read error", "client", c.UserID, "err", err)
 			}
 			break
 		}
@@ -329,7 +329,7 @@ func (h *Hub) addClient(c *Client) {
 	default:
 	}
 
-	log.Printf("[WS] User %s (%s) joined room %s", c.UserID, c.FullName, c.RoomID)
+	slog.Info("ws client joined", "user_id", c.UserID, "name", c.FullName, "room", c.RoomID)
 }
 
 func (h *Hub) removeClient(c *Client) {
@@ -379,7 +379,7 @@ func (h *Hub) removeClient(c *Client) {
 		h.subscribeMu.Unlock()
 	}
 
-	log.Printf("[WS] User %s (%s) left room %s", c.UserID, c.FullName, c.RoomID)
+	slog.Info("ws client left", "user_id", c.UserID, "name", c.FullName, "room", c.RoomID)
 }
 
 func (h *Hub) BroadcastToRoom(roomID string, data []byte, exclude *Client) {

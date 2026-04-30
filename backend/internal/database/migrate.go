@@ -166,6 +166,18 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// C6: Add verify_token_expires_at so email verification tokens expire after 24h.
+			ID: "202604300007_verify_token_expiry",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.Exec(`ALTER TABLE schema_travel.users
+					ADD COLUMN IF NOT EXISTS verify_token_expires_at TIMESTAMPTZ;`).Error
+			},
+			Rollback: func(tx *gorm.DB) error {
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP COLUMN IF EXISTS verify_token_expires_at;`).Error
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()
