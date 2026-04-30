@@ -28,13 +28,13 @@ func TestParseDate(t *testing.T) {
 	t.Run("empty string", func(t *testing.T) {
 		_, err := parseDate("")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "không được để trống")
+		assert.Contains(t, err.Error(), "date must not be empty")
 	})
 
 	t.Run("invalid format", func(t *testing.T) {
 		_, err := parseDate("15/06/2025")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "format phải là YYYY-MM-DD")
+		assert.Contains(t, err.Error(), "date must be YYYY-MM-DD")
 	})
 
 	t.Run("invalid date", func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestSetItineraryDates(t *testing.T) {
 		var it models.Itinerary
 		err := setItineraryDates(&it, "2025-06-20", "2025-06-15")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "end_date phải bằng hoặc sau start_date")
+		assert.Contains(t, err.Error(), "end_date must be on or after start_date")
 	})
 
 	t.Run("same day", func(t *testing.T) {
@@ -163,7 +163,7 @@ func TestItineraryService_Create(t *testing.T) {
 		}
 		_, err := svc.Create(user.ID.String(), input)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "end_date phải bằng hoặc sau start_date")
+		assert.Contains(t, err.Error(), "end_date must be on or after start_date")
 	})
 }
 

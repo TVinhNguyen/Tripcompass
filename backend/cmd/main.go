@@ -50,7 +50,6 @@ func main() {
 	// H10: Buffered view counter — Redis INCR per request, flush to DB every 30s.
 	// Context cancelled on SIGTERM triggers a final flush before process exits.
 	flusherCtx, cancelFlusher := context.WithCancel(context.Background())
-	defer cancelFlusher()
 	vc := viewcounter.New(rdb, db)
 	vc.StartFlusher(flusherCtx)
 
@@ -78,6 +77,11 @@ func main() {
 		slog.Error("server shutdown error", "err", err)
 	}
 
+	// Shutdown order matters:
+	// 1. Cancel flusher → triggers final view-count flush to DB
+	// 2. Stop WS hub + pubsub (Redis client still open for the flush above)
+	// 3. Log cleanup complete — all writes are done at this point
+	cancelFlusher()
 	hub.Stop()
 	redisPubSub.Close()
 	slog.Info("cleanup complete")

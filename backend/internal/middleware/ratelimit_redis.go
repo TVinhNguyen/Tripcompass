@@ -33,7 +33,7 @@ func RateLimitRedis(rdb *redis.Client, maxRequests int, windowSecs int) gin.Hand
 
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
-		key := fmt.Sprintf("rl:%s:%d", ip, windowSecs) // bucket per IP+window
+		key := fmt.Sprintf("rl:%s:%s:%d", ip, c.FullPath(), windowSecs) // bucket per IP + route + window
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 200*time.Millisecond)
 		defer cancel()
