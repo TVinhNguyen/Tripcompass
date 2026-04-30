@@ -3,7 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -52,14 +52,14 @@ func (ps *RedisPubSub) TrackOnline(ctx context.Context, roomID, userID string) {
 	// TTL 24h: tự expire nếu server crash mà không cleanup được
 	pipe.Expire(ctx, onlineKey(roomID), 24*time.Hour)
 	if _, err := pipe.Exec(ctx); err != nil {
-		log.Printf("[Redis PubSub] Error tracking online room=%s user=%s: %v", roomID, userID, err)
+		slog.Warn("pubsub: error tracking online", "room", roomID, "user", userID, "err", err)
 	}
 }
 
 func (ps *RedisPubSub) TrackOffline(ctx context.Context, roomID, userID string) {
 	// SRem only — không cần SCard+Del vì TTL sẽ tự cleanup
 	if err := ps.rdb.SRem(ctx, onlineKey(roomID), userID).Err(); err != nil {
-		log.Printf("[Redis PubSub] Error tracking offline room=%s user=%s: %v", roomID, userID, err)
+		slog.Warn("pubsub: error tracking offline", "room", roomID, "user", userID, "err", err)
 	}
 }
 
@@ -67,20 +67,13 @@ func (ps *RedisPubSub) GetOnlineUsers(ctx context.Context, roomID string) ([]str
 	return ps.rdb.SMembers(ctx, onlineKey(roomID)).Result()
 }
 
-// GetOnlineUsersWithDetails retrieves online users with full details
-func (ps *RedisPubSub) GetOnlineUsersWithDetails(ctx context.Context, roomID string, userMap map[string]SenderInfo) ([]SenderInfo, error) {
-	userIDs, err := ps.GetOnlineUsers(ctx, roomID)
-	if err != nil {
-		return nil, err
-	}
 
-	var users []SenderInfo
-	for _, userID := range userIDs {
-		if user, ok := userMap[userID]; ok {
-			users = append(users, user)
-		}
-	}
-	return users, nil
+
+// pubEnvelope is the cross-server message wrapper used to deduplicate broadcasts.
+// Messages published by this instance are ignored when received via the subscription.
+type pubEnvelope struct {
+	InstanceID string          `json:"_iid"`
+	Data       json.RawMessage `json:"d"`
 }
 
 // ─── Pub/Sub ──────────────────────────────────────────────────────────────────
@@ -92,10 +85,20 @@ func channelKey(roomID string) string {
 	return channelKeyPrefix + roomID
 }
 
-// Publish gửi message vào Redis channel
+// Publish wraps data with the hub's instanceID and publishes to Redis.
+// The subscriber on the same instance will skip this message to avoid duplicates.
 func (ps *RedisPubSub) Publish(ctx context.Context, roomID string, data []byte) {
-	if err := ps.rdb.Publish(ctx, channelKey(roomID), data).Err(); err != nil {
-		log.Printf("[Redis PubSub] Error publishing to room=%s: %v", roomID, err)
+	envelope := pubEnvelope{
+		InstanceID: ps.hub.instanceID,
+		Data:       json.RawMessage(data),
+	}
+	payload, err := json.Marshal(envelope)
+	if err != nil {
+		slog.Warn("pubsub: marshal error", "room", roomID, "err", err)
+		return
+	}
+	if err := ps.rdb.Publish(ctx, channelKey(roomID), payload).Err(); err != nil {
+		slog.Warn("pubsub: publish error", "room", roomID, "err", err)
 	}
 }
 
@@ -118,27 +121,37 @@ func (ps *RedisPubSub) SubscribeRoom(ctx context.Context, roomID string) {
 			delete(ps.roomCancels, roomID)
 			ps.roomMu.Unlock()
 		}()
-		log.Printf("[Redis PubSub] Subscribed to room %s (channel: %s)", roomID, channelKey(roomID))
+		slog.Info("pubsub: subscribed", "room", roomID, "channel", channelKey(roomID))
 
 		for {
 			select {
 			case <-roomCtx.Done():
-				log.Printf("[Redis PubSub] Stopped subscribing to room %s", roomID)
+				slog.Info("pubsub: unsubscribed", "room", roomID)
 				return
 			case msg, ok := <-ch:
 				if !ok {
-					log.Printf("[Redis PubSub] Channel closed for room %s", roomID)
+					slog.Info("pubsub: channel closed", "room", roomID)
 					return
 				}
 				if len(msg.Payload) == 0 {
 					continue
 				}
-				room := ps.hub.GetRoom(roomID)
-				if room == nil {
-					log.Printf("[Redis PubSub] Room %s not found locally, skipping", roomID)
+
+				// Unwrap envelope and skip messages from this instance (already broadcast locally)
+				var envelope pubEnvelope
+				if err := json.Unmarshal([]byte(msg.Payload), &envelope); err != nil {
+					slog.Warn("pubsub: invalid envelope", "room", roomID, "err", err)
 					continue
 				}
-				room.Broadcast([]byte(msg.Payload), nil)
+				if envelope.InstanceID == ps.hub.instanceID {
+					continue // own-instance message: already broadcast in ReadPump
+				}
+
+				room := ps.hub.GetRoom(roomID)
+				if room == nil {
+					continue
+				}
+				room.Broadcast([]byte(envelope.Data), nil)
 			}
 		}
 	}()
@@ -153,33 +166,4 @@ func (ps *RedisPubSub) UnsubscribeRoom(roomID string) {
 	}
 }
 
-// HealthCheck verifies Redis connection
-func (ps *RedisPubSub) HealthCheck() error {
-	return ps.rdb.Ping(ps.ctx).Err()
-}
 
-// PublishUserStatus broadcasts user status changes (login/logout from anywhere)
-func (ps *RedisPubSub) PublishUserStatus(ctx context.Context, userID string, status string, details string) {
-	payload, _ := json.Marshal(map[string]interface{}{
-		"type":      "user_status",
-		"user_id":   userID,
-		"status":    status,
-		"details":   details,
-		"timestamp": time.Now().Unix(),
-	})
-	if err := ps.rdb.Publish(ctx, "ws:user_status", payload).Err(); err != nil {
-		log.Printf("[Redis PubSub] Error publishing user status user=%s: %v", userID, err)
-	}
-}
-
-// SendTypingIndicator sends typing indicator for a specific itinerary
-func (ps *RedisPubSub) SendTypingIndicator(ctx context.Context, roomID, userID string, isTyping bool) {
-	payload, _ := json.Marshal(map[string]interface{}{
-		"type":    "typing",
-		"user_id": userID,
-		"typing":  isTyping,
-	})
-	if err := ps.rdb.Publish(ctx, channelKey(roomID), payload).Err(); err != nil {
-		log.Printf("[Redis PubSub] Error sending typing indicator room=%s user=%s: %v", roomID, userID, err)
-	}
-}

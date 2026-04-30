@@ -1,6 +1,7 @@
 package models
 
 import (
+	"github.com/lib/pq"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,8 +16,8 @@ type Combo struct {
 	Provider    *string     `                                                                       json:"provider"`
 	// Composite index (destination, price_per_person) — used by Lookup ORDER BY price ASC
 	PricePerPerson    *int        `gorm:"column:price_per_person;index:idx_combo_dest_price,priority:2"  json:"price_per_person"`
-	Includes          StringArray `gorm:"type:text[]"                                                    json:"includes"`
-	Benefits          StringArray `gorm:"type:text[]"                                                    json:"benefits"`
+	Includes          pq.StringArray `gorm:"type:text[]"                                                    json:"includes"`
+	Benefits          pq.StringArray `gorm:"type:text[]"                                                    json:"benefits"`
 	DurationDays      *int        `gorm:"column:duration_days"                                           json:"duration_days"`
 	RequiresOvernight bool        `gorm:"column:requires_overnight;not null;default:false"               json:"requires_overnight"`
 	BookURL           *string     `gorm:"column:book_url"                                                json:"book_url"`

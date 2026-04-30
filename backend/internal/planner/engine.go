@@ -61,7 +61,7 @@ func (e *Engine) Generate(req GenerateRequest) (*GenerateResponse, error) {
 
 	// ── Step 2: Query DB ──────────────────────────────────────────────────────
 	var attractions []models.Place
-	q := e.db.Table("schema_travel.places").
+	q := e.db.Table("places").
 		Where("destination = ? AND category = ?", dest, models.CategoryAttraction).
 		Order("must_visit DESC, priority_score DESC, rating DESC NULLS LAST")
 
@@ -69,24 +69,30 @@ func (e *Engine) Generate(req GenerateRequest) (*GenerateResponse, error) {
 	if req.TravelMonth > 0 {
 		q = q.Where(`
 			NOT EXISTS (
-				SELECT 1 FROM schema_travel.place_seasons ps
+				SELECT 1 FROM place_seasons ps
 				WHERE ps.place_id = places.id
 				  AND ? != ALL(ps.open_months)
 			)`, req.TravelMonth)
 	}
-	q.Find(&attractions)
+	if err := q.Find(&attractions).Error; err != nil {
+		return nil, fmt.Errorf("query attractions: %w", err)
+	}
 
 	var foodPlaces []models.Place
-	e.db.Table("schema_travel.places").
+	if err := e.db.Table("places").
 		Where("destination = ? AND category = ?", dest, models.CategoryFood).
 		Order("priority_score DESC, rating DESC NULLS LAST").
-		Find(&foodPlaces)
+		Find(&foodPlaces).Error; err != nil {
+		return nil, fmt.Errorf("query food places: %w", err)
+	}
 
 	var combos []models.Combo
-	e.db.Table("schema_travel.combos").
+	if err := e.db.Table("combos").
 		Where("destination = ?", dest).
 		Order("price_per_person ASC NULLS LAST").
-		Find(&combos)
+		Find(&combos).Error; err != nil {
+		return nil, fmt.Errorf("query combos: %w", err)
+	}
 
 	// ── Step 3: Select attractions within budget + tier constraints ───────────
 	selected := SelectAttractions(attractions, req.BudgetVND, req.GuestCount, req.PreferenceTags, strategy.Budget)
@@ -106,7 +112,7 @@ func (e *Engine) Generate(req GenerateRequest) (*GenerateResponse, error) {
 	}
 
 	// ── Step 6: Cluster + assign to days (BestTimeOfDay-aware) ───────────────
-	clusters := ClusterByProximity(regular, 5.0)
+	clusters := ClusterByProximity(regular, ClusterRadiusKm)
 	dayAssignments, dayDurationMap := assignToDays(mustVisit, clusters, numDays)
 
 	// ── Step 7: Per-day route optimize ────────────────────────────────────────
@@ -218,7 +224,7 @@ func sortByTimeOfDay(places []SlotPlace) []SlotPlace {
 
 // collectStalePriceWarnings returns display strings for places with stale prices.
 func collectStalePriceWarnings(days []DayPlan) []string {
-	staleThreshold := time.Now().AddDate(0, 0, -30)
+	staleThreshold := time.Now().AddDate(0, 0, -StalePriceDays)
 	seen := map[string]bool{}
 	warnings := []string{}
 	for _, day := range days {
@@ -434,9 +440,16 @@ func fillEmptyDays(assignments map[int][]SlotPlace, selected []SlotPlace, numDay
 	if len(selected) == 0 {
 		return
 	}
+	// Iterate keys in sorted order for deterministic output (Go map iteration is random)
+	days := make([]int, 0, len(assignments))
+	for d := range assignments {
+		days = append(days, d)
+	}
+	sort.Ints(days)
+
 	usedIDs := map[string]bool{}
-	for _, places := range assignments {
-		for _, p := range places {
+	for _, d := range days {
+		for _, p := range assignments[d] {
 			usedIDs[p.ID] = true
 		}
 	}

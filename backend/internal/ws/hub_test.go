@@ -280,17 +280,19 @@ func TestNewClient(t *testing.T) {
 	assert.Equal(t, 256, cap(c.Send))
 }
 
-func TestSafeClose(t *testing.T) {
+func TestCloseSend(t *testing.T) {
+	hub := NewHub()
+
 	t.Run("normal close", func(t *testing.T) {
-		ch := make(chan []byte, 1)
+		c := NewClient(hub, nil, "room-1", "user-1", "User One")
 		// Should not panic
-		safeClose(ch)
+		c.closeSend()
 	})
 
 	t.Run("double close does not panic", func(t *testing.T) {
-		ch := make(chan []byte, 1)
-		safeClose(ch)
-		// Second close should not panic due to recover
-		safeClose(ch)
+		c := NewClient(hub, nil, "room-1", "user-1", "User One")
+		c.closeSend()
+		// Second close is idempotent via sync.Once
+		c.closeSend()
 	})
 }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/lib/pq"
 	"fmt"
 	"strings"
 	"tripcompass-backend/internal/apperror"
@@ -91,8 +92,8 @@ func (s *ComboService) Create(input CreateComboInput) (*models.Combo, error) {
 		CoverImage:        input.CoverImage,
 		Provider:          input.Provider,
 		PricePerPerson:    input.PricePerPerson,
-		Includes:          models.StringArray(input.Includes),
-		Benefits:          models.StringArray(input.Benefits),
+		Includes:          nilSafePQArray(input.Includes),
+		Benefits:          nilSafePQArray(input.Benefits),
 		DurationDays:      input.DurationDays,
 		RequiresOvernight: input.RequiresOvernight,
 		BookURL:           input.BookURL,
@@ -126,10 +127,10 @@ func (s *ComboService) Update(id string, input UpdateComboInput) (*models.Combo,
 		updates["price_per_person"] = *input.PricePerPerson
 	}
 	if input.Includes != nil {
-		updates["includes"] = models.StringArray(input.Includes)
+		updates["includes"] = pq.StringArray(input.Includes)
 	}
 	if input.Benefits != nil {
-		updates["benefits"] = models.StringArray(input.Benefits)
+		updates["benefits"] = pq.StringArray(input.Benefits)
 	}
 	if input.DurationDays != nil {
 		updates["duration_days"] = *input.DurationDays

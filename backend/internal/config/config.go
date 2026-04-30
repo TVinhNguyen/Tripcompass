@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -17,6 +18,7 @@ type Config struct {
 	RedisAddr      string
 	RedisPassword  string
 	JWTSecret      string
+	JWTExpireHours int    // L5: parsed at startup, default 72h
 	Port           string
 	AllowedOrigins string
 	// LLM planner proxy
@@ -34,6 +36,8 @@ type Config struct {
 	GoogleClientSecret string
 	FacebookAppID      string
 	FacebookAppSecret  string
+	// Admin access control
+	AdminEmails string
 }
 
 func Load() *Config {
@@ -67,16 +71,40 @@ func Load() *Config {
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		FacebookAppID:      os.Getenv("FACEBOOK_APP_ID"),
 		FacebookAppSecret:  os.Getenv("FACEBOOK_APP_SECRET"),
+		AdminEmails:        os.Getenv("ADMIN_EMAILS"),
 	}
 
 	if cfg.JWTSecret == "" {
 		log.Fatal("JWT_SECRET is required")
+	}
+	// L5: parse JWT_EXPIRE_HOURS at startup (fail-fast, consistent with other int config)
+	cfg.JWTExpireHours = 72 // default 72h
+	if e := os.Getenv("JWT_EXPIRE_HOURS"); e != "" {
+		if v, err := strconv.Atoi(e); err == nil && v > 0 {
+			cfg.JWTExpireHours = v
+		} else {
+			log.Fatalf("JWT_EXPIRE_HOURS must be a positive integer, got %q", e)
+		}
+	}
+	// Validate required database fields — fail fast with a clear message instead of a cryptic DB error
+	for _, check := range []struct{ name, val string }{
+		{"DB_HOST", cfg.DBHost},
+		{"DB_PORT", cfg.DBPort},
+		{"DB_USER", cfg.DBUser},
+		{"DB_NAME", cfg.DBName},
+	} {
+		if check.val == "" {
+			log.Fatalf("environment variable %s is required but not set", check.name)
+		}
 	}
 	if cfg.AllowedOrigins == "" {
 		cfg.AllowedOrigins = "http://localhost:3000"
 	}
 	if cfg.Port == "" {
 		cfg.Port = "8080"
+	}
+	if cfg.UseLLMPlanner && cfg.PlannerAIURL == "" {
+		log.Fatal("USE_LLM_PLANNER=true requires PLANNER_AI_URL to be set")
 	}
 
 	return cfg

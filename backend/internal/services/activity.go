@@ -202,17 +202,48 @@ func (s *ActivityService) Delete(id, ownerID string) error {
 }
 
 func (s *ActivityService) Reorder(ownerID string, items []ReorderItem) error {
-	for _, item := range items {
-		act, err := s.isOwnerOfActivity(item.ID, ownerID)
-		if err != nil {
-			return err
-		}
-		if err := s.db.Model(act).Updates(map[string]interface{}{
-			"day_number":  item.DayNumber,
-			"order_index": item.OrderIndex,
-		}).Error; err != nil {
-			return err
-		}
+	if len(items) == 0 {
+		return nil
 	}
-	return nil
+	ids := make([]string, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// First: count how many of the given IDs actually exist.
+		var total int64
+		if err := tx.Model(&models.Activity{}).
+			Where("id IN ?", ids).
+			Count(&total).Error; err != nil {
+			return err
+		}
+		if int(total) != len(items) {
+			return apperror.ErrNotFound // some IDs don't exist at all
+		}
+
+		// Second: count how many belong to ownerID via JOIN.
+		var owned int64
+		if err := tx.Model(&models.Activity{}).
+			Joins("INNER JOIN itineraries ON itineraries.id = activities.itinerary_id").
+			Where("activities.id IN ? AND itineraries.owner_id = ?", ids, ownerID).
+			Count(&owned).Error; err != nil {
+			return err
+		}
+		if int(owned) != len(items) {
+			return apperror.ErrForbidden // activities exist but belong to a different user
+		}
+
+		for _, item := range items {
+			if err := tx.Model(&models.Activity{}).
+				Where("id = ?", item.ID).
+				Updates(map[string]interface{}{
+					"day_number":  item.DayNumber,
+					"order_index": item.OrderIndex,
+				}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

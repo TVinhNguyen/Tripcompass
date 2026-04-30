@@ -18,9 +18,13 @@ func NewUserHandler(db *gorm.DB) *UserHandler {
 
 // GET /api/v1/user/profile
 func (h *UserHandler) GetProfile(c *gin.Context) {
-	u, err := h.svc.GetByID(userID(c))
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	u, err := h.svc.GetByID(uid)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"user": u})
@@ -28,15 +32,18 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 
 // PATCH /api/v1/user/profile
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var input services.UpdateProfileInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	u, err := h.svc.UpdateProfile(userID(c), input)
+	u, err := h.svc.UpdateProfile(uid, input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"user": u})
@@ -44,14 +51,17 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 
 // POST /api/v1/user/change-password
 func (h *UserHandler) ChangePassword(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var input services.ChangePasswordInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	if err := h.svc.ChangePassword(userID(c), input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := h.svc.ChangePassword(uid, input); err != nil {
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "password changed successfully"})
@@ -59,9 +69,13 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 
 // GET /api/v1/user/saved-places
 func (h *UserHandler) GetSavedPlaces(c *gin.Context) {
-	places, err := h.svc.GetSavedPlaces(userID(c))
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	places, err := h.svc.GetSavedPlaces(uid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": places})
@@ -69,6 +83,10 @@ func (h *UserHandler) GetSavedPlaces(c *gin.Context) {
 
 // POST /api/v1/user/saved-places
 func (h *UserHandler) SavePlace(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var body struct {
 		PlaceID string `json:"place_id" binding:"required"`
 	}
@@ -76,9 +94,8 @@ func (h *UserHandler) SavePlace(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	if err := h.svc.SavePlace(userID(c), body.PlaceID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := h.svc.SavePlace(uid, body.PlaceID); err != nil {
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"message": "place saved"})
@@ -86,8 +103,12 @@ func (h *UserHandler) SavePlace(c *gin.Context) {
 
 // DELETE /api/v1/user/saved-places/:place_id
 func (h *UserHandler) UnsavePlace(c *gin.Context) {
-	if err := h.svc.UnsavePlace(userID(c), c.Param("place_id")); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.UnsavePlace(uid, c.Param("place_id")); err != nil {
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusNoContent, nil)

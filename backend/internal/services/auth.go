@@ -8,17 +8,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
-	"os"
-	"strconv"
+	"net/url"
+	"strings"
 	"time"
+	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,17 +37,11 @@ type AuthService struct {
 	facebookAppSecret string
 }
 
-func NewAuthService(db *gorm.DB, jwtSecret string, emailSvc *EmailService, googleClientID, facebookAppSecret string) *AuthService {
-	expire := 72
-	if e := os.Getenv("JWT_EXPIRE_HOURS"); e != "" {
-		if v, err := strconv.Atoi(e); err == nil {
-			expire = v
-		}
-	}
+func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc *EmailService, googleClientID, facebookAppSecret string) *AuthService {
 	return &AuthService{
 		db:                db,
 		jwtSecret:         jwtSecret,
-		jwtExpire:         expire,
+		jwtExpire:         jwtExpireHours,
 		email:             emailSvc,
 		googleClientID:    googleClientID,
 		facebookAppSecret: facebookAppSecret,
@@ -77,10 +73,26 @@ type AuthResponse struct {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
-	// Check email uniqueness
+	// Check email uniqueness — if email exists, return success to prevent enumeration.
+	// Send a notification email to the existing account instead.
 	var existing models.User
 	if err := s.db.Where("email = ?", input.Email).First(&existing).Error; err == nil {
-		return nil, errors.New("email already registered")
+		// Email already registered — fire a notification async but return an empty
+		// success response so callers cannot enumerate existing accounts or extract PII.
+		if s.email != nil {
+			emailSvc := s.email
+			name := existing.FullName
+			addr := existing.Email
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Warn("[email] panic sending duplicate-registration notice", "err", r)
+					}
+				}()
+				_ = emailSvc.SendDuplicateRegistrationNotice(addr, name)
+			}()
+		}
+		return &AuthResponse{}, nil // B1: no Token, no User — caller cannot distinguish
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
@@ -90,29 +102,39 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 
 	hashStr := string(hash)
 	verifyToken := generateToken32()
+	expiry := time.Now().Add(24 * time.Hour) // C6: tokens expire in 24h
 
 	user := models.User{
-		Email:        input.Email,
-		PasswordHash: &hashStr,
-		FullName:     input.FullName,
-		Provider:     "local",
-		IsVerified:   false,
-		VerifyToken:  &verifyToken,
+		Email:                input.Email,
+		PasswordHash:         &hashStr,
+		FullName:             input.FullName,
+		Provider:             "local",
+		IsVerified:           false,
+		VerifyToken:          &verifyToken,
+		VerifyTokenExpiresAt: &expiry,
 	}
 
 	if err := s.db.Create(&user).Error; err != nil {
 		return nil, err
 	}
 
-	// Send verification email (non-blocking failure)
+	// Send verification email asynchronously — don't block registration response
 	if s.email != nil {
-		if err := s.email.SendVerificationEmail(user.Email, user.FullName, verifyToken); err != nil {
-			// Log but don't fail registration
-			log.Printf("[WARN] Failed to send verification email to %s: %v", user.Email, err)
-		}
+		emailSvc := s.email
+		emailAddr, fullName, tok := user.Email, user.FullName, verifyToken
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Warn("[email] panic sending verification email", "err", r)
+				}
+			}()
+			if err := emailSvc.SendVerificationEmail(emailAddr, fullName, tok); err != nil {
+				slog.Warn("failed to send verification email", "email", emailAddr, "err", err)
+			}
+		}()
 	}
 
-	token, err := s.generateToken(user.ID)
+	token, err := s.generateToken(user.ID, user.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -127,22 +149,25 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 func (s *AuthService) Login(input LoginInput) (*AuthResponse, error) {
 	var user models.User
 	if err := s.db.Where("email = ?", input.Email).First(&user).Error; err != nil {
-		return nil, errors.New("invalid email or password")
+		return nil, apperror.ErrUnauthorized
 	}
 
 	if user.PasswordHash == nil {
-		return nil, errors.New("this account uses social login")
+		// Social-login account — log internally for audit but return generic error
+		slog.Info("login attempt on social account", "email", input.Email)
+		return nil, apperror.ErrUnauthorized
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(input.Password)); err != nil {
-		return nil, errors.New("invalid email or password")
+		return nil, apperror.ErrUnauthorized
 	}
 
 	if !user.IsVerified {
-		return nil, errors.New("please verify your email before logging in")
+		// Return a specific sentinel so the handler can give a helpful (but not PII-leaking) message
+		return nil, fmt.Errorf("%w: email not verified", apperror.ErrUnauthorized)
 	}
 
-	token, err := s.generateToken(user.ID)
+	token, err := s.generateToken(user.ID, user.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -168,9 +193,15 @@ func (s *AuthService) VerifyEmail(token string) error {
 		return errors.New("email already verified")
 	}
 
+	// C6: reject tokens past their expiry window
+	if user.VerifyTokenExpiresAt != nil && time.Now().After(*user.VerifyTokenExpiresAt) {
+		return errors.New("verification token has expired — please request a new one")
+	}
+
 	if err := s.db.Model(&user).Updates(map[string]interface{}{
-		"is_verified":  true,
-		"verify_token": nil,
+		"is_verified":              true,
+		"verify_token":             nil,
+		"verify_token_expires_at": nil,
 	}).Error; err != nil {
 		return fmt.Errorf("verification failed: %w", err)
 	}
@@ -194,7 +225,11 @@ func (s *AuthService) ResendVerification(email string) error {
 	}
 
 	newToken := generateToken32()
-	if err := s.db.Model(&user).Update("verify_token", newToken).Error; err != nil {
+	newExpiry := time.Now().Add(24 * time.Hour) // C6: refresh expiry window
+	if err := s.db.Model(&user).Updates(map[string]interface{}{
+		"verify_token":             newToken,
+		"verify_token_expires_at": newExpiry,
+	}).Error; err != nil {
 		return fmt.Errorf("failed to generate new token: %w", err)
 	}
 
@@ -219,9 +254,22 @@ type googleTokenInfo struct {
 }
 
 func (s *AuthService) GoogleLogin(idToken string) (*AuthResponse, error) {
-	// Verify token with Google's tokeninfo endpoint
-	url := "https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken
-	resp, err := http.Get(url)
+	if s.googleClientID == "" {
+		return nil, errors.New("Google login is not configured")
+	}
+
+	// Verify token via POST (keeps id_token out of URL/logs)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	body := strings.NewReader("id_token=" + url.QueryEscape(idToken))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/tokeninfo", body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build Google tokeninfo request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify Google token: %w", err)
 	}
@@ -231,14 +279,14 @@ func (s *AuthService) GoogleLogin(idToken string) (*AuthResponse, error) {
 		return nil, errors.New("invalid Google token")
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	var info googleTokenInfo
-	if err := json.Unmarshal(body, &info); err != nil {
+	if err := json.Unmarshal(respBody, &info); err != nil {
 		return nil, errors.New("failed to parse Google token info")
 	}
 
-	// Validate audience matches our client ID (if configured)
-	if s.googleClientID != "" && info.Aud != s.googleClientID {
+	// Always validate audience
+	if info.Aud != s.googleClientID {
 		return nil, errors.New("Google token audience mismatch")
 	}
 
@@ -301,39 +349,37 @@ func (s *AuthService) FacebookLogin(accessToken string) (*AuthResponse, error) {
 	return s.findOrCreateSocialUser(info.Email, info.Name, avatarURL, "facebook", info.ID)
 }
 
-// findOrCreateSocialUser upserts a user for social login.
+// findOrCreateSocialUser atomically upserts a social-login user.
+// Uses INSERT ... ON CONFLICT (email) DO UPDATE — concurrent first-logins
+// with the same email result in exactly one row (the second request updates
+// avatar_url + is_verified rather than inserting a duplicate or returning an error).
 func (s *AuthService) findOrCreateSocialUser(email, name, avatarURL, provider, providerID string) (*AuthResponse, error) {
-	var user models.User
-
-	// Find by email + provider, or by email (local account linking)
-	err := s.db.Where("email = ?", email).First(&user).Error
-	if err == gorm.ErrRecordNotFound {
-		// Create new social user
-		av := avatarURL
-		user = models.User{
-			Email:      email,
-			FullName:   name,
-			AvatarURL:  &av,
-			Provider:   provider,
-			IsVerified: true, // Social login users are considered verified
-		}
-		if err := s.db.Create(&user).Error; err != nil {
-			return nil, fmt.Errorf("failed to create social user: %w", err)
-		}
-	} else if err != nil {
-		return nil, err
-	} else {
-		// Update avatar if changed
-		updates := map[string]interface{}{
-			"is_verified": true, // ensure verified
-		}
-		if avatarURL != "" && (user.AvatarURL == nil || *user.AvatarURL != avatarURL) {
-			updates["avatar_url"] = avatarURL
-		}
-		s.db.Model(&user).Updates(updates)
+	av := avatarURL
+	user := models.User{
+		Email:      email,
+		FullName:   name,
+		AvatarURL:  &av,
+		Provider:   provider,
+		IsVerified: true,
 	}
 
-	token, err := s.generateToken(user.ID)
+	// INSERT ... ON CONFLICT (email) DO UPDATE avatar_url + is_verified.
+	// Does NOT overwrite PasswordHash or Provider so existing local accounts keep their credentials.
+	result := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "email"}},
+		DoUpdates: clause.AssignmentColumns([]string{"avatar_url", "is_verified"}),
+	}).Create(&user)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to upsert social user: %w", result.Error)
+	}
+
+	// Re-fetch after upsert so user.ID is populated (Create sets ID on insert;
+	// on conflict the original row's ID is returned via Returning or re-query).
+	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch upserted user: %w", err)
+	}
+
+	token, err := s.generateToken(user.ID, user.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -357,11 +403,12 @@ func (s *AuthService) GetByID(id string) (*models.User, error) {
 // Token helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-func (s *AuthService) generateToken(userID uuid.UUID) (string, error) {
+func (s *AuthService) generateToken(userID uuid.UUID, email string) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": userID.String(),
-		"exp": time.Now().Add(time.Duration(s.jwtExpire) * time.Hour).Unix(),
-		"iat": time.Now().Unix(),
+		"sub":   userID.String(),
+		"email": email,
+		"exp":   time.Now().Add(time.Duration(s.jwtExpire) * time.Hour).Unix(),
+		"iat":   time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.jwtSecret))
@@ -369,6 +416,9 @@ func (s *AuthService) generateToken(userID uuid.UUID) (string, error) {
 
 func generateToken32() string {
 	b := make([]byte, 32)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failure is catastrophic — an all-zero token would be a silent security hole.
+		panic("crypto/rand is unavailable: " + err.Error())
+	}
 	return hex.EncodeToString(b)
 }

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"github.com/lib/pq"
 	"database/sql/driver"
 	"encoding/json"
 	"testing"
@@ -117,39 +118,39 @@ func TestDateOnly_Scan(t *testing.T) {
 	})
 }
 
-// ─── StringArray ──────────────────────────────────────────────────────────────
+// ─── pq.StringArray (formerly StringArray) ──────────────────────────────────────────────────────────────
 
 func TestStringArray_Value(t *testing.T) {
 	t.Run("empty array", func(t *testing.T) {
-		a := StringArray{}
+		a := pq.StringArray{}
 		val, err := a.Value()
 		require.NoError(t, err)
 		assert.Equal(t, "{}", val)
 	})
 
 	t.Run("single element", func(t *testing.T) {
-		a := StringArray{"hello"}
+		a := pq.StringArray{"hello"}
 		val, err := a.Value()
 		require.NoError(t, err)
 		assert.Equal(t, `{"hello"}`, val)
 	})
 
 	t.Run("multiple elements", func(t *testing.T) {
-		a := StringArray{"beach", "food", "culture"}
+		a := pq.StringArray{"beach", "food", "culture"}
 		val, err := a.Value()
 		require.NoError(t, err)
 		assert.Equal(t, `{"beach","food","culture"}`, val)
 	})
 
 	t.Run("element with double quotes", func(t *testing.T) {
-		a := StringArray{`say "hello"`}
+		a := pq.StringArray{`say "hello"`}
 		val, err := a.Value()
 		require.NoError(t, err)
 		assert.Equal(t, `{"say \"hello\""}`, val)
 	})
 
 	t.Run("element with backslash", func(t *testing.T) {
-		a := StringArray{`path\to\file`}
+		a := pq.StringArray{`path\to\file`}
 		val, err := a.Value()
 		require.NoError(t, err)
 		assert.Equal(t, `{"path\\to\\file"}`, val)
@@ -158,70 +159,71 @@ func TestStringArray_Value(t *testing.T) {
 
 func TestStringArray_Scan(t *testing.T) {
 	t.Run("valid postgres array", func(t *testing.T) {
-		var a StringArray
+		var a pq.StringArray
 		err := a.Scan(`{"beach","food","culture"}`)
 		require.NoError(t, err)
-		assert.Equal(t, StringArray{"beach", "food", "culture"}, a)
+		assert.Equal(t, pq.StringArray{"beach", "food", "culture"}, a)
 	})
 
 	t.Run("empty braces", func(t *testing.T) {
-		var a StringArray
+		var a pq.StringArray
 		err := a.Scan("{}")
 		require.NoError(t, err)
-		assert.Equal(t, StringArray{}, a)
+		assert.Equal(t, pq.StringArray{}, a)
 	})
 
 	t.Run("nil value", func(t *testing.T) {
-		var a StringArray
+		var a pq.StringArray
 		err := a.Scan(nil)
+		// pq.StringArray: nil scan leaves array as nil (no error)
 		require.NoError(t, err)
-		assert.Equal(t, StringArray{}, a)
+		assert.Nil(t, a)
 	})
 
 	t.Run("empty string", func(t *testing.T) {
-		var a StringArray
+		var a pq.StringArray
 		err := a.Scan("")
-		require.NoError(t, err)
-		assert.Equal(t, StringArray{}, a)
+		// pq.StringArray returns error on empty string (not valid pg array)
+		assert.Error(t, err)
 	})
 
 	t.Run("byte slice", func(t *testing.T) {
-		var a StringArray
+		var a pq.StringArray
 		err := a.Scan([]byte(`{"a","b"}`))
 		require.NoError(t, err)
-		assert.Equal(t, StringArray{"a", "b"}, a)
+		assert.Equal(t, pq.StringArray{"a", "b"}, a)
 	})
 
 	t.Run("invalid format - no braces", func(t *testing.T) {
-		var a StringArray
+		var a pq.StringArray
 		err := a.Scan("hello,world")
+		// pq.StringArray returns an error for invalid format
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid PostgreSQL array format")
 	})
 
 	t.Run("unsupported type", func(t *testing.T) {
-		var a StringArray
+		var a pq.StringArray
 		err := a.Scan(12345)
+		// pq.StringArray returns an error for non-string/byte inputs
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "unsupported type")
 	})
 
 	t.Run("escaped quotes inside element", func(t *testing.T) {
-		var a StringArray
+		var a pq.StringArray
 		err := a.Scan(`{"say \"hello\""}`)
 		require.NoError(t, err)
-		assert.Equal(t, StringArray{`say "hello"`}, a)
+		assert.Equal(t, pq.StringArray{`say "hello"`}, a)
 	})
 }
 
 func TestStringArray_RoundTrip(t *testing.T) {
 	tests := []struct {
 		name  string
-		input StringArray
+		input pq.StringArray
 	}{
-		{"simple", StringArray{"a", "b", "c"}},
-		{"single", StringArray{"hello"}},
-		{"empty", StringArray{}},
+		{"simple", pq.StringArray{"a", "b", "c"}},
+		{"single", pq.StringArray{"hello"}},
+		{"empty", pq.StringArray{}},
 	}
 
 	for _, tt := range tests {
@@ -229,7 +231,7 @@ func TestStringArray_RoundTrip(t *testing.T) {
 			val, err := tt.input.Value()
 			require.NoError(t, err)
 
-			var restored StringArray
+			var restored pq.StringArray
 			err = restored.Scan(val)
 			require.NoError(t, err)
 
@@ -239,7 +241,7 @@ func TestStringArray_RoundTrip(t *testing.T) {
 }
 
 func TestStringArray_ValueReturnsDriverValue(t *testing.T) {
-	a := StringArray{"test"}
+	a := pq.StringArray{"test"}
 	var _ driver.Value
 	val, err := a.Value()
 	require.NoError(t, err)

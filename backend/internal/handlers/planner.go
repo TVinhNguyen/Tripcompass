@@ -52,12 +52,13 @@ func cacheKey(req planner.GenerateRequest) string {
 	prefs := strings.Join(req.PreferenceTags, ",")
 	raw := fmt.Sprintf("%s|%s|%s|%d|%d|%s",
 		dest, req.StartDate, req.EndDate,
-		req.BudgetVND/100_000, // bucket to 100K
+		req.BudgetVND/100_000, // bucket to 100K VND increments — prevents cache fragmentation
+		// (e.g. 1_234_567 and 1_280_000 map to the same bucket 12, same plan)
 		req.GuestCount,
 		prefs,
 	)
 	h := sha256.Sum256([]byte(raw))
-	return plannerCachePrefix + fmt.Sprintf("%x", h[:8])
+	return plannerCachePrefix + fmt.Sprintf("%x", h[:]) // full 128-bit hash; h[:8] collides at ~5B keys
 }
 
 // POST /api/v1/planner/generate
@@ -68,7 +69,7 @@ func (h *PlannerHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// ── Cache read (Go-engine only — planner-ai manages its own cache) ───
 	if h.redis != nil && !h.useLLM {
@@ -95,7 +96,7 @@ func (h *PlannerHandler) Generate(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 
@@ -152,7 +153,7 @@ func (h *PlannerHandler) runGoEngine(req planner.GenerateRequest) (json.RawMessa
 }
 
 func (h *PlannerHandler) mode() string {
-	if h.useLLM {
+	if h.useLLM && h.plannerAIURL != "" {
 		return "llm"
 	}
 	return "go-engine"
@@ -166,7 +167,7 @@ func (h *PlannerHandler) FlushCache(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	pattern := plannerCachePrefix + "*"
 	var deleted int64
 
@@ -174,7 +175,7 @@ func (h *PlannerHandler) FlushCache(c *gin.Context) {
 	for {
 		keys, next, err := h.redis.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("SCAN failed: %v", err)})
+			respondInternalError(c, err)
 			return
 		}
 		if len(keys) > 0 {

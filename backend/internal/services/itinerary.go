@@ -1,11 +1,15 @@
 package services
 
 import (
+	"github.com/lib/pq"
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
+	"tripcompass-backend/internal/viewcounter"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -13,10 +17,17 @@ import (
 
 type ItineraryService struct {
 	db *gorm.DB
+	vc *viewcounter.Counter // H10: buffered view counter, may be nil
 }
 
 func NewItineraryService(db *gorm.DB) *ItineraryService {
 	return &ItineraryService{db: db}
+}
+
+// WithViewCounter attaches a Redis-buffered view counter to the service.
+func (s *ItineraryService) WithViewCounter(vc *viewcounter.Counter) *ItineraryService {
+	s.vc = vc
+	return s
 }
 
 // ---------- DTOs ----------
@@ -40,7 +51,7 @@ type UpdateItineraryInput struct {
 	StartDate      *string            `json:"start_date"`
 	EndDate        *string            `json:"end_date"`
 	GuestCount     *int               `json:"guest_count"`
-	Tags           models.StringArray `json:"tags"`
+	Tags           pq.StringArray `json:"tags"`
 	BudgetCategory *string            `json:"budget_category"`
 	CoverImageURL  *string            `json:"cover_image_url"`
 	Status         *string            `json:"status"` // DRAFT | PUBLISHED
@@ -84,22 +95,21 @@ func (s *ItineraryService) Create(ownerID string, input CreateItineraryInput) (*
 	if input.GuestCount > 0 {
 		guestCount = input.GuestCount
 	}
-	tags := models.StringArray(input.Tags)
+	tags := pq.StringArray(input.Tags)
 	if tags == nil {
-		tags = models.StringArray{}
+		tags = pq.StringArray{}
 	}
 
-	// Parse dates
 	startDate, err := parseDate(input.StartDate)
 	if err != nil {
-		return nil, fmt.Errorf("start_date không hợp lệ (format: YYYY-MM-DD): %w", err)
+		return nil, fmt.Errorf("%w: start_date invalid (expected YYYY-MM-DD): %v", apperror.ErrInvalidInput, err)
 	}
 	endDate, err := parseDate(input.EndDate)
 	if err != nil {
-		return nil, fmt.Errorf("end_date không hợp lệ (format: YYYY-MM-DD): %w", err)
+		return nil, fmt.Errorf("%w: end_date invalid (expected YYYY-MM-DD): %v", apperror.ErrInvalidInput, err)
 	}
 	if !endDate.Time.After(startDate.Time) && !endDate.Time.Equal(startDate.Time) {
-		return nil, errors.New("end_date phải bằng hoặc sau start_date")
+		return nil, fmt.Errorf("%w: end_date must be on or after start_date", apperror.ErrInvalidInput)
 	}
 
 	itinerary := models.Itinerary{
@@ -117,7 +127,7 @@ func (s *ItineraryService) Create(ownerID string, input CreateItineraryInput) (*
 	}
 
 	if err := s.db.Create(&itinerary).Error; err != nil {
-		return nil, fmt.Errorf("tạo itinerary thất bại: %w", err)
+		return nil, fmt.Errorf("create itinerary: %w", err)
 	}
 	return &itinerary, nil
 }
@@ -131,11 +141,14 @@ func (s *ItineraryService) GetOne(id, ownerID string) (*models.Itinerary, error)
 		Preload("Owner").
 		Where("id = ?", id).First(&it).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
 		return nil, err
 	}
 	// Allow owner or collaborators – for now allow if owner or itinerary is published
 	if it.OwnerID.String() != ownerID && it.Status != "PUBLISHED" {
-		return nil, errors.New("forbidden")
+		return nil, apperror.ErrForbidden
 	}
 	return &it, nil
 }
@@ -143,7 +156,10 @@ func (s *ItineraryService) GetOne(id, ownerID string) (*models.Itinerary, error)
 func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput) (*models.Itinerary, error) {
 	var it models.Itinerary
 	if err := s.db.Where("id = ? AND owner_id = ?", id, ownerID).First(&it).Error; err != nil {
-		return nil, errors.New("itinerary not found or forbidden")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
+		return nil, apperror.ErrNotFound // owner mismatch or missing — return 404, not 403 (avoids leaking existence)
 	}
 
 	updates := map[string]interface{}{}
@@ -171,14 +187,14 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 	if input.StartDate != nil {
 		t, err := parseDate(*input.StartDate)
 		if err != nil {
-			return nil, fmt.Errorf("start_date không hợp lệ: %w", err)
+			return nil, fmt.Errorf("%w: start_date invalid (expected YYYY-MM-DD)", apperror.ErrInvalidInput)
 		}
 		updates["start_date"] = t
 	}
 	if input.EndDate != nil {
 		t, err := parseDate(*input.EndDate)
 		if err != nil {
-			return nil, fmt.Errorf("end_date không hợp lệ: %w", err)
+			return nil, fmt.Errorf("%w: end_date invalid (expected YYYY-MM-DD)", apperror.ErrInvalidInput)
 		}
 		updates["end_date"] = t
 	}
@@ -186,13 +202,13 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 	if input.Status != nil {
 		s := *input.Status
 		if s != "DRAFT" && s != "PUBLISHED" {
-			return nil, fmt.Errorf("status không hợp lệ: phải là DRAFT hoặc PUBLISHED, nhận được %q", s)
+			return nil, fmt.Errorf("%w: status must be DRAFT or PUBLISHED, got %q", apperror.ErrInvalidInput, s)
 		}
 		updates["status"] = s
 	}
 
 	if err := s.db.Model(&it).Updates(updates).Error; err != nil {
-		return nil, fmt.Errorf("cập nhật itinerary thất bại: %w", err)
+		return nil, fmt.Errorf("update itinerary: %w", err)
 	}
 	// Reload để trả về dữ liệu mới nhất
 	s.db.First(&it, "id = ?", id)
@@ -201,19 +217,25 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 
 func (s *ItineraryService) Delete(id, ownerID string) error {
 	res := s.db.Where("id = ? AND owner_id = ?", id, ownerID).Delete(&models.Itinerary{})
-	if res.RowsAffected == 0 {
-		return errors.New("itinerary not found or forbidden")
+	if res.Error != nil {
+		return res.Error
 	}
-	return res.Error
+	if res.RowsAffected == 0 {
+		return apperror.ErrNotFound // 404: not found or not owned (don't leak existence to non-owners)
+	}
+	return nil
 }
 
 func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, error) {
 	var original models.Itinerary
 	if err := s.db.Preload("Activities").Where("id = ?", id).First(&original).Error; err != nil {
-		return nil, errors.New("itinerary not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
+		return nil, err
 	}
 	if original.Status != "PUBLISHED" && original.OwnerID.String() != requesterID {
-		return nil, errors.New("forbidden")
+		return nil, apperror.ErrForbidden
 	}
 
 	uid, _ := uuid.Parse(requesterID)
@@ -226,55 +248,62 @@ func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, err
 		StartDate:      original.StartDate,
 		EndDate:        original.EndDate,
 		GuestCount:     original.GuestCount,
-		Tags:           models.StringArray(original.Tags),
+		Tags:           pq.StringArray(original.Tags),
 		BudgetCategory: original.BudgetCategory,
 		CoverImageURL:  original.CoverImageURL,
 		Status:         "DRAFT",
 		ClonedFromID:   &clonedFrom,
 	}
 
-	if err := s.db.Create(&clone).Error; err != nil {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&clone).Error; err != nil {
+			return err
+		}
+		newActs := make([]models.Activity, 0, len(original.Activities))
+		for _, act := range original.Activities {
+			newActs = append(newActs, models.Activity{
+				ItineraryID:   clone.ID,
+				DayNumber:     act.DayNumber,
+				OrderIndex:    act.OrderIndex,
+				Title:         act.Title,
+				Category:      act.Category,
+				Lat:           act.Lat,
+				Lng:           act.Lng,
+				EstimatedCost: act.EstimatedCost,
+				StartTime:     act.StartTime,
+				EndTime:       act.EndTime,
+				ImageURL:      act.ImageURL,
+				Notes:         act.Notes,
+			})
+		}
+		if len(newActs) > 0 {
+			if err := tx.CreateInBatches(newActs, 50).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Model(&original).UpdateColumn("clone_count", gorm.Expr("clone_count + 1")).Error
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	// Clone activities
-	for _, act := range original.Activities {
-		newAct := models.Activity{
-			ItineraryID:   clone.ID,
-			DayNumber:     act.DayNumber,
-			OrderIndex:    act.OrderIndex,
-			Title:         act.Title,
-			Category:      act.Category,
-			Lat:           act.Lat,
-			Lng:           act.Lng,
-			EstimatedCost: act.EstimatedCost,
-			StartTime:     act.StartTime,
-			EndTime:       act.EndTime,
-			ImageURL:      act.ImageURL,
-			Notes:         act.Notes,
-		}
-		s.db.Create(&newAct)
-	}
-
-	// increment clone count on original
-	s.db.Model(&original).UpdateColumn("clone_count", gorm.Expr("clone_count + 1"))
-
-	// reload
 	s.db.Preload("Activities").First(&clone, "id = ?", clone.ID)
 	return &clone, nil
 }
 
-func (s *ItineraryService) Publish(id, ownerID string) (*models.Itinerary, error) {
+// Publish sets itinerary status explicitly. Accepted statuses: "PUBLISHED", "DRAFT".
+func (s *ItineraryService) Publish(id, ownerID, status string) (*models.Itinerary, error) {
+	if status != "PUBLISHED" && status != "DRAFT" {
+		return nil, fmt.Errorf("%w: status must be PUBLISHED or DRAFT", apperror.ErrInvalidInput)
+	}
 	var it models.Itinerary
 	if err := s.db.Where("id = ? AND owner_id = ?", id, ownerID).First(&it).Error; err != nil {
-		return nil, errors.New("itinerary not found or forbidden")
+		return nil, apperror.ErrNotFound
 	}
-	newStatus := "PUBLISHED"
-	if it.Status == "PUBLISHED" {
-		newStatus = "DRAFT"
+	if err := s.db.Model(&it).UpdateColumn("status", status).Error; err != nil {
+		return nil, fmt.Errorf("update status: %w", err)
 	}
-	s.db.Model(&it).UpdateColumn("status", newStatus)
-	it.Status = newStatus
+	it.Status = status
 	return &it, nil
 }
 
@@ -290,8 +319,13 @@ func (s *ItineraryService) GetPublic(id string) (*models.Itinerary, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Increment view count
-	s.db.Model(&it).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+	// H10: buffered view increment — Redis INCR, flushed to DB every 30s by StartFlusher.
+	// Falls back to direct DB write if Redis/vc is unavailable.
+	if s.vc != nil {
+		s.vc.RecordView(context.Background(), it.ID.String())
+	} else {
+		s.db.Model(&it).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+	}
 	return &it, nil
 }
 
@@ -350,11 +384,11 @@ const dateLayout = "2006-01-02"
 
 func parseDate(s string) (models.DateOnly, error) {
 	if s == "" {
-		return models.DateOnly{}, errors.New("date không được để trống")
+		return models.DateOnly{}, fmt.Errorf("%w: date must not be empty", apperror.ErrInvalidInput)
 	}
 	t, err := time.Parse(dateLayout, s)
 	if err != nil {
-		return models.DateOnly{}, fmt.Errorf("format phải là YYYY-MM-DD, nhận được: %q", s)
+		return models.DateOnly{}, fmt.Errorf("%w: date must be YYYY-MM-DD, got %q", apperror.ErrInvalidInput, s)
 	}
 	return models.DateOnly{Time: t}, nil
 }
@@ -369,9 +403,28 @@ func setItineraryDates(it *models.Itinerary, startDate, endDate string) error {
 		return fmt.Errorf("end_date: %w", err)
 	}
 	if end.Time.Before(start.Time) {
-		return errors.New("end_date phải bằng hoặc sau start_date")
+		return fmt.Errorf("%w: end_date must be on or after start_date", apperror.ErrInvalidInput)
 	}
 	it.StartDate = start
 	it.EndDate = end
 	return nil
+}
+
+// CheckWSAccess verifies that userID is either the owner or an ACCEPTED collaborator.
+// Used by the WebSocket handler to avoid direct DB access from the transport layer.
+func (s *ItineraryService) CheckWSAccess(itineraryID, userID string) error {
+	var it models.Itinerary
+	if err := s.db.First(&it, "id = ?", itineraryID).Error; err != nil {
+		return apperror.ErrNotFound
+	}
+	if it.OwnerID.String() == userID {
+		return nil
+	}
+	var collab models.Collaborator
+	err := s.db.Where("itinerary_id = ? AND user_id = ? AND status = ?",
+		itineraryID, userID, "ACCEPTED").First(&collab).Error
+	if err == nil {
+		return nil
+	}
+	return apperror.ErrForbidden
 }

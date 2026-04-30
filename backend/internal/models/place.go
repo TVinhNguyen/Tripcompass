@@ -1,6 +1,7 @@
 package models
 
 import (
+	"github.com/lib/pq"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,13 +29,13 @@ type Place struct {
 	Latitude            *float64       `gorm:"column:latitude;index:idx_place_coords" json:"latitude"`
 	Longitude           *float64       `gorm:"column:longitude;index:idx_place_coords" json:"longitude"`
 	CoverImage          *string        `gorm:"column:cover_image" json:"cover_image"`
-	Images              StringArray    `gorm:"type:text[]" json:"images"`
+	Images              pq.StringArray    `gorm:"type:text[]" json:"images"`
 	Rating              *float64       `gorm:"index:idx_place_rating" json:"rating"`
 	ReviewCount         int            `gorm:"column:review_count;not null;default:0" json:"review_count"`
 	MustVisit           bool           `gorm:"column:must_visit;not null;default:false" json:"must_visit"`
 	PriorityScore       int            `gorm:"column:priority_score;not null;default:0" json:"priority_score"`
 	BestTimeOfDay       *string        `gorm:"column:best_time_of_day" json:"best_time_of_day"`
-	Tags                StringArray    `gorm:"type:text[];column:tags" json:"tags"`
+	Tags                pq.StringArray    `gorm:"type:text[];column:tags" json:"tags"`
 	OpenTime            *string        `gorm:"column:open_time;type:time without time zone" json:"open_time"`
 	CloseTime           *string        `gorm:"column:close_time;type:time without time zone" json:"close_time"`
 	Hours               *string        `json:"hours"`

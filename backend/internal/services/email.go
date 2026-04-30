@@ -55,6 +55,31 @@ Trân trọng,
 	return s.sendMail(toEmail, subject, body)
 }
 
+// SendDuplicateRegistrationNotice notifies the account owner that someone tried
+// to register with their email. Called during Register when the email already exists.
+// Sends a security notification — NOT a verification email.
+func (s *EmailService) SendDuplicateRegistrationNotice(toEmail, fullName string) error {
+	if !s.IsConfigured() {
+		fmt.Printf("[EMAIL] Duplicate registration attempt for %s\n", toEmail)
+		return nil
+	}
+
+	subject := "Ai đó đã thử đăng ký bằng email của bạn — TripCompass"
+	body := fmt.Sprintf(`Xin chào %s,
+
+Chúng tôi nhận được yêu cầu đăng ký tài khoản mới với địa chỉ email này.
+
+Vì tài khoản đã tồn tại, chúng tôi không tạo thêm tài khoản mới.
+
+Nếu đây là bạn, hãy đăng nhập tại: %s/login
+Nếu không phải bạn, hãy bỏ qua email này.
+
+Trân trọng,
+Đội ngũ TripCompass`, fullName, s.cfg.FrontendURL)
+
+	return s.sendMail(toEmail, subject, body)
+}
+
 // SendPasswordResetEmail sends a password reset link.
 func (s *EmailService) SendPasswordResetEmail(toEmail, fullName, token string) error {
 	if !s.IsConfigured() {
