@@ -1,10 +1,12 @@
 package services
 
 import (
+	"errors"
 	"github.com/lib/pq"
 	"testing"
 	"time"
 
+	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
 
 	"github.com/google/uuid"
@@ -285,7 +287,7 @@ func TestItineraryService_Update(t *testing.T) {
 		input := UpdateItineraryInput{Title: &newTitle}
 		_, err := svc.Update(it.ID.String(), otherUser.ID.String(), input)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "itinerary not found or forbidden")
+		assert.True(t, errors.Is(err, apperror.ErrNotFound)) // Update with wrong owner now returns ErrNotFound (404)
 	})
 }
 
@@ -310,7 +312,7 @@ func TestItineraryService_Delete(t *testing.T) {
 	t.Run("not found or forbidden", func(t *testing.T) {
 		err := svc.Delete(uuid.New().String(), user.ID.String())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "itinerary not found or forbidden")
+		assert.True(t, errors.Is(err, apperror.ErrNotFound)) // Delete non-owned now returns ErrNotFound (404)
 	})
 }
 
@@ -362,7 +364,7 @@ func TestItineraryService_Clone(t *testing.T) {
 		clone, err := svc.Clone(uuid.New().String(), owner.ID.String())
 		assert.Nil(t, clone)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "itinerary not found")
+		assert.True(t, errors.Is(err, apperror.ErrNotFound)) // Clone non-existent returns ErrNotFound (404)
 	})
 }
 
