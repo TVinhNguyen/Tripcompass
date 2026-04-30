@@ -1,12 +1,14 @@
 package services
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
+	"tripcompass-backend/internal/apperror"
 )
 
 const testJWTSecret = "test-secret-key"
@@ -79,8 +81,8 @@ func TestAuthService_Login(t *testing.T) {
 		}
 		resp, err := svc.Login(input)
 		assert.Nil(t, resp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid email or password")
+		// B4: generic ErrUnauthorized — no hint whether email or password is wrong (anti-enumeration)
+		assert.True(t, errors.Is(err, apperror.ErrUnauthorized))
 	})
 
 	t.Run("non-existent email", func(t *testing.T) {
@@ -90,8 +92,8 @@ func TestAuthService_Login(t *testing.T) {
 		}
 		resp, err := svc.Login(input)
 		assert.Nil(t, resp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid email or password")
+		// B4: same generic error as wrong password — prevents email enumeration
+		assert.True(t, errors.Is(err, apperror.ErrUnauthorized))
 	})
 
 	t.Run("social login account", func(t *testing.T) {
@@ -115,8 +117,9 @@ func TestAuthService_Login(t *testing.T) {
 		}
 		resp, err := svc.Login(input)
 		assert.Nil(t, resp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "this account uses social login")
+		// B4: social login accounts return the same generic ErrUnauthorized
+		// (no hint that the account exists or which provider to use)
+		assert.True(t, errors.Is(err, apperror.ErrUnauthorized))
 	})
 }
 

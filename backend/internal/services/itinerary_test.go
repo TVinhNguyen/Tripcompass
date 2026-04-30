@@ -150,7 +150,7 @@ func TestItineraryService_Create(t *testing.T) {
 		}
 		_, err := svc.Create(user.ID.String(), input)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "start_date không hợp lệ")
+		assert.Contains(t, err.Error(), "start_date invalid")
 	})
 
 	t.Run("end_date before start_date", func(t *testing.T) {
@@ -268,7 +268,7 @@ func TestItineraryService_Update(t *testing.T) {
 		input := UpdateItineraryInput{Status: &badStatus}
 		_, err := svc.Update(it.ID.String(), user.ID.String(), input)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "status không hợp lệ")
+		assert.Contains(t, err.Error(), "status must be DRAFT or PUBLISHED")
 	})
 
 	t.Run("valid status - DRAFT", func(t *testing.T) {
