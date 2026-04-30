@@ -23,10 +23,9 @@ func (h *ActivityHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	act, err := h.svc.Create(userID(c), input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, act)
@@ -39,7 +38,6 @@ func (h *ActivityHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	act, err := h.svc.Update(c.Param("id"), userID(c), input)
 	if err != nil {
 		handleServiceError(c, err)
@@ -66,7 +64,6 @@ func (h *ActivityHandler) Reorder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	if err := h.svc.Reorder(userID(c), input.Items); err != nil {
 		handleServiceError(c, err)
 		return

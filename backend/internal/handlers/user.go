@@ -20,7 +20,7 @@ func NewUserHandler(db *gorm.DB) *UserHandler {
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	u, err := h.svc.GetByID(userID(c))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"user": u})
@@ -33,10 +33,9 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	u, err := h.svc.UpdateProfile(userID(c), input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"user": u})
@@ -49,9 +48,8 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	if err := h.svc.ChangePassword(userID(c), input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "password changed successfully"})
@@ -61,7 +59,7 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 func (h *UserHandler) GetSavedPlaces(c *gin.Context) {
 	places, err := h.svc.GetSavedPlaces(userID(c))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": places})
@@ -76,9 +74,8 @@ func (h *UserHandler) SavePlace(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	if err := h.svc.SavePlace(userID(c), body.PlaceID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"message": "place saved"})
@@ -87,7 +84,7 @@ func (h *UserHandler) SavePlace(c *gin.Context) {
 // DELETE /api/v1/user/saved-places/:place_id
 func (h *UserHandler) UnsavePlace(c *gin.Context) {
 	if err := h.svc.UnsavePlace(userID(c), c.Param("place_id")); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusNoContent, nil)

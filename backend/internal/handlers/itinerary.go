@@ -30,7 +30,7 @@ func userID(c *gin.Context) string {
 func (h *ItineraryHandler) GetMyItineraries(c *gin.Context) {
 	list, err := h.svc.GetMyItineraries(userID(c))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": list})
@@ -43,10 +43,9 @@ func (h *ItineraryHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	it, err := h.svc.Create(userID(c), input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, it)
@@ -69,10 +68,9 @@ func (h *ItineraryHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	it, err := h.svc.Update(c.Param("id"), userID(c), input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, it)
@@ -81,7 +79,7 @@ func (h *ItineraryHandler) Update(c *gin.Context) {
 // DELETE /itineraries/:id
 func (h *ItineraryHandler) Delete(c *gin.Context) {
 	if err := h.svc.Delete(c.Param("id"), userID(c)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusNoContent, nil)
@@ -91,7 +89,7 @@ func (h *ItineraryHandler) Delete(c *gin.Context) {
 func (h *ItineraryHandler) Clone(c *gin.Context) {
 	it, err := h.svc.Clone(c.Param("id"), userID(c))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, it)
@@ -134,7 +132,7 @@ func (h *ItineraryHandler) Explore(c *gin.Context) {
 
 	list, total, err := h.svc.Explore(filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 

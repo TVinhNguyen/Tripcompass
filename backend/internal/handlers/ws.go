@@ -1,10 +1,11 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 	"tripcompass-backend/internal/middleware"
-	"tripcompass-backend/internal/models"
+	"tripcompass-backend/internal/services"
 	"tripcompass-backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
@@ -13,18 +14,26 @@ import (
 )
 
 type WSHandler struct {
-	db             *gorm.DB
+	itinerarySvc   *services.ItineraryService
+	userSvc        *services.UserService
 	hub            *ws.Hub
 	jwtSecret      string
 	allowedOrigins []string
 }
 
+// NewWSHandler injects service layer dependencies instead of raw DB (M1: no direct DB access from handler).
 func NewWSHandler(db *gorm.DB, hub *ws.Hub, jwtSecret, allowedOrigins string) *WSHandler {
 	origins := strings.Split(allowedOrigins, ",")
 	for i, o := range origins {
 		origins[i] = strings.TrimSpace(o)
 	}
-	return &WSHandler{db: db, hub: hub, jwtSecret: jwtSecret, allowedOrigins: origins}
+	return &WSHandler{
+		itinerarySvc:   services.NewItineraryService(db),
+		userSvc:        services.NewUserService(db),
+		hub:            hub,
+		jwtSecret:      jwtSecret,
+		allowedOrigins: origins,
+	}
 }
 
 func (h *WSHandler) newUpgrader() *websocket.Upgrader {
@@ -43,7 +52,7 @@ func (h *WSHandler) newUpgrader() *websocket.Upgrader {
 	}
 }
 
-// HandleWebSocket xử lý upgrade HTTP → WebSocket
+// HandleWebSocket upgrades HTTP → WebSocket.
 // Route: GET /api/v1/ws/itinerary/:id?token=<JWT>
 func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	itineraryID := c.Param("id")
@@ -57,36 +66,22 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	// Parse JWT using shared helper (same logic as JWTAuth middleware)
 	userIDStr, err := middleware.ParseJWT(h.jwtSecret, tokenStr)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
 		return
 	}
 
-	// Kiểm tra quyền: user phải là owner hoặc collaborator ACCEPTED
-	var itinerary models.Itinerary
-	if err := h.db.First(&itinerary, "id = ?", itineraryID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "itinerary not found"})
+	// Check access: user must be owner or ACCEPTED collaborator
+	// Uses service layer — respects any caching or future business logic added there.
+	if err := h.itinerarySvc.CheckWSAccess(itineraryID, userIDStr); err != nil {
+		handleServiceError(c, err)
 		return
 	}
 
-	hasAccess := itinerary.OwnerID.String() == userIDStr
-	if !hasAccess {
-		var collab models.Collaborator
-		err := h.db.Where("itinerary_id = ? AND user_id = ? AND status = ?",
-			itineraryID, userIDStr, "ACCEPTED").First(&collab).Error
-		if err == nil {
-			hasAccess = true
-		}
-	}
-
-	if !hasAccess {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you don't have access to this itinerary"})
-		return
-	}
-
-	// Lấy thông tin user
-	var user models.User
-	if err := h.db.First(&user, "id = ?", userIDStr).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
+	// Fetch display name via service layer (M1: no h.db)
+	fullName, err := h.userSvc.GetFullName(userIDStr)
+	if err != nil {
+		slog.Warn("ws: user not found for id", "user_id", userIDStr, "err", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 		return
 	}
 
@@ -96,12 +91,9 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	client := ws.NewClient(h.hub, conn, itineraryID, userIDStr, user.FullName)
-
-	// Register client vào hub
+	client := ws.NewClient(h.hub, conn, itineraryID, userIDStr, fullName)
 	h.hub.Register <- client
 
-	// Start read/write pumps
 	go client.WritePump()
 	go client.ReadPump()
 }

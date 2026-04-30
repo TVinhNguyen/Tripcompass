@@ -90,17 +90,16 @@ func (s *ItineraryService) Create(ownerID string, input CreateItineraryInput) (*
 		tags = models.StringArray{}
 	}
 
-	// Parse dates
 	startDate, err := parseDate(input.StartDate)
 	if err != nil {
-		return nil, fmt.Errorf("start_date không hợp lệ (format: YYYY-MM-DD): %w", err)
+		return nil, fmt.Errorf("%w: start_date invalid (expected YYYY-MM-DD): %v", apperror.ErrInvalidInput, err)
 	}
 	endDate, err := parseDate(input.EndDate)
 	if err != nil {
-		return nil, fmt.Errorf("end_date không hợp lệ (format: YYYY-MM-DD): %w", err)
+		return nil, fmt.Errorf("%w: end_date invalid (expected YYYY-MM-DD): %v", apperror.ErrInvalidInput, err)
 	}
 	if !endDate.Time.After(startDate.Time) && !endDate.Time.Equal(startDate.Time) {
-		return nil, errors.New("end_date phải bằng hoặc sau start_date")
+		return nil, fmt.Errorf("%w: end_date must be on or after start_date", apperror.ErrInvalidInput)
 	}
 
 	itinerary := models.Itinerary{
@@ -118,7 +117,7 @@ func (s *ItineraryService) Create(ownerID string, input CreateItineraryInput) (*
 	}
 
 	if err := s.db.Create(&itinerary).Error; err != nil {
-		return nil, fmt.Errorf("tạo itinerary thất bại: %w", err)
+		return nil, fmt.Errorf("create itinerary: %w", err)
 	}
 	return &itinerary, nil
 }
@@ -172,14 +171,14 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 	if input.StartDate != nil {
 		t, err := parseDate(*input.StartDate)
 		if err != nil {
-			return nil, fmt.Errorf("start_date không hợp lệ: %w", err)
+			return nil, fmt.Errorf("%w: start_date invalid (expected YYYY-MM-DD)", apperror.ErrInvalidInput)
 		}
 		updates["start_date"] = t
 	}
 	if input.EndDate != nil {
 		t, err := parseDate(*input.EndDate)
 		if err != nil {
-			return nil, fmt.Errorf("end_date không hợp lệ: %w", err)
+			return nil, fmt.Errorf("%w: end_date invalid (expected YYYY-MM-DD)", apperror.ErrInvalidInput)
 		}
 		updates["end_date"] = t
 	}
@@ -187,13 +186,13 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 	if input.Status != nil {
 		s := *input.Status
 		if s != "DRAFT" && s != "PUBLISHED" {
-			return nil, fmt.Errorf("status không hợp lệ: phải là DRAFT hoặc PUBLISHED, nhận được %q", s)
+			return nil, fmt.Errorf("%w: status must be DRAFT or PUBLISHED, got %q", apperror.ErrInvalidInput, s)
 		}
 		updates["status"] = s
 	}
 
 	if err := s.db.Model(&it).Updates(updates).Error; err != nil {
-		return nil, fmt.Errorf("cập nhật itinerary thất bại: %w", err)
+		return nil, fmt.Errorf("update itinerary: %w", err)
 	}
 	// Reload để trả về dữ liệu mới nhất
 	s.db.First(&it, "id = ?", id)
@@ -358,11 +357,11 @@ const dateLayout = "2006-01-02"
 
 func parseDate(s string) (models.DateOnly, error) {
 	if s == "" {
-		return models.DateOnly{}, errors.New("date không được để trống")
+		return models.DateOnly{}, fmt.Errorf("%w: date must not be empty", apperror.ErrInvalidInput)
 	}
 	t, err := time.Parse(dateLayout, s)
 	if err != nil {
-		return models.DateOnly{}, fmt.Errorf("format phải là YYYY-MM-DD, nhận được: %q", s)
+		return models.DateOnly{}, fmt.Errorf("%w: date must be YYYY-MM-DD, got %q", apperror.ErrInvalidInput, s)
 	}
 	return models.DateOnly{Time: t}, nil
 }
@@ -377,9 +376,28 @@ func setItineraryDates(it *models.Itinerary, startDate, endDate string) error {
 		return fmt.Errorf("end_date: %w", err)
 	}
 	if end.Time.Before(start.Time) {
-		return errors.New("end_date phải bằng hoặc sau start_date")
+		return fmt.Errorf("%w: end_date must be on or after start_date", apperror.ErrInvalidInput)
 	}
 	it.StartDate = start
 	it.EndDate = end
 	return nil
+}
+
+// CheckWSAccess verifies that userID is either the owner or an ACCEPTED collaborator.
+// Used by the WebSocket handler to avoid direct DB access from the transport layer.
+func (s *ItineraryService) CheckWSAccess(itineraryID, userID string) error {
+	var it models.Itinerary
+	if err := s.db.First(&it, "id = ?", itineraryID).Error; err != nil {
+		return apperror.ErrNotFound
+	}
+	if it.OwnerID.String() == userID {
+		return nil
+	}
+	var collab models.Collaborator
+	err := s.db.Where("itinerary_id = ? AND user_id = ? AND status = ?",
+		itineraryID, userID, "ACCEPTED").First(&collab).Error
+	if err == nil {
+		return nil
+	}
+	return apperror.ErrForbidden
 }

@@ -111,7 +111,7 @@ func (s *UserService) ChangePassword(userID string, input ChangePasswordInput) e
 func (s *UserService) GetSavedPlaces(userID string) ([]models.Place, error) {
 	var places []models.Place
 	err := s.db.
-		Joins("INNER JOIN schema_travel.user_saved_places usp ON usp.place_id = places.id").
+		Joins("INNER JOIN user_saved_places usp ON usp.place_id = places.id").
 		Where("usp.user_id = ?", userID).
 		Order("usp.saved_at DESC").
 		Find(&places).Error
@@ -129,7 +129,7 @@ func (s *UserService) SavePlace(userID, placeID string) error {
 
 	// Try insert, ignore conflict (already saved)
 	result := s.db.Exec(
-		`INSERT INTO schema_travel.user_saved_places (user_id, place_id, saved_at)
+		`INSERT INTO user_saved_places (user_id, place_id, saved_at)
 		 VALUES (?, ?, NOW()) ON CONFLICT DO NOTHING`,
 		userID, placeID,
 	)
@@ -139,7 +139,7 @@ func (s *UserService) SavePlace(userID, placeID string) error {
 // UnsavePlace removes a place from user's saved list.
 func (s *UserService) UnsavePlace(userID, placeID string) error {
 	res := s.db.Exec(
-		`DELETE FROM schema_travel.user_saved_places WHERE user_id = ? AND place_id = ?`,
+		`DELETE FROM user_saved_places WHERE user_id = ? AND place_id = ?`,
 		userID, placeID,
 	)
 	if res.Error != nil {
@@ -149,4 +149,21 @@ func (s *UserService) UnsavePlace(userID, placeID string) error {
 		return errors.New("saved place not found")
 	}
 	return nil
+}
+
+// GetFullName returns the user's display name for the WebSocket session.
+// Avoids loading the full user model when only the name is needed.
+func (s *UserService) GetFullName(userID string) (string, error) {
+	var name string
+	err := s.db.Model(&models.User{}).
+		Where("id = ?", userID).
+		Select("full_name").
+		Scan(&name).Error
+	if err != nil {
+		return "", err
+	}
+	if name == "" {
+		return "", errors.New("user not found")
+	}
+	return name, nil
 }

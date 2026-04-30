@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,22 +19,33 @@ import (
 )
 
 func main() {
+	// M10: JSON structured logging — all slog.* calls now emit JSON to stdout.
+	// Set LOG_LEVEL=DEBUG in env for verbose output.
+	logLevel := slog.LevelInfo
+	if os.Getenv("LOG_LEVEL") == "DEBUG" {
+		logLevel = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})))
+
 	cfg := config.Load()
 
 	db, err := database.Connect(cfg)
 	if err != nil {
-		log.Fatal("Không kết nối được DB:", err)
+		slog.Error("database connection failed", "err", err)
+		os.Exit(1)
 	}
 
 	if err := database.Migrate(db); err != nil {
-		log.Fatal("Database migration failed:", err)
+		slog.Error("database migration failed", "err", err)
+		os.Exit(1)
 	}
 
 	rdb, err := database.ConnectRedis(cfg)
 	if err != nil {
-		log.Fatal("Không kết nối được Redis:", err)
+		slog.Error("redis connection failed", "addr", cfg.RedisAddr, "err", err)
+		os.Exit(1)
 	}
-	log.Printf("Kết nối Redis thành công: %s", cfg.RedisAddr)
+	slog.Info("redis connected", "addr", cfg.RedisAddr)
 
 	// WebSocket Hub
 	hub := ws.NewHub()
@@ -184,22 +195,23 @@ func main() {
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 	go func() {
-		log.Printf("Server chạy tại port %s", cfg.Port)
+		slog.Info("server starting", "port", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal("Lỗi khi chạy server:", err)
+			slog.Error("server error", "err", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-quit
-	log.Println("Shutting down server...")
+	slog.Info("shutting down server")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("Server shutdown error: %v", err)
+		slog.Error("server shutdown error", "err", err)
 	}
 
 	hub.Stop()
 	redisPubSub.Close()
-	log.Println("Cleanup complete.")
+	slog.Info("cleanup complete")
 }

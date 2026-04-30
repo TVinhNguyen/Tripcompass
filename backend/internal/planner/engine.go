@@ -61,7 +61,7 @@ func (e *Engine) Generate(req GenerateRequest) (*GenerateResponse, error) {
 
 	// ── Step 2: Query DB ──────────────────────────────────────────────────────
 	var attractions []models.Place
-	q := e.db.Table("schema_travel.places").
+	q := e.db.Table("places").
 		Where("destination = ? AND category = ?", dest, models.CategoryAttraction).
 		Order("must_visit DESC, priority_score DESC, rating DESC NULLS LAST")
 
@@ -69,7 +69,7 @@ func (e *Engine) Generate(req GenerateRequest) (*GenerateResponse, error) {
 	if req.TravelMonth > 0 {
 		q = q.Where(`
 			NOT EXISTS (
-				SELECT 1 FROM schema_travel.place_seasons ps
+				SELECT 1 FROM place_seasons ps
 				WHERE ps.place_id = places.id
 				  AND ? != ALL(ps.open_months)
 			)`, req.TravelMonth)
@@ -79,7 +79,7 @@ func (e *Engine) Generate(req GenerateRequest) (*GenerateResponse, error) {
 	}
 
 	var foodPlaces []models.Place
-	if err := e.db.Table("schema_travel.places").
+	if err := e.db.Table("places").
 		Where("destination = ? AND category = ?", dest, models.CategoryFood).
 		Order("priority_score DESC, rating DESC NULLS LAST").
 		Find(&foodPlaces).Error; err != nil {
@@ -87,7 +87,7 @@ func (e *Engine) Generate(req GenerateRequest) (*GenerateResponse, error) {
 	}
 
 	var combos []models.Combo
-	if err := e.db.Table("schema_travel.combos").
+	if err := e.db.Table("combos").
 		Where("destination = ?", dest).
 		Order("price_per_person ASC NULLS LAST").
 		Find(&combos).Error; err != nil {

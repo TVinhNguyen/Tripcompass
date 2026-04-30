@@ -95,7 +95,7 @@ func (h *PlannerHandler) Generate(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 
@@ -174,7 +174,7 @@ func (h *PlannerHandler) FlushCache(c *gin.Context) {
 	for {
 		keys, next, err := h.redis.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("SCAN failed: %v", err)})
+			respondInternalError(c, err)
 			return
 		}
 		if len(keys) > 0 {

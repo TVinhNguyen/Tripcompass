@@ -26,13 +26,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	resp, err := h.svc.Register(input)
 	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusCreated, resp)
 }
 
@@ -43,13 +41,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	resp, err := h.svc.Login(input)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
-
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -60,13 +56,11 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
-
 	user, err := h.svc.GetByID(uid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"user": user})
 }
 
@@ -79,12 +73,10 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	if err := h.svc.VerifyEmail(body.Token); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired verification token"})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"message": "email verified successfully"})
 }
 
@@ -97,9 +89,7 @@ func (h *AuthHandler) ResendVerification(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	_ = h.svc.ResendVerification(body.Email) // always return 200 to prevent email enumeration
-
 	c.JSON(http.StatusOK, gin.H{"message": "if the email exists and is unverified, a new verification email has been sent"})
 }
 
@@ -112,13 +102,11 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	resp, err := h.svc.GoogleLogin(body.IDToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "google authentication failed"})
 		return
 	}
-
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -131,12 +119,10 @@ func (h *AuthHandler) FacebookLogin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	resp, err := h.svc.FacebookLogin(body.AccessToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "facebook authentication failed"})
 		return
 	}
-
 	c.JSON(http.StatusOK, resp)
 }

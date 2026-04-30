@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
+	"tripcompass-backend/internal/pagination"
 	"tripcompass-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -19,11 +19,10 @@ func NewPlaceHandler(db *gorm.DB) *PlaceHandler {
 
 // GET /api/v1/places?destination=nha+trang&category=FOOD&page=1&limit=20
 func (h *PlaceHandler) List(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	page, limit, _ := pagination.Parse(c, 20, 100)
 	result, err := h.svc.List(c.Query("destination"), c.Query("category"), page, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -48,7 +47,7 @@ func (h *PlaceHandler) Create(c *gin.Context) {
 	}
 	p, err := h.svc.Create(input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, p)
