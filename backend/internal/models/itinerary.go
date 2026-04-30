@@ -1,6 +1,7 @@
 package models
 
 import (
+	"github.com/lib/pq"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,7 +24,7 @@ type Itinerary struct {
 	CloneCount     int         `gorm:"column:clone_count;not null;default:0" json:"clone_count"`
 	ClonedFromID   *uuid.UUID  `gorm:"column:cloned_from_id" json:"cloned_from_id"`
 	GuestCount     int         `gorm:"column:guest_count;not null;default:1" json:"guest_count"`
-	Tags           StringArray `gorm:"type:text[]" json:"tags"`
+	Tags           pq.StringArray `gorm:"type:text[]" json:"tags"`
 	BudgetCategory string      `gorm:"column:budget_category;not null;default:MODERATE" json:"budget_category"` // BUDGET | MODERATE | LUXURY
 	CreatedAt      time.Time   `json:"created_at"`
 	Activities     []Activity  `gorm:"foreignKey:ItineraryID" json:"activities,omitempty"`

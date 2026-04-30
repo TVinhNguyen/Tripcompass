@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/lib/pq"
 	"testing"
 	"time"
 
@@ -123,7 +124,7 @@ func TestItineraryService_Create(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "LUXURY", it.BudgetCategory)
 		assert.Equal(t, 4, it.GuestCount)
-		assert.Equal(t, models.StringArray{"beach", "resort"}, it.Tags)
+		assert.Equal(t, pq.StringArray{"beach", "resort"}, it.Tags)
 	})
 
 	t.Run("invalid user id", func(t *testing.T) {

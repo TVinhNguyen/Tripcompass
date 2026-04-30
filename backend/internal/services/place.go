@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/lib/pq"
 	"fmt"
 	"strings"
 	"time"
@@ -148,7 +149,7 @@ func (s *PlaceService) Create(input CreatePlaceInput) (*models.Place, error) {
 		Latitude:            input.Latitude,
 		Longitude:           input.Longitude,
 		CoverImage:          input.CoverImage,
-		Images:              models.StringArray(input.Images),
+		Images:              pq.StringArray(input.Images),
 		Rating:              input.Rating,
 		ReviewCount:         input.ReviewCount,
 		Hours:               input.Hours,
@@ -163,7 +164,7 @@ func (s *PlaceService) Create(input CreatePlaceInput) (*models.Place, error) {
 		MustVisit:           input.MustVisit,
 		PriorityScore:       input.PriorityScore,
 		BestTimeOfDay:       input.BestTimeOfDay,
-		Tags:                models.StringArray(input.Tags),
+		Tags:                pq.StringArray(input.Tags),
 		PriceUpdatedAt:      &now,
 	}
 	if err := s.db.Create(&p).Error; err != nil {
@@ -240,7 +241,7 @@ func (s *PlaceService) Update(id string, input UpdatePlaceInput) (*models.Place,
 		updates["best_time_of_day"] = *input.BestTimeOfDay
 	}
 	if input.Tags != nil {
-		updates["tags"] = models.StringArray(input.Tags)
+		updates["tags"] = pq.StringArray(input.Tags)
 	}
 	if input.Description != nil {
 		updates["description"] = *input.Description

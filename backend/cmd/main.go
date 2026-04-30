@@ -11,6 +11,7 @@ import (
 	"tripcompass-backend/internal/config"
 	"tripcompass-backend/internal/database"
 	"tripcompass-backend/internal/server"
+	"tripcompass-backend/internal/viewcounter"
 	"tripcompass-backend/internal/ws"
 )
 
@@ -46,7 +47,14 @@ func main() {
 	hub.SetRedisPubSub(redisPubSub)
 	go hub.Run()
 
-	r := server.NewRouter(db, rdb, hub, cfg)
+	// H10: Buffered view counter — Redis INCR per request, flush to DB every 30s.
+	// Context cancelled on SIGTERM triggers a final flush before process exits.
+	flusherCtx, cancelFlusher := context.WithCancel(context.Background())
+	defer cancelFlusher()
+	vc := viewcounter.New(rdb, db)
+	vc.StartFlusher(flusherCtx)
+
+	r := server.NewRouter(db, rdb, hub, cfg, vc)
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)

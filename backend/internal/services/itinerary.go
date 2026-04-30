@@ -1,12 +1,15 @@
 package services
 
 import (
+	"github.com/lib/pq"
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
+	"tripcompass-backend/internal/viewcounter"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -14,10 +17,17 @@ import (
 
 type ItineraryService struct {
 	db *gorm.DB
+	vc *viewcounter.Counter // H10: buffered view counter, may be nil
 }
 
 func NewItineraryService(db *gorm.DB) *ItineraryService {
 	return &ItineraryService{db: db}
+}
+
+// WithViewCounter attaches a Redis-buffered view counter to the service.
+func (s *ItineraryService) WithViewCounter(vc *viewcounter.Counter) *ItineraryService {
+	s.vc = vc
+	return s
 }
 
 // ---------- DTOs ----------
@@ -41,7 +51,7 @@ type UpdateItineraryInput struct {
 	StartDate      *string            `json:"start_date"`
 	EndDate        *string            `json:"end_date"`
 	GuestCount     *int               `json:"guest_count"`
-	Tags           models.StringArray `json:"tags"`
+	Tags           pq.StringArray `json:"tags"`
 	BudgetCategory *string            `json:"budget_category"`
 	CoverImageURL  *string            `json:"cover_image_url"`
 	Status         *string            `json:"status"` // DRAFT | PUBLISHED
@@ -85,9 +95,9 @@ func (s *ItineraryService) Create(ownerID string, input CreateItineraryInput) (*
 	if input.GuestCount > 0 {
 		guestCount = input.GuestCount
 	}
-	tags := models.StringArray(input.Tags)
+	tags := pq.StringArray(input.Tags)
 	if tags == nil {
-		tags = models.StringArray{}
+		tags = pq.StringArray{}
 	}
 
 	startDate, err := parseDate(input.StartDate)
@@ -226,7 +236,7 @@ func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, err
 		StartDate:      original.StartDate,
 		EndDate:        original.EndDate,
 		GuestCount:     original.GuestCount,
-		Tags:           models.StringArray(original.Tags),
+		Tags:           pq.StringArray(original.Tags),
 		BudgetCategory: original.BudgetCategory,
 		CoverImageURL:  original.CoverImageURL,
 		Status:         "DRAFT",
@@ -297,8 +307,13 @@ func (s *ItineraryService) GetPublic(id string) (*models.Itinerary, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Increment view count
-	s.db.Model(&it).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+	// H10: buffered view increment — Redis INCR, flushed to DB every 30s by StartFlusher.
+	// Falls back to direct DB write if Redis/vc is unavailable.
+	if s.vc != nil {
+		s.vc.RecordView(context.Background(), it.ID.String())
+	} else {
+		s.db.Model(&it).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+	}
 	return &it, nil
 }
 

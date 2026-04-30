@@ -9,6 +9,7 @@ import (
 	"tripcompass-backend/internal/config"
 	"tripcompass-backend/internal/handlers"
 	"tripcompass-backend/internal/middleware"
+	"tripcompass-backend/internal/viewcounter"
 	"tripcompass-backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +19,7 @@ import (
 
 // NewRouter constructs the gin engine with all middleware and routes registered.
 // It does not start the HTTP server — that is the responsibility of main.go.
-func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config) *gin.Engine {
+func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, vc *viewcounter.Counter) *gin.Engine {
 	r := gin.Default()
 
 	// ── CORS ───────────────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config) 
 	// ── Handlers ───────────────────────────────────────────────────────────────
 	authHandler := handlers.NewAuthHandler(db, cfg)
 	userHandler := handlers.NewUserHandler(db)
-	itineraryHandler := handlers.NewItineraryHandler(db)
+	itineraryHandler := handlers.NewItineraryHandler(db, vc) // H10: buffered view counter
 	activityHandler := handlers.NewActivityHandler(db)
 	placeHandler := handlers.NewPlaceHandler(db)
 	comboHandler := handlers.NewComboHandler(db)
@@ -72,10 +73,10 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config) 
 		// Public routes ──────────────────────────────────────────────────────
 
 		auth := api.Group("/auth")
-		auth.POST("/register", middleware.RateLimit(5, 60), authHandler.Register)
-		auth.POST("/login", middleware.RateLimit(10, 60), authHandler.Login)
-		auth.POST("/verify", middleware.RateLimit(20, 60), authHandler.VerifyEmail)
-		auth.POST("/resend-verification", middleware.RateLimit(3, 300), authHandler.ResendVerification)
+		auth.POST("/register", middleware.RateLimitRedis(rdb, 5, 60), authHandler.Register)
+		auth.POST("/login", middleware.RateLimitRedis(rdb, 10, 60), authHandler.Login)
+		auth.POST("/verify", middleware.RateLimitRedis(rdb, 20, 60), authHandler.VerifyEmail)
+		auth.POST("/resend-verification", middleware.RateLimitRedis(rdb, 3, 300), authHandler.ResendVerification)
 		auth.POST("/google", authHandler.GoogleLogin)
 		auth.POST("/facebook", authHandler.FacebookLogin)
 
@@ -89,7 +90,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config) 
 		api.GET("/itineraries/:id/public", itineraryHandler.GetPublic)
 
 		api.GET("/knowledge-base/lookup", lookupHandler.Lookup)
-		api.POST("/planner/generate", middleware.RateLimit(30, 60), plannerHandler.Generate)
+		api.POST("/planner/generate", middleware.RateLimitRedis(rdb, 30, 60), plannerHandler.Generate)
 		api.GET("/ws/itinerary/:id", wsHandler.HandleWebSocket)
 
 		// Protected routes (JWT required) ────────────────────────────────────

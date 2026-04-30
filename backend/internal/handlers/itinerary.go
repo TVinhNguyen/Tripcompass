@@ -7,6 +7,7 @@ import (
 	"tripcompass-backend/internal/middleware"
 	"tripcompass-backend/internal/pagination"
 	"tripcompass-backend/internal/services"
+	"tripcompass-backend/internal/viewcounter"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -16,8 +17,12 @@ type ItineraryHandler struct {
 	svc *services.ItineraryService
 }
 
-func NewItineraryHandler(db *gorm.DB) *ItineraryHandler {
-	return &ItineraryHandler{svc: services.NewItineraryService(db)}
+func NewItineraryHandler(db *gorm.DB, vc *viewcounter.Counter) *ItineraryHandler {
+	svc := services.NewItineraryService(db)
+	if vc != nil {
+		svc = svc.WithViewCounter(vc)
+	}
+	return &ItineraryHandler{svc: svc}
 }
 
 // mustUserID extracts the authenticated user ID from gin context.
