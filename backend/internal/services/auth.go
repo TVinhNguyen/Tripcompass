@@ -89,7 +89,7 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 						slog.Warn("[email] panic sending duplicate-registration notice", "err", r)
 					}
 				}()
-				_ = emailSvc.SendVerificationEmail(addr, name, "")
+				_ = emailSvc.SendDuplicateRegistrationNotice(addr, name)
 			}()
 		}
 		return &AuthResponse{}, nil // B1: no Token, no User — caller cannot distinguish

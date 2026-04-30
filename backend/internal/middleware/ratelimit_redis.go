@@ -45,8 +45,15 @@ func RateLimitRedis(rdb *redis.Client, maxRequests int, windowSecs int) gin.Hand
 			return
 		}
 		if count == 1 {
-			// First request in this window: set expiry
-			rdb.Expire(ctx, key, window)
+			// First request in this window: set expiry.
+			// If EXPIRE fails (e.g. context timeout between INCR and EXPIRE),
+			// delete the key to prevent a permanent counter that never expires —
+			// which would permanently rate-limit this IP+route.
+			if err := rdb.Expire(ctx, key, window).Err(); err != nil {
+				rdb.Del(ctx, key)
+				c.Next()
+				return
+			}
 		}
 
 		if count > int64(maxRequests) {

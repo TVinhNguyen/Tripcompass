@@ -141,6 +141,9 @@ func (s *ItineraryService) GetOne(id, ownerID string) (*models.Itinerary, error)
 		Preload("Owner").
 		Where("id = ?", id).First(&it).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
 		return nil, err
 	}
 	// Allow owner or collaborators – for now allow if owner or itinerary is published
@@ -153,7 +156,10 @@ func (s *ItineraryService) GetOne(id, ownerID string) (*models.Itinerary, error)
 func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput) (*models.Itinerary, error) {
 	var it models.Itinerary
 	if err := s.db.Where("id = ? AND owner_id = ?", id, ownerID).First(&it).Error; err != nil {
-		return nil, errors.New("itinerary not found or forbidden")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
+		return nil, apperror.ErrNotFound // owner mismatch or missing — return 404, not 403 (avoids leaking existence)
 	}
 
 	updates := map[string]interface{}{}
@@ -211,16 +217,22 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 
 func (s *ItineraryService) Delete(id, ownerID string) error {
 	res := s.db.Where("id = ? AND owner_id = ?", id, ownerID).Delete(&models.Itinerary{})
-	if res.RowsAffected == 0 {
-		return errors.New("itinerary not found or forbidden")
+	if res.Error != nil {
+		return res.Error
 	}
-	return res.Error
+	if res.RowsAffected == 0 {
+		return apperror.ErrNotFound // 404: not found or not owned (don't leak existence to non-owners)
+	}
+	return nil
 }
 
 func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, error) {
 	var original models.Itinerary
 	if err := s.db.Preload("Activities").Where("id = ?", id).First(&original).Error; err != nil {
-		return nil, errors.New("itinerary not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
+		return nil, err
 	}
 	if original.Status != "PUBLISHED" && original.OwnerID.String() != requesterID {
 		return nil, apperror.ErrForbidden
