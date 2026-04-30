@@ -1,7 +1,6 @@
 package services
 
 import (
-	"github.com/lib/pq"
 	"fmt"
 	"regexp"
 	"strings"
@@ -87,7 +86,7 @@ func (s *SeedService) BulkUpsert(input SeedInput) (*SeedResult, error) {
 				Latitude:            p.Latitude,
 				Longitude:           p.Longitude,
 				CoverImage:          p.CoverImage,
-				Images:              pq.StringArray(p.Images),
+				Images:              nilSafePQArray(p.Images),
 				Rating:              p.Rating,
 				ReviewCount:         p.ReviewCount,
 				Hours:               p.Hours,
@@ -102,7 +101,7 @@ func (s *SeedService) BulkUpsert(input SeedInput) (*SeedResult, error) {
 				MustVisit:           p.MustVisit,
 				PriorityScore:       p.PriorityScore,
 				BestTimeOfDay:       p.BestTimeOfDay,
-				Tags:                pq.StringArray(p.Tags),
+				Tags:                nilSafePQArray(p.Tags),
 				OpenTime:            openTime,
 				CloseTime:           closeTime,
 				PriceUpdatedAt:      &now,
@@ -181,8 +180,8 @@ func (s *SeedService) BulkUpsert(input SeedInput) (*SeedResult, error) {
 				CoverImage:        c.CoverImage,
 				Provider:          c.Provider,
 				PricePerPerson:    c.PricePerPerson,
-				Includes:          pq.StringArray(c.Includes),
-				Benefits:          pq.StringArray(c.Benefits),
+				Includes:          nilSafePQArray(c.Includes),
+				Benefits:          nilSafePQArray(c.Benefits),
 				DurationDays:      c.DurationDays,
 				RequiresOvernight: c.RequiresOvernight,
 				BookURL:           c.BookURL,

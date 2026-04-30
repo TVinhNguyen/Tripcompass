@@ -149,7 +149,7 @@ func (s *PlaceService) Create(input CreatePlaceInput) (*models.Place, error) {
 		Latitude:            input.Latitude,
 		Longitude:           input.Longitude,
 		CoverImage:          input.CoverImage,
-		Images:              pq.StringArray(input.Images),
+		Images:              nilSafePQArray(input.Images),
 		Rating:              input.Rating,
 		ReviewCount:         input.ReviewCount,
 		Hours:               input.Hours,
@@ -164,7 +164,7 @@ func (s *PlaceService) Create(input CreatePlaceInput) (*models.Place, error) {
 		MustVisit:           input.MustVisit,
 		PriorityScore:       input.PriorityScore,
 		BestTimeOfDay:       input.BestTimeOfDay,
-		Tags:                pq.StringArray(input.Tags),
+		Tags:                nilSafePQArray(input.Tags),
 		PriceUpdatedAt:      &now,
 	}
 	if err := s.db.Create(&p).Error; err != nil {
