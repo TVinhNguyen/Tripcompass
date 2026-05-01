@@ -6,7 +6,6 @@ import { Brain, FileText, Upload, Search, Plus, MoreVertical, Trash2, Edit2, Eye
 import { AdminShell } from "@/components/admin/admin-shell"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { formatVND } from "@/lib/format"
 import { apiUpload } from "@/lib/api"
 
 const PLANNER_AI = process.env.NEXT_PUBLIC_PLANNER_AI_URL ?? ""

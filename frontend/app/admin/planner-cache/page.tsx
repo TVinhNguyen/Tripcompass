@@ -17,7 +17,6 @@ import {
 import { AdminShell } from "@/components/admin/admin-shell"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { formatVND } from "@/lib/format"
 
 const PLANNER_AI = process.env.NEXT_PUBLIC_PLANNER_AI_URL ?? ""
 

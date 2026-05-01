@@ -34,7 +34,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { formatVND } from "@/lib/format";
 
 type StatusFilter = "all" | "DRAFT" | "PUBLISHED";
 
