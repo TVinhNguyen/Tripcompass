@@ -4,6 +4,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatVND } from "@/lib/format";
 import type { Activity } from "../_lib/types";
 import { dayColor } from "../_lib/constants";
 import { SortableActivityCard } from "./sortable-activity-card";
@@ -56,7 +57,7 @@ export function DroppableDay({
             {realActivities.length} hoạt động
           </span>
           <span className="text-[11px] font-mono font-semibold nums text-[#1a1a1a]">
-            {dayCost.toLocaleString("vi-VN")} ₫
+            {formatVND(dayCost)}
           </span>
         </div>
       </div>

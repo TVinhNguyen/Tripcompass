@@ -16,6 +16,7 @@ import {
 import { AdminShell } from "@/components/admin/admin-shell"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { formatVND } from "@/lib/format"
 
 const PLANNER_AI = process.env.NEXT_PUBLIC_PLANNER_AI_URL ?? ""
 
@@ -136,7 +137,7 @@ export default function PlannerCachePage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           { label: "Hit rate trung bình", value: `${hr.toFixed(1)}%`,                                               icon: Zap,      trend: "", accent: "bg-[#3d5a3d]" },
-          { label: "Tổng entries",        value: entries.toLocaleString("vi-VN"),                                  icon: Database, trend: "", accent: "bg-[#c4785a]" },
+          { label: "Tổng entries",        value: formatVND(entries),                                                             icon: Database, trend: "", accent: "bg-[#c4785a]" },
           { label: "Tokens tiết kiệm",   value: tokensSaved >= 1e6 ? `${(tokensSaved/1e6).toFixed(1)}M` : String(tokensSaved), icon: TrendingUp, trend: "", accent: "bg-[#d4a853]" },
           { label: "Avg response",        value: `${avgMs}ms`,                                                       icon: Clock,    trend: "", accent: "bg-[#8b6f47]" },
         ].map((s) => (

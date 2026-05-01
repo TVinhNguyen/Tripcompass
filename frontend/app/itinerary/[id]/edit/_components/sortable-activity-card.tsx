@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, MapPin, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatVND } from "@/lib/format";
 import type { Activity } from "../_lib/types";
 import { TYPE_COLOR, TYPE_LABELS } from "../_lib/constants";
 
@@ -90,7 +91,7 @@ export function SortableActivityCard({
           <div className="flex items-center gap-3 text-[11px]">
             <span className="nums text-[#8b8378] font-mono">{activity.duration}m</span>
             {activity.cost > 0
-              ? <span className="nums font-mono font-semibold text-[#1a1a1a]">{activity.cost.toLocaleString("vi-VN")} ₫</span>
+              ? <span className="nums font-mono font-semibold text-[#1a1a1a]">{formatVND(activity.cost)}</span>
               : <span className="text-[#b8b1a6] italic">Miễn phí</span>
             }
           </div>

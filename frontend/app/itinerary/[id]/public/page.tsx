@@ -14,8 +14,7 @@ import { useAuth } from "@/hooks/use-auth"
 import type { Itinerary, Activity } from "@/lib/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-
-const nf = new Intl.NumberFormat("vi-VN")
+import { formatVND } from "@/lib/format"
 
 const CATEGORY_LABELS: Record<string, string> = {
   FOOD: "Ẩm thực", ATTRACTION: "Tham quan",
@@ -133,7 +132,7 @@ export default function PublicItineraryPage({ params }: { params: Promise<{ id: 
                     {itinerary.guest_count}
                   </span>
                   <span className="inline-flex items-center gap-1.5 tabular-nums">
-                    <Eye className="w-3.5 h-3.5 text-white/50" />{nf.format(itinerary.view_count)}
+                    <Eye className="w-3.5 h-3.5 text-white/50" />{itinerary.view_count.toLocaleString("vi-VN")}
                   </span>
                   {itinerary.rating > 0 && (
                     <span className="inline-flex items-center gap-1.5">
@@ -202,7 +201,7 @@ export default function PublicItineraryPage({ params }: { params: Promise<{ id: 
                               {a.estimated_cost > 0 && (
                                 <div className="mt-3 pt-3 border-t border-dashed border-[#e8e2d9] text-right">
                                   <span className="text-xs font-semibold text-[#1a1a1a] tabular-nums">
-                                    {nf.format(a.estimated_cost)} đ
+                                    {formatVND(a.estimated_cost)}
                                   </span>
                                 </div>
                               )}
@@ -224,7 +223,7 @@ export default function PublicItineraryPage({ params }: { params: Promise<{ id: 
                   <dl className="space-y-3 text-sm">
                     <div className="flex items-center justify-between">
                       <dt className="text-[#6b6b6b]">Tổng chi phí</dt>
-                      <dd className="font-semibold text-[#1a1a1a] tabular-nums">{nf.format(totalCost)} đ</dd>
+                      <dd className="font-semibold text-[#1a1a1a] tabular-nums">{formatVND(totalCost)}</dd>
                     </div>
                     <div className="flex items-center justify-between">
                       <dt className="text-[#6b6b6b]">Hoạt động</dt>

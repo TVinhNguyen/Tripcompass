@@ -1,10 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, useRef } from "react"
 import { Brain, FileText, Upload, Search, Plus, MoreVertical, Trash2, Edit2, Eye, FileCheck2, FileClock, Link as LinkIcon, Loader2, RefreshCw } from "lucide-react"
 import { AdminShell } from "@/components/admin/admin-shell"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { formatVND } from "@/lib/format"
 
 const PLANNER_AI = process.env.NEXT_PUBLIC_PLANNER_AI_URL ?? ""
 
@@ -45,6 +46,7 @@ export default function KnowledgeBasePage() {
   const [docs, setDocs] = useState<KBDoc[]>([])
   const [sources, setSources] = useState<KBSource[]>([])
   const [loading, setLoading] = useState(true)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -106,12 +108,34 @@ export default function KnowledgeBasePage() {
       action={
         <div className="flex gap-2">
           <button
-            onClick={() => toast.info("Upload modal sẽ mở")}
+            onClick={() => fileInputRef.current?.click()}
             className="px-4 py-2 bg-white border border-[#e8e2d9] rounded-lg text-sm font-medium text-[#1a1a1a] hover:bg-[#f5f0e8] inline-flex items-center gap-2"
           >
             <Upload className="w-4 h-4" />
             Tải lên
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.txt,.md,.docx"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              const form = new FormData()
+              form.append("file", file)
+              try {
+                const res = await fetch(`${PLANNER_AI}/knowledge/documents`, { method: "POST", body: form })
+                if (!res.ok) throw new Error()
+                toast.success(`Đã tải lên ${file.name}`)
+                load()
+              } catch {
+                toast.error("Tải lên thất bại")
+              } finally {
+                e.target.value = ""
+              }
+            }}
+          />
           <button
             onClick={load}
             className="px-4 py-2 bg-white border border-[#e8e2d9] rounded-lg text-sm font-medium text-[#1a1a1a] hover:bg-[#f5f0e8] inline-flex items-center gap-2"
@@ -140,7 +164,7 @@ export default function KnowledgeBasePage() {
             {[
               { label: "Tổng tài liệu", value: docs.length, icon: FileText, accent: "bg-[#3d5a3d]" },
               { label: "Đã index", value: docs.filter((d) => d.status === "indexed").length, icon: FileCheck2, accent: "bg-[#c4785a]" },
-              { label: "Tổng chunks", value: docs.reduce((s, d) => s + d.chunks, 0).toLocaleString("vi-VN"), icon: Brain, accent: "bg-[#d4a853]" },
+              { label: "Tổng chunks", value: formatVND(docs.reduce((s, d) => s + d.chunks, 0)), icon: Brain, accent: "bg-[#d4a853]" },
               { label: "Nguồn kiến thức", value: sources.length, icon: LinkIcon, accent: "bg-[#8b6f47]" },
             ].map((s) => (
               <div key={s.label} className="bg-white border border-[#e8e2d9] rounded-2xl p-5 flex items-center gap-4">
