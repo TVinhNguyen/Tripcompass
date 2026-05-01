@@ -1,4 +1,5 @@
 "use client"
+import { RequireAdmin } from "@/components/require-auth"
 
 import { useCallback, useEffect, useState, useRef } from "react"
 import { Brain, FileText, Upload, Search, Plus, MoreVertical, Trash2, Edit2, Eye, FileCheck2, FileClock, Link as LinkIcon, Loader2, RefreshCw } from "lucide-react"
@@ -6,6 +7,7 @@ import { AdminShell } from "@/components/admin/admin-shell"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { formatVND } from "@/lib/format"
+import { apiUpload } from "@/lib/api"
 
 const PLANNER_AI = process.env.NEXT_PUBLIC_PLANNER_AI_URL ?? ""
 
@@ -102,7 +104,8 @@ export default function KnowledgeBasePage() {
   const filteredDocs = docs.filter((d) => !search || d.title.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <AdminShell
+    <RequireAdmin>
+      <AdminShell
       title="Knowledge Base"
       description="Tài liệu và nguồn kiến thức cho AI Planner"
       action={
@@ -122,11 +125,9 @@ export default function KnowledgeBasePage() {
             onChange={async (e) => {
               const file = e.target.files?.[0]
               if (!file) return
-              const form = new FormData()
-              form.append("file", file)
               try {
-                const res = await fetch(`${PLANNER_AI}/knowledge/documents`, { method: "POST", body: form })
-                if (!res.ok) throw new Error()
+                // Bug 14: use apiUpload so Bearer token is attached, targeting AI service
+                await apiUpload("/knowledge/documents", file, "file", undefined, "ai")
                 toast.success(`Đã tải lên ${file.name}`)
                 load()
               } catch {
@@ -164,7 +165,7 @@ export default function KnowledgeBasePage() {
             {[
               { label: "Tổng tài liệu", value: docs.length, icon: FileText, accent: "bg-[#3d5a3d]" },
               { label: "Đã index", value: docs.filter((d) => d.status === "indexed").length, icon: FileCheck2, accent: "bg-[#c4785a]" },
-              { label: "Tổng chunks", value: formatVND(docs.reduce((s, d) => s + d.chunks, 0)), icon: Brain, accent: "bg-[#d4a853]" },
+              { label: "Tổng chunks", value: docs.reduce((s, d) => s + d.chunks, 0).toLocaleString("vi-VN"), icon: Brain, accent: "bg-[#d4a853]" },
               { label: "Nguồn kiến thức", value: sources.length, icon: LinkIcon, accent: "bg-[#8b6f47]" },
             ].map((s) => (
               <div key={s.label} className="bg-white border border-[#e8e2d9] rounded-2xl p-5 flex items-center gap-4">
@@ -326,5 +327,6 @@ export default function KnowledgeBasePage() {
         </>
       )}
     </AdminShell>
+    </RequireAdmin>
   )
 }

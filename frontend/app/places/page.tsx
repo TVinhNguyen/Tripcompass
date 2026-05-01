@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { Search, Grid3X3, List, X, ChevronDown, Loader2 } from "lucide-react"
+import { Search, Grid3X3, List, Map, X, ChevronDown, Loader2 } from "lucide-react"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import { PlaceCard } from "@/components/place-card"
@@ -191,7 +191,6 @@ export default function PlacesPage() {
                   </div>
                 </div>
                 <button onClick={resetFilters} className="w-full mt-4 text-sm text-[#c4785a] hover:text-[#3d5a3d]">Xóa bộ lọc</button>
-                <button onClick={resetFilters} className="w-full mt-4 text-sm text-[#c4785a] hover:text-[#3d5a3d]">Xóa bộ lọc</button>
               </div>
             </aside>
 
@@ -237,7 +236,7 @@ export default function PlacesPage() {
                       )}
                       aria-label="Dạng bản đồ"
                     >
-                      <Search className="w-4 h-4" />
+                      <Map className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

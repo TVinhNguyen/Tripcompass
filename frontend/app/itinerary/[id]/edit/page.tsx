@@ -22,6 +22,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatVND } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import ItineraryMapDynamic from "@/components/itinerary-map-dynamic";
 
@@ -131,7 +132,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
         <div className="hidden lg:flex items-center gap-3 pr-1">
           <div className="flex items-baseline gap-1.5">
             <span className="text-[10px] font-mono tracking-[0.2em] uppercase text-[#8b8378]">Budget</span>
-            <span className="text-sm font-mono nums text-[#f5f0e8]">{totalBudget.toLocaleString("vi-VN")} ₫</span>
+            <span className="text-sm font-mono nums text-[#f5f0e8]">{formatVND(totalBudget)}</span>
           </div>
           <div className="h-5 w-px bg-white/10" />
           <div className="flex items-baseline gap-1.5">
@@ -206,7 +207,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                 <span><span className="text-[#8b8378]">ACTS </span><span className="text-[#1a1a1a]">{String(totalActivities).padStart(2, "0")}</span></span>
                 <span className="hidden sm:inline lg:hidden">
                   <span className="text-[#8b8378]">₫ </span>
-                  <span className="text-[#1a1a1a]">{totalBudget.toLocaleString("vi-VN")}</span>
+                  <span className="text-[#1a1a1a]">{formatVND(totalBudget)}</span>
                 </span>
               </div>
 

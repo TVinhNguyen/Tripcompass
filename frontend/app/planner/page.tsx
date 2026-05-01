@@ -290,7 +290,7 @@ function PlannerContent() {
                       <h3 className="text-base font-semibold text-[#1a1a1a] mb-2 hover:text-[#3d5a3d] transition-colors line-clamp-2 tracking-tight leading-snug">{it.title}</h3>
                     </Link>
                     <div className="flex items-center gap-4 text-sm text-[#8b8378] mb-4">
-                      <div className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /><span>{formatVND(it.view_count)}</span></div>
+                      <div className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /><span>{it.view_count.toLocaleString("vi-VN")}</span></div>
                       <div className="flex items-center gap-1"><Heart className="w-3.5 h-3.5 text-[#c4785a]" /><span>{it.clone_count}</span></div>
                     </div>
                     <div className="flex items-center gap-2 mt-auto">
@@ -332,7 +332,7 @@ function PlannerContent() {
                     </Link>
                     <div className="flex items-center gap-4 text-sm text-[#8b8378] mt-1">
                       <span>{getDuration(it)} ngày · {it.destination}</span>
-                      <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{formatVND(it.view_count)}</span>
+                      <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{it.view_count.toLocaleString("vi-VN")}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

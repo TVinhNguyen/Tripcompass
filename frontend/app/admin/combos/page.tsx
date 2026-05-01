@@ -1,4 +1,5 @@
 "use client"
+import { RequireAdmin } from "@/components/require-auth"
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
@@ -54,7 +55,8 @@ export default function AdminCombosPage() {
   }
 
   return (
-    <AdminShell
+    <RequireAdmin>
+      <AdminShell
       title="Combo du lịch"
       description={`Quản lý ${combos.length} gói combo`}
       action={
@@ -193,5 +195,6 @@ export default function AdminCombosPage() {
         </div>
       )}
     </AdminShell>
+    </RequireAdmin>
   )
 }
