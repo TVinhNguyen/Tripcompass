@@ -9,6 +9,7 @@ import { Footer } from "@/components/footer"
 import { PlaceCard } from "@/components/place-card"
 import { Button } from "@/components/ui/button"
 import { apiFetch } from "@/lib/api"
+import PlacesMapDynamic from "@/components/places-map-dynamic"
 import type { Place, PlaceCategory, PaginatedList } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -25,7 +26,7 @@ const CATEGORIES: { id: PlaceCategory | "all"; label: string }[] = [
 ]
 
 export default function PlacesPage() {
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCity, setSelectedCity] = useState<string>("all")
   const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | "all">("all")
@@ -214,6 +215,7 @@ export default function PlacesPage() {
                         "p-2 rounded-md transition-colors",
                         viewMode === "grid" ? "bg-[#3d5a3d] text-white" : "text-[#6b6b6b]",
                       )}
+                      aria-label="Dạng lưới"
                     >
                       <Grid3X3 className="w-4 h-4" />
                     </button>
@@ -223,16 +225,39 @@ export default function PlacesPage() {
                         "p-2 rounded-md transition-colors",
                         viewMode === "list" ? "bg-[#3d5a3d] text-white" : "text-[#6b6b6b]",
                       )}
+                      aria-label="Dạng danh sách"
                     >
                       <List className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("map")}
+                      className={cn(
+                        "p-2 rounded-md transition-colors",
+                        viewMode === "map" ? "bg-[#3d5a3d] text-white" : "text-[#6b6b6b]",
+                      )}
+                      aria-label="Dạng bản đồ"
+                    >
+                      <Search className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               </div>
 
               {loading ? (
-                <div className="flex items-center justify-center py-20">
-                  <Loader2 className="w-8 h-8 animate-spin text-[#3d5a3d]" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="bg-white border border-[#e8e2d9] rounded-2xl overflow-hidden animate-pulse">
+                      <div className="h-48 bg-[#e8e2d9]" />
+                      <div className="p-4 space-y-2">
+                        <div className="h-4 bg-[#e8e2d9] rounded w-3/4" />
+                        <div className="h-3 bg-[#e8e2d9] rounded w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : viewMode === "map" ? (
+                <div className="h-[600px] rounded-2xl overflow-hidden border border-[#e8e2d9]">
+                  <PlacesMapDynamic places={places} />
                 </div>
               ) : places.length > 0 ? (
                 <div

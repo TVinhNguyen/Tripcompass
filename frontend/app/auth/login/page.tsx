@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Eye, EyeOff, Loader2, Mail, Lock } from "lucide-react"
@@ -10,12 +10,12 @@ import { AuthLayout } from "@/components/auth-layout"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { ApiError } from "@/lib/api"
-import { Suspense } from "react"
+import { GoogleOAuthProvider, useGoogleLogin } from "@react-oauth/google"
 
 function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { login } = useAuth()
+  const { login, loginGoogle } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -43,6 +43,19 @@ function LoginContent() {
       setLoading(false)
     }
   }
+
+  // Google OAuth via implicit token flow
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        await loginGoogle(tokenResponse.access_token)
+        router.push(redirectTo)
+      } catch {
+        setError("Google đăng nhập thất bại. Thử lại sau.")
+      }
+    },
+    onError: () => setError("Google đăng nhập bị huỷ."),
+  })
 
   return (
     <AuthLayout
@@ -142,6 +155,7 @@ function LoginContent() {
       <div className="grid grid-cols-2 gap-3">
         <button
           type="button"
+          onClick={() => handleGoogleLogin()}
           className="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-[#e8e2d9] rounded-lg hover:bg-[#f5f0e8] transition-colors"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -188,8 +202,10 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense>
-      <LoginContent />
-    </Suspense>
+    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ""}>
+      <Suspense>
+        <LoginContent />
+      </Suspense>
+    </GoogleOAuthProvider>
   )
 }

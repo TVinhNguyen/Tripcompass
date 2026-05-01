@@ -79,6 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ---- helpers ----
   const persist = (t: string, u: User) => {
     localStorage.setItem("token", t);
+    // Also set cookie so middleware can read it (middleware cannot access localStorage)
+    document.cookie = `token=${t}; path=/; max-age=86400; SameSite=Lax`;
     setToken(t);
     setUser(u);
   };
@@ -109,6 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem("token");
+    // Clear cookie so middleware stops protecting routes immediately
+    document.cookie = "token=; path=/; max-age=0; SameSite=Lax";
     setUser(null);
     setToken(null);
     if (typeof window !== "undefined") window.location.href = "/";

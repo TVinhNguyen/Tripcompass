@@ -34,6 +34,7 @@ import { AIChatPanel }           from "./_components/ai-chat-panel";
 import { CollaboratorsPanel }    from "./_components/collaborators-panel";
 import { DroppableDay }          from "./_components/droppable-day";
 import { ActivityTemplateCard }  from "./_components/activity-template-card";
+import { PresenceStack }         from "@/components/presence-stack";
 
 // ── Drag overlay mini-card ────────────────────────────────────────────────────
 
@@ -142,7 +143,11 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
 
         {/* Actions */}
         <div className="flex items-center gap-0.5 sm:gap-1">
-          <div className="hidden sm:block [&_button]:text-[#f5f0e8]/80 [&_button:hover]:text-[#f5f0e8] [&_button:hover]:bg-white/10">
+          <div className="hidden sm:flex items-center gap-1 [&_button]:text-[#f5f0e8]/80 [&_button:hover]:text-[#f5f0e8] [&_button:hover]:bg-white/10">
+            <PresenceStack
+              users={onlineUsers.map((u) => ({ user_id: u.id, full_name: u.name }))}
+              className="mr-1"
+            />
             <CollaboratorsPanel collaborators={onlineUsers} />
           </div>
 

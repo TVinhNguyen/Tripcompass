@@ -19,10 +19,9 @@ if not api_key:
 
 base_url = "https://travel-data-api.omkar.cloud/travel/attractions"
 
-# 1. Lấy danh sách địa điểm tại Quảng Ninh (Hạ Long)
-# Dùng location_id từ Tripadvisor: g293923 (Ha Long Bay)
+# 1. Lấy danh sách địa điểm tại Sơn La
 search_params = {
-    "query": "293923",
+    "query": "2146239", # Ninh Binh Province
     "page": "1"
 }
 headers = {"API-Key": api_key}
@@ -54,9 +53,11 @@ if locations:
 
     # Thử lần lượt vài ID đầu, mỗi ID retry 2 lần
     for candidate in locations[:10]:
-        target_id = candidate.get("tripadvisor_entity_id")
+        target_id = candidate.get("tripadvisor_entity_id") or candidate.get("entity_id")
         if not target_id:
             continue
+            
+        print(f"👉 Đang query detail cho ID: {target_id} ({candidate.get('name')})...")
 
         for attempt in range(1, 3):
             try:

@@ -4,23 +4,22 @@ import type React from "react"
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles, Send, Plus, Trash2, Loader2, MessageSquare,
-  Compass, MapPin, Calendar, Wallet, Bot, User as UserIcon,
-  AlertCircle, RefreshCw,
+  Compass, Bot, User as UserIcon,
+  AlertCircle, RefreshCw, LayoutGrid,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RequireAuth } from "@/components/require-auth"
 import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api"
 import { streamChat } from "@/lib/stream-chat"
-import { savePlanAsItinerary } from "@/lib/plan-to-itinerary"
 import { getToolLabel, CHAT_SUGGESTIONS } from "@/lib/tool-labels"
+import { PlanPreviewCard } from "@/components/plan-preview-card"
+import { PlacePicker } from "@/components/place-picker"
 import type { SessionInfo, GenerateResponse } from "@/lib/types"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
 
 // ---------------------------------------------------------------------------
 // Local message type (enriched for UI streaming)
@@ -40,7 +39,6 @@ interface UiMessage {
 // Main page
 // ---------------------------------------------------------------------------
 function AIPlannerContent() {
-  const router = useRouter()
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<UiMessage[]>([])
@@ -48,7 +46,8 @@ function AIPlannerContent() {
   const [streaming, setStreaming] = useState(false)
   const [toolRunning, setToolRunning] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [savingPlan, setSavingPlan] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerDest, setPickerDest] = useState("Việt Nam")
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -183,30 +182,14 @@ function AIPlannerContent() {
     })
   }, [input, sessionId, streaming])
 
-  // ---- Save plan ----
-  const handleSavePlan = async (plan: GenerateResponse) => {
-    setSavingPlan(true)
-    try {
-      const today = new Date()
-      const end   = new Date(today)
-      end.setDate(today.getDate() + (plan.days?.length ?? 3) - 1)
-      const fmt = (d: Date) => d.toISOString().slice(0, 10)
-      const it = await savePlanAsItinerary(plan, {
-        title: `Lịch trình ${plan.days?.[0]?.date_str ?? ""}`,
-        destination: plan.days?.[0]?.primary_area ?? "Việt Nam",
-        start_date: fmt(today),
-        end_date:   fmt(end),
-        budget_vnd: plan.budget_recap?.total_budget_vnd ?? 0,
-        guest_count: 2,
-        tags: [],
-      })
-      toast.success("Đã lưu lịch trình!")
-      router.push(`/itinerary/${it.id}/edit`)
-    } catch {
-      toast.error("Lưu lịch trình thất bại. Thử lại sau.")
-    } finally {
-      setSavingPlan(false)
-    }
+  // ---- Open place picker (detect destination from session list) ----
+  const handleOpenPicker = () => {
+    const dest =
+      sessions.find((s) => s.session_id === sessionId)?.destination ??
+      sessions[0]?.destination ??
+      "Việt Nam"
+    setPickerDest(dest)
+    setPickerOpen(true)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -269,6 +252,7 @@ function AIPlannerContent() {
                     <button
                       onClick={(e) => deleteSession(s.session_id, e)}
                       className="opacity-0 group-hover:opacity-100 p-1 text-white/50 hover:text-red-400"
+                      aria-label="Xoá phiên"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -294,7 +278,7 @@ function AIPlannerContent() {
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="p-2 -m-2 text-[#6b6b6b] hover:text-[#1a1a1a]"
-              aria-label="Toggle sidebar"
+              aria-label="Ẩn/hiện sidebar"
             >
               <MessageSquare className="w-5 h-5" />
             </button>
@@ -303,11 +287,22 @@ function AIPlannerContent() {
               <span className="text-sm font-medium text-[#3d5a3d]">Trợ lý AI TripCompass</span>
             </div>
           </div>
-          <Link href="/ai-planner/quick">
-            <Button variant="outline" className="border-[#e8e2d9] text-[#1a1a1a] h-9 bg-transparent">
-              Tạo nhanh
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleOpenPicker}
+              className="border-[#e8e2d9] text-[#1a1a1a] h-9 bg-transparent gap-1.5"
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span className="hidden sm:inline">Chọn địa điểm</span>
             </Button>
-          </Link>
+            <Link href="/ai-planner/quick">
+              <Button variant="outline" className="border-[#e8e2d9] text-[#1a1a1a] h-9 bg-transparent">
+                Tạo nhanh
+              </Button>
+            </Link>
+          </div>
         </header>
 
         {/* Tool chip (floating above messages when streaming) */}
@@ -354,8 +349,6 @@ function AIPlannerContent() {
                 <MessageBubble
                   key={msg.id}
                   message={msg}
-                  onSavePlan={handleSavePlan}
-                  savingPlan={savingPlan}
                   onRetry={() => {
                     // Find last user message and resend
                     const lastUser = [...messages].reverse().find((m) => m.role === "user")
@@ -401,6 +394,7 @@ function AIPlannerContent() {
                     onClick={() => { abortRef.current?.abort(); setStreaming(false); setToolRunning(null) }}
                     className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
                     title="Dừng"
+                    aria-label="Dừng stream"
                   >
                     <span className="w-3 h-3 block bg-white rounded-sm" />
                   </button>
@@ -410,6 +404,7 @@ function AIPlannerContent() {
                     onClick={() => handleSend()}
                     disabled={!input.trim() || streaming}
                     className="p-2 bg-[#1a1a1a] hover:bg-[#3d5a3d] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                    aria-label="Gửi tin nhắn"
                   >
                     <Send className="w-4 h-4" />
                   </button>
@@ -422,6 +417,15 @@ function AIPlannerContent() {
           </div>
         </div>
       </main>
+
+      {/* Place picker */}
+      {pickerOpen && (
+        <PlacePicker
+          destination={pickerDest}
+          onClose={() => setPickerOpen(false)}
+          onSend={(msg) => handleSend(msg)}
+        />
+      )}
     </div>
   )
 }
@@ -431,12 +435,10 @@ function AIPlannerContent() {
 // ---------------------------------------------------------------------------
 interface MessageBubbleProps {
   message: UiMessage
-  onSavePlan: (plan: GenerateResponse) => void
-  savingPlan: boolean
   onRetry: () => void
 }
 
-function MessageBubble({ message, onSavePlan, savingPlan, onRetry }: MessageBubbleProps) {
+function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   const isUser = message.role === "user"
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={cn("flex gap-3", isUser && "flex-row-reverse")}>
@@ -481,106 +483,12 @@ function MessageBubble({ message, onSavePlan, savingPlan, onRetry }: MessageBubb
             <RefreshCw className="w-3 h-3" /> Thử lại
           </button>
         )}
-        {/* Plan card */}
+        {/* Plan preview card (extracted component) */}
         {!isUser && message.plan && (
-          <PlanPreviewCard plan={message.plan} onSave={onSavePlan} saving={savingPlan} />
+          <PlanPreviewCard plan={message.plan} />
         )}
       </div>
     </motion.div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// PlanPreviewCard
-// ---------------------------------------------------------------------------
-function PlanPreviewCard({
-  plan,
-  onSave,
-  saving,
-}: {
-  plan: GenerateResponse
-  onSave: (p: GenerateResponse) => void
-  saving: boolean
-}) {
-  const totalDays = plan.days?.length ?? 0
-  const dest = plan.days?.[0]?.primary_area ?? "Việt Nam"
-  const budget = plan.budget_recap?.total_budget_vnd ?? 0
-  const violations = plan.violations?.filter((v) => v.severity === "error") ?? []
-
-  return (
-    <div className="mt-3 bg-gradient-to-br from-[#1a1a1a] to-[#2a2a2a] rounded-2xl overflow-hidden max-w-md w-full">
-      <div className="relative h-36">
-        <Image
-          src="https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800"
-          alt={dest}
-          fill
-          className="object-cover opacity-60"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] to-transparent" />
-        <div className="absolute bottom-3 left-4 right-4">
-          <div className="text-[#d4a853] text-xs uppercase tracking-wider mb-1">Lịch trình gợi ý</div>
-          <div className="text-lg font-semibold text-white tracking-tight">{dest}</div>
-        </div>
-      </div>
-      <div className="p-4 space-y-3">
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 text-white">
-          <div>
-            <div className="flex items-center gap-1 text-white/60 text-xs mb-1"><MapPin className="w-3 h-3" /> Điểm đến</div>
-            <div className="text-sm font-medium truncate">{dest}</div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1 text-white/60 text-xs mb-1"><Calendar className="w-3 h-3" /> Thời gian</div>
-            <div className="text-sm font-medium">{totalDays} ngày</div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1 text-white/60 text-xs mb-1"><Wallet className="w-3 h-3" /> Ngân sách</div>
-            <div className="text-sm font-medium">{(budget / 1_000_000).toFixed(1)}M</div>
-          </div>
-        </div>
-
-        {/* Days summary */}
-        {plan.days && plan.days.length > 0 && (
-          <div>
-            <div className="text-white/60 text-xs mb-2">Tóm tắt theo ngày</div>
-            <ul className="space-y-1">
-              {plan.days.slice(0, 3).map((day) => (
-                <li key={day.day_num} className="flex items-start gap-2 text-sm text-white/90">
-                  <div className="w-5 h-5 rounded-full bg-[#d4a853]/20 text-[#d4a853] text-xs flex items-center justify-center shrink-0">{day.day_num}</div>
-                  <span className="truncate">{day.slots.filter((s) => !s.is_buffer && s.place).map((s) => s.place?.name).join(" · ")}</span>
-                </li>
-              ))}
-              {plan.days.length > 3 && <li className="text-xs text-white/40">+{plan.days.length - 3} ngày nữa...</li>}
-            </ul>
-          </div>
-        )}
-
-        {/* Violations */}
-        {violations.length > 0 && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-xs text-red-300 space-y-1">
-            {violations.map((v, i) => <div key={i}>⚠ {v.message}</div>)}
-          </div>
-        )}
-
-        {/* Budget warning */}
-        {plan.budget_warning && (
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2 text-xs text-yellow-300">
-            {plan.budget_warning}
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-2 pt-1">
-          <Button
-            onClick={() => onSave(plan)}
-            disabled={saving}
-            className="flex-1 bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a1a] h-10"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Lưu thành lịch trình"}
-          </Button>
-        </div>
-      </div>
-    </div>
   )
 }
 
