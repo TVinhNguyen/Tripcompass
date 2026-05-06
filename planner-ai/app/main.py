@@ -8,6 +8,7 @@ Endpoints live in app/routes/. This file only handles:
 """
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.services.database import get_pool, close_pool
 from app.services.redis import get_redis, close_redis, ping_redis
@@ -31,6 +32,17 @@ app = FastAPI(
     description="Conversational travel agent for Vietnam",
     version="2.0.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(chat_router)

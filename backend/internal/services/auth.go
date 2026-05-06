@@ -3,12 +3,12 @@ package services
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strings"
@@ -101,7 +101,7 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 	}
 
 	hashStr := string(hash)
-	verifyToken := generateToken32()
+	verifyToken := generateOTP6()
 	expiry := time.Now().Add(24 * time.Hour) // C6: tokens expire in 24h
 
 	user := models.User{
@@ -224,7 +224,7 @@ func (s *AuthService) ResendVerification(email string) error {
 		return errors.New("email already verified")
 	}
 
-	newToken := generateToken32()
+	newToken := generateOTP6()
 	newExpiry := time.Now().Add(24 * time.Hour) // C6: refresh expiry window
 	if err := s.db.Model(&user).Updates(map[string]interface{}{
 		"verify_token":             newToken,
@@ -414,11 +414,13 @@ func (s *AuthService) generateToken(userID uuid.UUID, email string) (string, err
 	return token.SignedString([]byte(s.jwtSecret))
 }
 
-func generateToken32() string {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		// crypto/rand failure is catastrophic — an all-zero token would be a silent security hole.
+// generateOTP6 returns a cryptographically random 6-digit numeric string (000000–999999).
+// Matches the frontend 6-box OTP input UI.
+func generateOTP6() string {
+	max := big.NewInt(1_000_000)
+	n, err := rand.Int(rand.Reader, max)
+	if err != nil {
 		panic("crypto/rand is unavailable: " + err.Error())
 	}
-	return hex.EncodeToString(b)
+	return fmt.Sprintf("%06d", n.Int64())
 }

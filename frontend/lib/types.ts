@@ -283,6 +283,7 @@ export type SessionInfo = {
   last_active?: string;
   message_count: number;
   destination?: string;
+  title?: string;
 };
 
 export type SessionHistory = {

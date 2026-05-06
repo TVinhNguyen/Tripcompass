@@ -60,6 +60,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 	lookupHandler := handlers.NewLookupHandler(db)
 	seedHandler := handlers.NewSeedHandler(db)
 	plannerHandler := handlers.NewPlannerHandler(db, rdb, cfg)
+	aiChatHandler := handlers.NewAIChatHandler(db, cfg.PlannerAIURL)
 	wsHandler := handlers.NewWSHandler(db, hub, cfg.JWTSecret, cfg.AllowedOrigins)
 
 	// ── Health check — public ─────────────────────────────────────────────────
@@ -118,6 +119,11 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 			protected.PATCH("/activities/:id", activityHandler.Update)
 			protected.DELETE("/activities/:id", activityHandler.Delete)
 			protected.PATCH("/activities/reorder", activityHandler.Reorder)
+
+			protected.GET("/ai-chat/sessions", aiChatHandler.ListSessions)
+			protected.GET("/ai-chat/sessions/:id/history", aiChatHandler.GetHistory)
+			protected.DELETE("/ai-chat/sessions/:id", aiChatHandler.DeleteSession)
+			protected.POST("/ai-chat/stream", middleware.RateLimitRedis(rdb, 30, 60), aiChatHandler.Stream)
 
 			protected.POST("/places", placeHandler.Create)
 			protected.PATCH("/places/:id", placeHandler.Update)

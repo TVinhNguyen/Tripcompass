@@ -22,7 +22,7 @@ function LoginContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const redirectTo = searchParams.get("redirect") || "/planner"
+  const redirectTo = searchParams.get("redirect") || "/"
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,7 +30,7 @@ function LoginContent() {
     setLoading(true)
     try {
       await login(email, password)
-      router.push(redirectTo)
+      window.location.href = redirectTo
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401) setError("Email hoặc mật khẩu không đúng.")
@@ -49,7 +49,7 @@ function LoginContent() {
     if (!credentialResponse.credential) return
     try {
       await loginGoogle(credentialResponse.credential) // ✅ id_token, not access_token
-      router.push(redirectTo)
+      window.location.href = redirectTo
     } catch {
       setError("Google đăng nhập thất bại. Thử lại sau.")
     }

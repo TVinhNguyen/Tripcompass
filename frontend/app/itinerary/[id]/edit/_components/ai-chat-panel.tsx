@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Bot, Loader2, Send, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "../_lib/types";
 
@@ -127,7 +128,7 @@ export function AIChatPanel({
                 ? "bg-[#1a1a1a] text-[#f5f0e8] rounded-tr-sm"
                 : "bg-white text-[#1a1a1a] rounded-tl-sm border border-[#e8e2d9]"
             )}>
-              {m.content}
+              {m.role === "user" ? m.content : <ChatMarkdown content={m.content} />}
             </div>
           </div>
         ))}

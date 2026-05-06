@@ -80,11 +80,23 @@ CREATE TABLE "collaborators" (
 
 CREATE TABLE "ai_chat_messages" (
     "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid (),
-    "itinerary_id" UUID NOT NULL,
+    "session_id" UUID,
+    "itinerary_id" UUID,
     "role" "role_ai_chat_message" NOT NULL,
     "content" TEXT NOT NULL,
     "metadata" JSONB,
     "created_at" TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE "ai_chat_sessions" (
+    "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid (),
+    "user_id" UUID NOT NULL,
+    "title" TEXT NOT NULL,
+    "destination" TEXT,
+    "message_count" INTEGER NOT NULL DEFAULT 0,
+    "saved_itinerary_id" UUID,
+    "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+    "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE "places" (
@@ -199,6 +211,15 @@ ADD CONSTRAINT "fk_collaborators_invited_by" FOREIGN KEY ("invited_by") REFERENC
 
 ALTER TABLE "ai_chat_messages"
 ADD CONSTRAINT "fk_chat_itinerary" FOREIGN KEY ("itinerary_id") REFERENCES "itineraries" ("id") ON DELETE CASCADE;
+
+ALTER TABLE "ai_chat_sessions"
+ADD CONSTRAINT "fk_ai_chat_sessions_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE;
+
+ALTER TABLE "ai_chat_sessions"
+ADD CONSTRAINT "fk_ai_chat_sessions_saved_itinerary" FOREIGN KEY ("saved_itinerary_id") REFERENCES "itineraries" ("id") ON DELETE SET NULL;
+
+ALTER TABLE "ai_chat_messages"
+ADD CONSTRAINT "fk_chat_session" FOREIGN KEY ("session_id") REFERENCES "ai_chat_sessions" ("id") ON DELETE CASCADE;
 
 ALTER TABLE "user_saved_places"
 ADD CONSTRAINT "fk_saved_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE;

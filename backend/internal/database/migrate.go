@@ -178,6 +178,49 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// AI Planner chat sessions are persisted per user; Redis remains short-term working memory.
+			ID: "202605060008_ai_chat_sessions",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`CREATE TABLE IF NOT EXISTS schema_travel.ai_chat_sessions (
+						id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+						user_id UUID NOT NULL REFERENCES schema_travel.users(id) ON DELETE CASCADE,
+						title TEXT NOT NULL,
+						destination TEXT,
+						message_count INTEGER NOT NULL DEFAULT 0,
+						saved_itinerary_id UUID REFERENCES schema_travel.itineraries(id) ON DELETE SET NULL,
+						created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+						updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+					);`,
+					`CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_user_updated
+						ON schema_travel.ai_chat_sessions (user_id, updated_at DESC);`,
+					`ALTER TABLE schema_travel.ai_chat_messages
+						ADD COLUMN IF NOT EXISTS session_id UUID;`,
+					`ALTER TABLE schema_travel.ai_chat_messages
+						ALTER COLUMN itinerary_id DROP NOT NULL;`,
+					`DO $$
+BEGIN
+	IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_chat_session') THEN
+		ALTER TABLE schema_travel.ai_chat_messages
+		ADD CONSTRAINT fk_chat_session
+		FOREIGN KEY (session_id) REFERENCES schema_travel.ai_chat_sessions(id) ON DELETE CASCADE;
+	END IF;
+END $$;`,
+					`CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_session_created
+						ON schema_travel.ai_chat_messages (session_id, created_at ASC);`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()

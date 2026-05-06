@@ -5,6 +5,7 @@
 .gitignore
 *.md
 bin/
+server
 *.test
 *.out
 coverage.out

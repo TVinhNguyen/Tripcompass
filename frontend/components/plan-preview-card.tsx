@@ -14,6 +14,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Loader2, MapPin, Calendar, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ApiError } from "@/lib/api";
 import { savePlanAsItinerary } from "@/lib/plan-to-itinerary";
 import { toast } from "sonner";
 import type { GenerateResponse } from "@/lib/types";
@@ -32,7 +33,14 @@ export function PlanPreviewCard({ plan, onSaved }: PlanPreviewCardProps) {
 
   const totalDays = plan.days?.length ?? 0;
   const dest = plan.days?.[0]?.primary_area ?? "Việt Nam";
-  const budget = plan.budget_recap?.total_budget_vnd ?? 0;
+  const spent =
+    (plan.budget_recap?.attraction_spent_vnd ?? 0) +
+    (plan.budget_recap?.food_spent_vnd ?? 0);
+  const budget = Math.max(
+    plan.budget_recap?.total_budget_vnd ?? 0,
+    spent + Math.max(plan.budget_recap?.remaining_vnd ?? 0, 0),
+    spent,
+  );
   const violations = plan.violations?.filter((v) => v.severity === "error") ?? [];
 
   const handleSave = async () => {
@@ -56,8 +64,9 @@ export function PlanPreviewCard({ plan, onSaved }: PlanPreviewCardProps) {
       toast.success("Đã lưu lịch trình!");
       onSaved?.(it.id);
       router.push(`/itinerary/${it.id}/edit`);
-    } catch {
-      toast.error("Lưu lịch trình thất bại. Thử lại sau.");
+    } catch (error) {
+      console.error("Save itinerary failed", error);
+      toast.error(error instanceof ApiError ? error.message : "Lưu lịch trình thất bại. Thử lại sau.");
     } finally {
       setSaving(false);
     }

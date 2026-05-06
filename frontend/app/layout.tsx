@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { Playfair_Display, Inter } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider } from '@/hooks/use-auth'
 import './globals.css'
@@ -53,12 +52,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="vi">
-      <body className={`${playfairDisplay.variable} ${inter.variable} font-sans antialiased bg-[#f5f0e8] text-[#1a1a1a]`}>
+    <html lang="vi" suppressHydrationWarning>
+      <body
+        suppressHydrationWarning
+        className={`${playfairDisplay.variable} ${inter.variable} font-sans antialiased bg-[#f5f0e8] text-[#1a1a1a]`}
+      >
         <AuthProvider>
           {children}
           <Toaster />
-          <Analytics />
         </AuthProvider>
       </body>
     </html>

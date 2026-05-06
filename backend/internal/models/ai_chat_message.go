@@ -10,7 +10,8 @@ import (
 
 type AIChatMessage struct {
 	ID          uuid.UUID       `gorm:"type:uuid;primaryKey" json:"id"`
-	ItineraryID uuid.UUID       `gorm:"column:itinerary_id;not null" json:"itinerary_id"`
+	SessionID   *uuid.UUID      `gorm:"column:session_id" json:"session_id,omitempty"`
+	ItineraryID *uuid.UUID      `gorm:"column:itinerary_id" json:"itinerary_id,omitempty"`
 	Role        string          `gorm:"not null" json:"role"`
 	Content     string          `gorm:"not null" json:"content"`
 	Metadata    json.RawMessage `gorm:"type:jsonb;serializer:json" json:"metadata,omitempty"`

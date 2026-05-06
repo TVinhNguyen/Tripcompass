@@ -17,6 +17,7 @@ import { apiFetch } from "@/lib/api"
 import { streamChat } from "@/lib/stream-chat"
 import { getToolLabel, CHAT_SUGGESTIONS } from "@/lib/tool-labels"
 import { PlanPreviewCard } from "@/components/plan-preview-card"
+import { ChatMarkdown } from "@/components/chat-markdown"
 import { PlacePicker } from "@/components/place-picker"
 import type { SessionInfo, GenerateResponse } from "@/lib/types"
 import { toast } from "sonner"
@@ -55,7 +56,7 @@ function AIPlannerContent() {
 
   // ---- Fetch sessions on mount ----
   useEffect(() => {
-    apiFetch<SessionInfo[]>("/sessions", { base: "ai", auth: false })
+    apiFetch<SessionInfo[]>("/ai-chat/sessions")
       .then((data) => setSessions(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [])
@@ -79,7 +80,7 @@ function AIPlannerContent() {
       const { messages: hist } = await apiFetch<{
         messages: { role: "user" | "assistant"; content: string; tool_calls?: string[]; plan?: GenerateResponse | null; created_at: string }[]
         session_id: string
-      }>(`/sessions/${sid}/history`, { base: "ai", auth: false })
+      }>(`/ai-chat/sessions/${sid}/history`)
       setSessionId(sid)
       setMessages(
         (hist || []).map((m, i) => ({
@@ -102,7 +103,7 @@ function AIPlannerContent() {
     setSessions((prev) => prev.filter((s) => s.session_id !== sid))
     if (sessionId === sid) { setSessionId(null); setMessages([]) }
     try {
-      await apiFetch(`/sessions/${sid}`, { base: "ai", auth: false, method: "DELETE" })
+      await apiFetch(`/ai-chat/sessions/${sid}`, { method: "DELETE" })
     } catch {
       toast.error("Không thể xoá phiên trò chuyện")
     }
@@ -147,6 +148,11 @@ function AIPlannerContent() {
       },
 
       onDone(newSessionId, fullText, plan, toolCalls) {
+        const displayText = fullText.trim() || (
+          plan
+            ? "Mình đã tạo được lịch trình nháp. Bạn có thể xem nhanh bên dưới và lưu lại để chỉnh sửa chi tiết."
+            : fullText
+        )
         // Persist session ID from first response
         setSessionId((prev) => {
           const sid = newSessionId ?? prev
@@ -162,7 +168,14 @@ function AIPlannerContent() {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === aiMsgId
-              ? { ...m, content: fullText, plan: plan ?? null, toolCalls: toolCalls ?? [], streaming: false }
+              ? {
+                  ...m,
+                  content: displayText,
+                  plan: plan ?? null,
+                  toolCalls: toolCalls ?? [],
+                  streaming: false,
+                  error: m.error && !plan,
+                }
               : m
           )
         )
@@ -228,11 +241,19 @@ function AIPlannerContent() {
               {sessions.length === 0 ? (
                 <p className="text-xs text-white/30 px-3 py-2">Chưa có cuộc trò chuyện nào</p>
               ) : sessions.map((s) => (
-                <button
+                <div
                   key={s.session_id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => loadSession(s.session_id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      loadSession(s.session_id)
+                    }
+                  }}
                   className={cn(
-                    "group w-full text-left px-3 py-3 rounded-lg mb-1 transition-colors",
+                    "group w-full cursor-pointer text-left px-3 py-3 rounded-lg mb-1 transition-colors",
                     sessionId === s.session_id ? "bg-white/10" : "hover:bg-white/5",
                   )}
                 >
@@ -240,7 +261,7 @@ function AIPlannerContent() {
                     <MessageSquare className="w-4 h-4 text-[#d4a853] shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-white font-medium truncate">
-                        {s.destination ?? `Phiên ${s.session_id.slice(0, 8)}`}
+                        {s.destination ?? s.title ?? `Phiên ${s.session_id.slice(0, 8)}`}
                       </div>
                       <div className="text-xs text-white/50 mt-0.5">{s.message_count} tin nhắn</div>
                       {s.last_active && (
@@ -257,7 +278,7 @@ function AIPlannerContent() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
 
@@ -356,19 +377,6 @@ function AIPlannerContent() {
                   }}
                 />
               ))}
-              {/* Typing indicator while waiting for first token */}
-              {streaming && messages[messages.length - 1]?.content === "" && (
-                <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#3d5a3d] to-[#c4785a] flex items-center justify-center shrink-0">
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="px-4 py-3 bg-white border border-[#e8e2d9] rounded-2xl rounded-tl-sm inline-flex gap-1.5">
-                    <span className="w-2 h-2 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="w-2 h-2 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="w-2 h-2 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                  </div>
-                </div>
-              )}
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -462,12 +470,12 @@ function MessageBubble({ message, onRetry }: MessageBubbleProps) {
         {/* Bubble */}
         {(message.content || message.streaming || message.error) && (
           <div className={cn(
-            "inline-block max-w-full px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap",
-            isUser ? "bg-[#3d5a3d] text-white rounded-tr-sm" : "bg-white border border-[#e8e2d9] text-[#1a1a1a] rounded-tl-sm",
+            "inline-block max-w-full px-4 py-3 rounded-2xl text-sm leading-relaxed",
+            isUser ? "bg-[#3d5a3d] text-white rounded-tr-sm whitespace-pre-wrap" : "bg-white border border-[#e8e2d9] text-[#1a1a1a] rounded-tl-sm",
             message.error && "border-red-200 bg-red-50 text-red-700",
           )}>
             {message.error && <AlertCircle className="w-4 h-4 inline mr-1" />}
-            {message.content}
+            {isUser ? message.content : <ChatMarkdown content={message.content} />}
             {message.streaming && !message.content && (
               <span className="inline-flex gap-1 ml-1">
                 <span className="w-1.5 h-1.5 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />

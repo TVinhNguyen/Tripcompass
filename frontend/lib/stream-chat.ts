@@ -5,7 +5,7 @@
 
 import type { GenerateResponse } from "./types";
 
-const AI_URL = process.env.NEXT_PUBLIC_PLANNER_AI_URL!;
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 // ---------------------------------------------------------------------------
 // Handler interface
@@ -45,12 +45,26 @@ type SseEvent =
     }
   | { type: "error"; message?: string };
 
+function friendlyStreamError(message?: string): string {
+  const raw = message ?? "";
+  const lower = raw.toLowerCase();
+  if (lower.includes("insufficient") && lower.includes("balance")) {
+    return "Tài khoản LLM đang hết credit, nên phần trả lời bằng chữ bị gián đoạn. Nếu lịch trình đã hiện bên dưới, bạn vẫn có thể lưu và chỉnh sửa.";
+  }
+  return raw || "Lỗi không xác định từ AI.";
+}
+
+function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("token");
+}
+
 // ---------------------------------------------------------------------------
 // streamChat — main export
 // ---------------------------------------------------------------------------
 
 /**
- * Open an SSE connection to planner-ai `/chat/stream` and dispatch events
+ * Open an SSE connection to backend `/ai-chat/stream` and dispatch events
  * to the provided handlers.
  *
  * ```ts
@@ -71,9 +85,13 @@ export async function streamChat(
 
   let res: Response;
   try {
-    res = await fetch(`${AI_URL}/chat/stream`, {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    res = await fetch(`${BACKEND_URL.replace(/\/$/, "")}/ai-chat/stream`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         session_id: sessionId ?? undefined,
         message,
@@ -89,6 +107,8 @@ export async function streamChat(
   if (!res.ok || !res.body) {
     if (res.status === 429) {
       onError?.("Bạn gửi quá nhiều yêu cầu. Vui lòng thử lại sau 60 giây.");
+    } else if (res.status === 401) {
+      onError?.("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
     } else {
       onError?.(`Lỗi kết nối AI (${res.status}). Vui lòng thử lại.`);
     }
@@ -137,7 +157,7 @@ export async function streamChat(
             );
             break;
           case "error":
-            onError?.(evt.message ?? "Lỗi không xác định từ AI.");
+            onError?.(friendlyStreamError(evt.message));
             break;
         }
       }

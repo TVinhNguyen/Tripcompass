@@ -18,8 +18,8 @@ export default function EditPlacePage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    apiFetch<{ place: Place }>(`/places/${id}`)
-      .then(({ place: p }) => setPlace(p))
+    apiFetch<Place>(`/places/${id}`)
+      .then((p) => setPlace(p))
       .catch(() => toast.error("Không thể tải thông tin địa điểm"))
       .finally(() => setLoading(false))
   }, [id])
