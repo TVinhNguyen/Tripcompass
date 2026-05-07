@@ -44,6 +44,8 @@ export interface Activity {
   duration: number;
   cost?: number;
   image?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export const destinations: Destination[] = [
@@ -340,6 +342,8 @@ export const sampleItinerary: Itinerary = {
       location: '49 Bát Đàn, Hoàn Kiếm',
       duration: 60,
       cost: 50000,
+      lat: 21.0343,
+      lng: 105.8484,
     },
     {
       id: 'a2',
@@ -353,6 +357,8 @@ export const sampleItinerary: Itinerary = {
       location: 'Hồ Hoàn Kiếm, Hoàn Kiếm',
       duration: 120,
       cost: 30000,
+      lat: 21.0287,
+      lng: 105.8524,
     },
     {
       id: 'a3',
@@ -366,6 +372,8 @@ export const sampleItinerary: Itinerary = {
       location: '24 Lê Văn Hưu, Hai Bà Trưng',
       duration: 60,
       cost: 60000,
+      lat: 21.0214,
+      lng: 105.8504,
     },
     {
       id: 'a4',
@@ -379,6 +387,8 @@ export const sampleItinerary: Itinerary = {
       location: '14 Hàng Gà, Hoàn Kiếm',
       duration: 45,
       cost: 40000,
+      lat: 21.0348,
+      lng: 105.8477,
     },
     {
       id: 'a5',
@@ -392,6 +402,8 @@ export const sampleItinerary: Itinerary = {
       location: '58 Quốc Tử Giám, Đống Đa',
       duration: 90,
       cost: 30000,
+      lat: 21.0270,
+      lng: 105.8358,
     },
     {
       id: 'a6',
@@ -405,6 +417,8 @@ export const sampleItinerary: Itinerary = {
       location: '35B Nguyễn Hữu Huân, Hoàn Kiếm',
       duration: 45,
       cost: 35000,
+      lat: 21.0341,
+      lng: 105.8551,
     },
   ],
 };

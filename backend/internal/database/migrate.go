@@ -55,6 +55,194 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// Add images column to places table.
+			ID: "202604020003_add_images_to_places",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.Exec(`ALTER TABLE places ADD COLUMN IF NOT EXISTS images text[];`).Error
+			},
+			Rollback: func(tx *gorm.DB) error {
+				return nil
+			},
+		},
+		{
+			// Add planner fields to places table.
+			ID: "202604040004_add_planner_fields_to_places",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`ALTER TABLE places ADD COLUMN IF NOT EXISTS must_visit boolean NOT NULL DEFAULT false;`,
+					`ALTER TABLE places ADD COLUMN IF NOT EXISTS priority_score integer NOT NULL DEFAULT 0;`,
+					`ALTER TABLE places ADD COLUMN IF NOT EXISTS best_time_of_day varchar(20) DEFAULT 'any';`,
+					`ALTER TABLE places ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}';`,
+					`ALTER TABLE places ADD COLUMN IF NOT EXISTS open_time time without time zone;`,
+					`ALTER TABLE places ADD COLUMN IF NOT EXISTS close_time time without time zone;`,
+					`CREATE INDEX IF NOT EXISTS idx_place_must_visit ON places (must_visit) WHERE must_visit = true;`,
+					`CREATE INDEX IF NOT EXISTS idx_place_priority ON places (destination, priority_score DESC);`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				return nil
+			},
+		},
+		{
+			// Add destination_neighbors and place_seasons tables for day-trip logic.
+			ID: "202604110005_add_day_trip_tables",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					// destination_neighbors: maps a base destination to a nearby day-trip destination
+					`CREATE TABLE IF NOT EXISTS schema_travel.destination_neighbors (
+						id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+						destination   TEXT NOT NULL,
+						neighbor      TEXT NOT NULL,
+						travel_min_ow INT  NOT NULL,
+						trip_type     VARCHAR(20) NOT NULL DEFAULT 'day_trip',
+						min_trip_days INT NOT NULL DEFAULT 4,
+						notes         TEXT
+					);`,
+					`CREATE INDEX IF NOT EXISTS idx_dn_dest
+						ON schema_travel.destination_neighbors (destination);`,
+
+					// place_seasons: months a place is open (empty row = year-round)
+					`CREATE TABLE IF NOT EXISTS schema_travel.place_seasons (
+						id          UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
+						place_id    UUID      NOT NULL REFERENCES schema_travel.places(id) ON DELETE CASCADE,
+						open_months INTEGER[] NOT NULL,
+						notes       TEXT
+					);`,
+					`CREATE INDEX IF NOT EXISTS idx_ps_place
+						ON schema_travel.place_seasons (place_id);`,
+
+					// Seed: Đà Nẵng neighbors
+					`INSERT INTO schema_travel.destination_neighbors
+						(destination, neighbor, travel_min_ow, trip_type, min_trip_days, notes)
+					VALUES
+						('đà nẵng', 'hội an',    60,  'day_trip',  4, '30km south, scenic coastal road'),
+						('đà nẵng', 'mỹ sơn',    75,  'half_day',  6, 'UNESCO sanctuary 70km southwest'),
+						('đà nẵng', 'cù lao chàm', 120, 'day_trip', 7, 'Boat required, seasonal Mar-Aug'),
+						('đà nẵng', 'huế',       120, 'day_trip',  7, 'Hai Van Pass route 100km north')
+					ON CONFLICT DO NOTHING;`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				sqls := []string{
+					`DROP TABLE IF EXISTS schema_travel.place_seasons;`,
+					`DROP TABLE IF EXISTS schema_travel.destination_neighbors;`,
+				}
+				for _, q := range sqls {
+					_ = tx.Exec(q).Error
+				}
+				return nil
+			},
+		},
+		{
+			ID: "202604150006_auth_enhancements",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`ALTER TABLE schema_travel.users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT false;`,
+					`ALTER TABLE schema_travel.users ADD COLUMN IF NOT EXISTS verify_token VARCHAR(64);`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP COLUMN IF EXISTS is_verified;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP COLUMN IF EXISTS verify_token;`).Error
+				return nil
+			},
+		},
+		{
+			// C6: Add verify_token_expires_at so email verification tokens expire after 24h.
+			ID: "202604300007_verify_token_expiry",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.Exec(`ALTER TABLE schema_travel.users
+					ADD COLUMN IF NOT EXISTS verify_token_expires_at TIMESTAMPTZ;`).Error
+			},
+			Rollback: func(tx *gorm.DB) error {
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP COLUMN IF EXISTS verify_token_expires_at;`).Error
+				return nil
+			},
+		},
+		{
+			// AI Planner chat sessions are persisted per user; Redis remains short-term working memory.
+			ID: "202605060008_ai_chat_sessions",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`CREATE TABLE IF NOT EXISTS schema_travel.ai_chat_sessions (
+						id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+						user_id UUID NOT NULL REFERENCES schema_travel.users(id) ON DELETE CASCADE,
+						title TEXT NOT NULL,
+						destination TEXT,
+						message_count INTEGER NOT NULL DEFAULT 0,
+						saved_itinerary_id UUID REFERENCES schema_travel.itineraries(id) ON DELETE SET NULL,
+						created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+						updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+					);`,
+					`CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_user_updated
+						ON schema_travel.ai_chat_sessions (user_id, updated_at DESC);`,
+					`ALTER TABLE schema_travel.ai_chat_messages
+						ADD COLUMN IF NOT EXISTS session_id UUID;`,
+					`ALTER TABLE schema_travel.ai_chat_messages
+						ALTER COLUMN itinerary_id DROP NOT NULL;`,
+					`DO $$
+BEGIN
+	IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_chat_session') THEN
+		ALTER TABLE schema_travel.ai_chat_messages
+		ADD CONSTRAINT fk_chat_session
+		FOREIGN KEY (session_id) REFERENCES schema_travel.ai_chat_sessions(id) ON DELETE CASCADE;
+	END IF;
+END $$;`,
+					`CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_session_created
+						ON schema_travel.ai_chat_messages (session_id, created_at ASC);`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				return nil
+			},
+		},
+		{
+			// GIN indexes on tags arrays for `tags && ARRAY[...]` overlap queries
+			// used by /places and /explore filter (services/place.go, services/itinerary.go).
+			ID: "202605070009_tags_gin_index",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`CREATE INDEX IF NOT EXISTS idx_places_tags_gin
+						ON schema_travel.places USING GIN (tags);`,
+					`CREATE INDEX IF NOT EXISTS idx_itineraries_tags_gin
+						ON schema_travel.itineraries USING GIN (tags);`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()

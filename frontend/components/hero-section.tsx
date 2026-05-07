@@ -57,7 +57,7 @@ export function HeroSection() {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="font-serif text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-6 leading-[0.9] tracking-tight"
+              className="font-serif text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-semibold text-white mb-6 leading-[0.9] tracking-tight"
             >
               Hành trình
               <br />
@@ -111,8 +111,8 @@ export function HeroSection() {
                   <MapPin className="w-5 h-5 text-[#d4a853]" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">63</p>
-                  <p className="text-xs text-white/50">Tỉnh thành</p>
+                  <p className="font-mono tabular-nums text-2xl font-semibold text-white">63</p>
+                  <p className="text-[10px] text-white/50 tracking-[0.2em] uppercase mt-0.5">Tỉnh thành</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -120,8 +120,8 @@ export function HeroSection() {
                   <Calendar className="w-5 h-5 text-[#d4a853]" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">500+</p>
-                  <p className="text-xs text-white/50">Lịch trình</p>
+                  <p className="font-mono tabular-nums text-2xl font-semibold text-white">500+</p>
+                  <p className="text-[10px] text-white/50 tracking-[0.2em] uppercase mt-0.5">Lịch trình</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -129,8 +129,8 @@ export function HeroSection() {
                   <Users className="w-5 h-5 text-[#d4a853]" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">10k+</p>
-                  <p className="text-xs text-white/50">Người dùng</p>
+                  <p className="font-mono tabular-nums text-2xl font-semibold text-white">10k+</p>
+                  <p className="text-[10px] text-white/50 tracking-[0.2em] uppercase mt-0.5">Người dùng</p>
                 </div>
               </div>
             </motion.div>
@@ -173,7 +173,7 @@ export function HeroSection() {
                         />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-serif text-xl font-bold text-white group-hover:text-[#d4a853] transition-colors">
+                        <h3 className="text-lg font-semibold text-white group-hover:text-[#d4a853] transition-colors tracking-tight">
                           {dest.name}
                         </h3>
                         <p className="text-sm text-white/50">{dest.type}</p>

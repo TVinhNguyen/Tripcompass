@@ -1,19 +1,21 @@
 package services
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
+	"tripcompass-backend/internal/apperror"
 )
 
 const testJWTSecret = "test-secret-key"
 
 func TestAuthService_Register(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuthService(db, testJWTSecret)
+	svc := NewAuthService(db, testJWTSecret, 72, nil, "", "")
 
 	t.Run("success", func(t *testing.T) {
 		input := RegisterInput{
@@ -37,6 +39,9 @@ func TestAuthService_Register(t *testing.T) {
 	})
 
 	t.Run("duplicate email", func(t *testing.T) {
+		// B1 anti-enumeration: Register with an existing email returns an empty
+		// success response (no error, no token, no user) so callers cannot
+		// distinguish registered vs unregistered emails.
 		_ = createTestUser(t, db)
 		input := RegisterInput{
 			Email:    "test@example.com",
@@ -44,16 +49,19 @@ func TestAuthService_Register(t *testing.T) {
 			FullName: "Duplicate",
 		}
 		resp, err := svc.Register(input)
-		assert.Nil(t, resp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "email already registered")
+		assert.NoError(t, err)                   // no error — prevents enumeration
+		require.NotNil(t, resp)                  // returns empty response, not nil
+		assert.Empty(t, resp.Token)              // no token leaked
+		assert.Empty(t, resp.User.Email)         // no user data leaked
 	})
 }
 
 func TestAuthService_Login(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuthService(db, testJWTSecret)
+	svc := NewAuthService(db, testJWTSecret, 72, nil, "", "")
 	user := createTestUser(t, db)
+	// Mark user as verified so login works
+	db.Exec("UPDATE users SET is_verified = true WHERE id = ?", user.ID)
 
 	t.Run("success", func(t *testing.T) {
 		input := LoginInput{
@@ -73,8 +81,8 @@ func TestAuthService_Login(t *testing.T) {
 		}
 		resp, err := svc.Login(input)
 		assert.Nil(t, resp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid email or password")
+		// B4: generic ErrUnauthorized — no hint whether email or password is wrong (anti-enumeration)
+		assert.True(t, errors.Is(err, apperror.ErrUnauthorized))
 	})
 
 	t.Run("non-existent email", func(t *testing.T) {
@@ -84,8 +92,8 @@ func TestAuthService_Login(t *testing.T) {
 		}
 		resp, err := svc.Login(input)
 		assert.Nil(t, resp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid email or password")
+		// B4: same generic error as wrong password — prevents email enumeration
+		assert.True(t, errors.Is(err, apperror.ErrUnauthorized))
 	})
 
 	t.Run("social login account", func(t *testing.T) {
@@ -109,18 +117,19 @@ func TestAuthService_Login(t *testing.T) {
 		}
 		resp, err := svc.Login(input)
 		assert.Nil(t, resp)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "this account uses social login")
+		// B4: social login accounts return the same generic ErrUnauthorized
+		// (no hint that the account exists or which provider to use)
+		assert.True(t, errors.Is(err, apperror.ErrUnauthorized))
 	})
 }
 
 func TestAuthService_GenerateToken(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuthService(db, testJWTSecret)
+	svc := NewAuthService(db, testJWTSecret, 72, nil, "", "")
 	user := createTestUser(t, db)
 
 	t.Run("token contains correct sub claim", func(t *testing.T) {
-		token, err := svc.generateToken(user.ID)
+		token, err := svc.generateToken(user.ID, user.Email)
 		require.NoError(t, err)
 		assert.NotEmpty(t, token)
 
@@ -134,12 +143,13 @@ func TestAuthService_GenerateToken(t *testing.T) {
 		claims, ok := parsed.Claims.(jwt.MapClaims)
 		require.True(t, ok)
 		assert.Equal(t, user.ID.String(), claims["sub"])
+		assert.Equal(t, user.Email, claims["email"])
 		assert.NotNil(t, claims["exp"])
 		assert.NotNil(t, claims["iat"])
 	})
 
 	t.Run("token is signed with HS256", func(t *testing.T) {
-		token, err := svc.generateToken(user.ID)
+		token, err := svc.generateToken(user.ID, user.Email)
 		require.NoError(t, err)
 
 		parsed, err := jwt.Parse(token, func(tk *jwt.Token) (interface{}, error) {

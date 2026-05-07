@@ -1,0 +1,535 @@
+{
+  "destination": "đà nẵng",
+  "places": [
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Ngũ Hành Sơn",
+      "address": "81 Huyền Trân Công Chúa, Hoà Hải, Ngũ Hành Sơn, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.0037104,
+      "longitude": 108.2631605,
+      "rating": 4.4,
+      "hours": "Đang mở cửa · Đóng cửa vào 17:30",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweobC8-h7nQc27YpO4JkGgx_UmnVPX7BSRJMaf0y6g2m1TXmuEwmNATI7Y0e-PJ8MKSa5xdJJyg_1srLi6Y6ktAYxdUwNlfM964c0SYqxiWSXXdZfGkI4dsKr5RNCMUNwDZnT-Oq=w164-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAweobC8-h7nQc27YpO4JkGgx_UmnVPX7BSRJMaf0y6g2m1TXmuEwmNATI7Y0e-PJ8MKSa5xdJJyg_1srLi6Y6ktAYxdUwNlfM964c0SYqxiWSXXdZfGkI4dsKr5RNCMUNwDZnT-Oq=w164-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://nguhanhson.org/",
+        "reviews_count": 39809,
+        "type": "Điểm thu hút khách du lịch"
+      },
+      "source_url": "https://nguhanhson.org/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Cầu Rồng",
+      "address": "An Hải, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.0611042,
+      "longitude": 108.2276926,
+      "rating": 4.5,
+      "hours": "Mở cả ngày",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepPr1M2yBCSFmpyYNl66qB7q2K_Ia_A_2zpvG9BIWbBCBWZF8Qw8F_nfMMMB3KB8TfWW4DRTJ93BkcHrnn-nsPOM3Vgbg2TA_SpMgNteZPp2oKghghn6pR3ixIPcnmlrhUkbh6aEWux61Y=w122-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepPr1M2yBCSFmpyYNl66qB7q2K_Ia_A_2zpvG9BIWbBCBWZF8Qw8F_nfMMMB3KB8TfWW4DRTJ93BkcHrnn-nsPOM3Vgbg2TA_SpMgNteZPp2oKghghn6pR3ixIPcnmlrhUkbh6aEWux61Y=w122-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJL1GKWJYZQjERLrEGqlK2kwQ",
+        "reviews_count": 7686,
+        "type": "Cầu"
+      },
+      "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJL1GKWJYZQjERLrEGqlK2kwQ"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Ba Na Hills",
+      "address": "Thôn An Sơn, Hòa Vang, Đà Nẵng, Việt Nam",
+      "latitude": 15.9951364,
+      "longitude": 107.9961392,
+      "rating": 4.4,
+      "hours": "Đang mở cửa · Đóng cửa vào 20:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepD3STO32nLgsznK-k76uKGofa-DlDmGb0ZoJKI7_Onfn-F6INks4UDN0fVWW2hkKlDNPdcSjtwLdtE1xaODsBovAOuExGGfpPe2lbs2dgpcS1tdwwkS1DWW3V_cmAkNiQethv9rg=w92-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepD3STO32nLgsznK-k76uKGofa-DlDmGb0ZoJKI7_Onfn-F6INks4UDN0fVWW2hkKlDNPdcSjtwLdtE1xaODsBovAOuExGGfpPe2lbs2dgpcS1tdwwkS1DWW3V_cmAkNiQethv9rg=w92-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://see-ticket.com/banahills/",
+        "reviews_count": 94750,
+        "type": "Điểm thu hút khách du lịch"
+      },
+      "source_url": "https://see-ticket.com/banahills/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Cầu Vàng",
+      "address": "XXVW+XJ, Hòa Vang, Đà Nẵng, Việt Nam",
+      "latitude": 15.994937499999999,
+      "longitude": 107.9965625,
+      "rating": 4.6,
+      "hours": "Đang mở cửa · Đóng cửa vào 19:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqHaYq6zVKGLCp2Q__DdWVkd3Uv9X69H2AL4KnMTiUn_rlMQAYus0DU1CJ99Eq1hVBB-GUVVXwABGsWH6rXFztCuyguQEda5m8Sh8OnBrjdtP-VayV181h2hB1aMgLxL-vK_B31=w122-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqHaYq6zVKGLCp2Q__DdWVkd3Uv9X69H2AL4KnMTiUn_rlMQAYus0DU1CJ99Eq1hVBB-GUVVXwABGsWH6rXFztCuyguQEda5m8Sh8OnBrjdtP-VayV181h2hB1aMgLxL-vK_B31=w122-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJj9PFGT33QTERDbUKRxFsdmM",
+        "reviews_count": 12375,
+        "type": "Điểm thu hút khách du lịch"
+      },
+      "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJj9PFGT33QTERDbUKRxFsdmM"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Đỉnh Bàn Cờ",
+      "address": "Bàn cờ, Thọ Quang, Sơn Trà, Đà Nẵng, Việt Nam",
+      "latitude": 16.1189365,
+      "longitude": 108.2719826,
+      "rating": 4.6,
+      "hours": "Đang mở cửa · Đóng cửa vào 17:30",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwer89rXqgObtWnQfXCzMihtElQoPid_fgTqrcTCFl5IgYI5I7KJ0ZKg_IJbmVc8bi7BCV2EU-B7QZ6tKQ8RRguKBq7Pxn5S7xEefo-hObgpbB3xi7ZlhbRjNlOM_G7LM-LRjpm4=w138-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwer89rXqgObtWnQfXCzMihtElQoPid_fgTqrcTCFl5IgYI5I7KJ0ZKg_IJbmVc8bi7BCV2EU-B7QZ6tKQ8RRguKBq7Pxn5S7xEefo-hObgpbB3xi7ZlhbRjNlOM_G7LM-LRjpm4=w138-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJBQHuNG49QjER7Mb_Y2I64mk",
+        "reviews_count": 4142,
+        "type": "Điểm thu hút khách du lịch"
+      },
+      "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJBQHuNG49QjER7Mb_Y2I64mk"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Bảo Tàng Đà Nẵng",
+      "address": "31 Trần Phú, P, Hải Châu, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.074554199999998,
+      "longitude": 108.2239668,
+      "rating": 4.2,
+      "hours": "Sắp đóng cửa · 17:00 · Mở cửa lúc 8:00 Thứ 4",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweoikyttFcMekmsRgF_ay9O-GqQQLIRcyFy4YJLBVpeSvl5UrbJKvzDUEYJ-3dP9wwQR-2nJsGMBurRjWPlqqHYx6u83-wVMnStOZV44k3kKiUkLzQgb3wqVgLycTvgGW7ksBf62QA=w138-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAweoikyttFcMekmsRgF_ay9O-GqQQLIRcyFy4YJLBVpeSvl5UrbJKvzDUEYJ-3dP9wwQR-2nJsGMBurRjWPlqqHYx6u83-wVMnStOZV44k3kKiUkLzQgb3wqVgLycTvgGW7ksBf62QA=w138-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "http://baotangdanang.vn/",
+        "reviews_count": 3229,
+        "type": "Điểm thu hút khách du lịch"
+      },
+      "source_url": "http://baotangdanang.vn/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Bảo tàng 3D Art In Paradise",
+      "address": "Lô 10, Trần Nhân Tông, Thọ Quang, Sơn Trà, Đà Nẵng, Việt Nam",
+      "latitude": 16.0954282,
+      "longitude": 108.2431088,
+      "rating": 4.4,
+      "hours": "Đang mở cửa · Đóng cửa vào 18:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqO_2x97V5qnlhY5vlhJM3xw8rGCiHbzjHaEvXJz_-Rne8_OjDWGXC0ZzMjoOzk7A7T6k1VG6MamOuZSSKxrbya5-PlNurJ4upMr4ysSeK9WBiwMM2TSgcHPrsNNbdMoYg2e8bJ=w138-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqO_2x97V5qnlhY5vlhJM3xw8rGCiHbzjHaEvXJz_-Rne8_OjDWGXC0ZzMjoOzk7A7T6k1VG6MamOuZSSKxrbya5-PlNurJ4upMr4ysSeK9WBiwMM2TSgcHPrsNNbdMoYg2e8bJ=w138-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "http://artinparadise.com.vn/",
+        "reviews_count": 3222,
+        "type": "Điểm thu hút khách du lịch"
+      },
+      "source_url": "http://artinparadise.com.vn/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Ghềnh Bàng",
+      "address": "Hoàng Sa, Thọ Quang, Sơn Trà, Đà Nẵng, Việt Nam",
+      "latitude": 16.1124336,
+      "longitude": 108.31163219999999,
+      "rating": 4.5,
+      "hours": "Mở cả ngày",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwerXrUmhqBgLwc3q7AgjRuYA8dNQf0l06zcsxVvXF_hbCvo9GKLPscnzEdIWtlDVXtREH-bYSUSMcIYEAL4pgKUyqkbULaLHMJCewOvg9nYjST-ytDpzHAkNvWd-URPB282zbndt=w163-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwerXrUmhqBgLwc3q7AgjRuYA8dNQf0l06zcsxVvXF_hbCvo9GKLPscnzEdIWtlDVXtREH-bYSUSMcIYEAL4pgKUyqkbULaLHMJCewOvg9nYjST-ytDpzHAkNvWd-URPB282zbndt=w163-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJW0KcgfI9QjERJpkPfjssyfo",
+        "reviews_count": 1034,
+        "type": "Điểm thu hút khách du lịch"
+      },
+      "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJW0KcgfI9QjERJpkPfjssyfo"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Sun World Bà Nà Hills",
+      "address": "Hoà Ninh, Bà Nà, Đà Nẵng, Việt Nam",
+      "latitude": 16.0265144,
+      "longitude": 108.03279719999999,
+      "rating": 4.5,
+      "hours": "Đang mở cửa · Đóng cửa vào 22:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepzC17uVD-8ldDWQQMmb00sfd1FDD7XK8iGPwG6emtK9meVU9bDcQYZ2OApXr1JlZtHIMC8QXW5jpNsVASeupE04DTAMqrwysBmRJAF56RrTwj9Yylmy5dVJNWkfeU0S_E2Yrc=w122-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepzC17uVD-8ldDWQQMmb00sfd1FDD7XK8iGPwG6emtK9meVU9bDcQYZ2OApXr1JlZtHIMC8QXW5jpNsVASeupE04DTAMqrwysBmRJAF56RrTwj9Yylmy5dVJNWkfeU0S_E2Yrc=w122-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://www.banahill.online/",
+        "reviews_count": 68451,
+        "type": "Đại lý du lịch"
+      },
+      "source_url": "https://www.banahill.online/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "ATTRACTION",
+      "name": "Vòng quay Mặt Trời (Sun Wheel)",
+      "address": "1 Phan Đăng Lưu, Hoà Cường Bắc, Hòa Cường, Đà Nẵng, Việt Nam",
+      "latitude": 16.0401624,
+      "longitude": 108.22851709999999,
+      "rating": 4.5,
+      "hours": "Temporarily closed",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqtzgW2KaB1TCUfqSinwTx9OildQI7U548hjSrbatluqd46BOC0pI7sjirSypJxrBBNN9gkCWWxG7-qNPPBFtfyuIqDZjETzznxNIh6sVihzrP4sGIQyOtUXvBNoH3sKTWTAUJyEQ=w138-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqtzgW2KaB1TCUfqSinwTx9OildQI7U548hjSrbatluqd46BOC0pI7sjirSypJxrBBNN9gkCWWxG7-qNPPBFtfyuIqDZjETzznxNIh6sVihzrP4sGIQyOtUXvBNoH3sKTWTAUJyEQ=w138-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJ9fqsdOcZQjERZcIMEHw3HtY",
+        "reviews_count": 5453,
+        "type": "Điểm thu hút khách du lịch"
+      },
+      "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJ9fqsdOcZQjERZcIMEHw3HtY"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Thìa Gỗ Đà Nẵng",
+      "address": "53 Phan Thúc Duyện, Bắc Mỹ Phú, Ngũ Hành Sơn, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.052986699999998,
+      "longitude": 108.2415777,
+      "rating": 4.7,
+      "hours": "Đang mở cửa · Đóng cửa vào 22:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepJJYVz6ZP5zCjVjw9r95s9N5A6JlHGfEYHspjioS-D_McTdYNAz_EVlDmnrNPVya3GovqQl6tjU0LDMDS8zEuNYoOjHlN4SNq0TYnzXwhV3xaK28kD6EhNOqkmbmwvOgrPDScK3Zc1sIyu=w80-h106-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepJJYVz6ZP5zCjVjw9r95s9N5A6JlHGfEYHspjioS-D_McTdYNAz_EVlDmnrNPVya3GovqQl6tjU0LDMDS8zEuNYoOjHlN4SNq0TYnzXwhV3xaK28kD6EhNOqkmbmwvOgrPDScK3Zc1sIyu=w80-h106-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "http://danang.thiagorestaurant.com/",
+        "reviews_count": 7212,
+        "type": "Nhà hàng Việt Nam"
+      },
+      "source_url": "http://danang.thiagorestaurant.com/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Bếp Cuốn Đà Nẵng",
+      "address": "31-33 Trần Bạch Đằng, An Hải, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.0579628,
+      "longitude": 108.2451505,
+      "rating": 4.9,
+      "hours": "Đang mở cửa · Đóng cửa vào 21:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweos_po9yJ6oboA7vbTdYd_SetRqduCta_sRVDFblE-jX-5Zaa-HP-p5Nto1f-0g9l0dEzgyepwV7CKA429pKCMsA1-gZRQZil97ieh-NNahwIPbC9f1vUOzwrTW8J1sSrQXTr0=w126-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAweos_po9yJ6oboA7vbTdYd_SetRqduCta_sRVDFblE-jX-5Zaa-HP-p5Nto1f-0g9l0dEzgyepwV7CKA429pKCMsA1-gZRQZil97ieh-NNahwIPbC9f1vUOzwrTW8J1sSrQXTr0=w126-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://www.facebook.com/DINNER.LUNCH.BEPCUON/",
+        "reviews_count": 15759,
+        "type": "Nhà hàng Việt Nam"
+      },
+      "source_url": "https://www.facebook.com/DINNER.LUNCH.BEPCUON/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Nhà hàng Madame Lân",
+      "address": "04 Bạch Đằng, Thạch Thang, Hải Châu, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.081406299999998,
+      "longitude": 108.2232528,
+      "rating": 4.2,
+      "hours": "Đang mở cửa · Đóng cửa vào 21:30",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwep80bMd_G_SbkApbgPTDdO8UFoqV9hqpamhyLjZ2zDd_N-be0DV53Rhacs4PlT4yi4LS1XWFMvy_tcEy-G9d9XAkbcmwUdK0WOr0fF9Byvy6Ldyw1fB4ALiznJcfIM-Pa58JqH3S_es2Bba=w199-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwep80bMd_G_SbkApbgPTDdO8UFoqV9hqpamhyLjZ2zDd_N-be0DV53Rhacs4PlT4yi4LS1XWFMvy_tcEy-G9d9XAkbcmwUdK0WOr0fF9Byvy6Ldyw1fB4ALiznJcfIM-Pa58JqH3S_es2Bba=w199-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "http://madamelan.vn/",
+        "reviews_count": 12310,
+        "type": "Nhà hàng Việt Nam"
+      },
+      "source_url": "http://madamelan.vn/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Bánh Xèo Bà Dưỡng",
+      "address": "280/23 Hoàng Diệu, Hải Châu, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.058877199999998,
+      "longitude": 108.216166,
+      "rating": 4.3,
+      "hours": "Đang mở cửa · Đóng cửa vào 21:30",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepIp8XemJiG6qL_J-7418TQSQXvPAQ2GBewRFdjv40jv3EaXByHrSPsBWNyL7yY8XU8f7yxWkiUu8UdL0_tJ8q2zLMP-mVFZcmi1ykzvUiYVw26mbE6LjAR1nc8iXlwkV6DGFzm1JxwCULY=w122-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepIp8XemJiG6qL_J-7418TQSQXvPAQ2GBewRFdjv40jv3EaXByHrSPsBWNyL7yY8XU8f7yxWkiUu8UdL0_tJ8q2zLMP-mVFZcmi1ykzvUiYVw26mbE6LjAR1nc8iXlwkV6DGFzm1JxwCULY=w122-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJrSiIJ8oZQjERn2-PvhzOCuU",
+        "reviews_count": 9627,
+        "type": "Nhà hàng Việt Nam"
+      },
+      "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJrSiIJ8oZQjERn2-PvhzOCuU"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Pizza 4P's Hoàng Văn Thụ",
+      "address": "quan, 8 Hoàng Văn Thụ, Phước Ninh, Hải Châu, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.0627429,
+      "longitude": 108.2227982,
+      "rating": 4.8,
+      "hours": "Đang mở cửa · Đóng cửa vào 23:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepY6rbT7I5aeQf9XMa_e3g1-gdD9SYYvX5MNBrsbXhcYf5Qphvy1u1aghKCSZJGYgi5RjtZFTDoobRC0WeOPnzFZHimfCRY4PJMK_OVDTnVGGpctpZb3MITb8OoCFixPl2o3tc=w92-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepY6rbT7I5aeQf9XMa_e3g1-gdD9SYYvX5MNBrsbXhcYf5Qphvy1u1aghKCSZJGYgi5RjtZFTDoobRC0WeOPnzFZHimfCRY4PJMK_OVDTnVGGpctpZb3MITb8OoCFixPl2o3tc=w92-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "http://pizza4ps.com/",
+        "reviews_count": 14751,
+        "type": "Nhà hàng pizza"
+      },
+      "source_url": "http://pizza4ps.com/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Maharaja Indian Restaurant",
+      "address": "09 An Thượng 2, Bắc Mỹ Phú, Ngũ Hành Sơn, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.0495376,
+      "longitude": 108.24724409999999,
+      "rating": 4.7,
+      "hours": "Đang mở cửa · Đóng cửa vào 22:45",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweo9xFsK80F9LGyevQySAWgZRHQwiRbE0ygceph1721PhmcGUqXENM4DqRwLjPJBQComqQFttTrd8eNq8o41wWKEfyFRU7TIF54Ml5YaLJWYxLB9iTq7RAikyPYPWexHQyg1ggY=w122-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAweo9xFsK80F9LGyevQySAWgZRHQwiRbE0ygceph1721PhmcGUqXENM4DqRwLjPJBQComqQFttTrd8eNq8o41wWKEfyFRU7TIF54Ml5YaLJWYxLB9iTq7RAikyPYPWexHQyg1ggY=w122-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://www.maharaja.vn/",
+        "reviews_count": 4125,
+        "type": "Nhà hàng Ấn Độ"
+      },
+      "source_url": "https://www.maharaja.vn/"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Nhà hàng NHÀ BẾP CHỢ HÀN",
+      "address": "22 Hùng Vương, Hải Châu, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.0687376,
+      "longitude": 108.22433749999999,
+      "rating": 4.8,
+      "hours": "Đang mở cửa · Đóng cửa vào 22:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweoODtrFZr8larTH5xVEPvv7RjZR4LSJ1sHeesd1y0zUtpsv3B0pBcXGYKZxskFqxXfwoxkhnR5D9DfPEUZ5odwStoqgmsgSpg0xCORuJovX4_Djy0t5b8441nXbVMyMhBswZlLl_i5D5MLa=w122-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAweoODtrFZr8larTH5xVEPvv7RjZR4LSJ1sHeesd1y0zUtpsv3B0pBcXGYKZxskFqxXfwoxkhnR5D9DfPEUZ5odwStoqgmsgSpg0xCORuJovX4_Djy0t5b8441nXbVMyMhBswZlLl_i5D5MLa=w122-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://cafe.naver.com/flymap",
+        "reviews_count": 5871,
+        "type": "Nhà hàng Việt Nam"
+      },
+      "source_url": "https://cafe.naver.com/flymap"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Hải sản Năm Đảnh",
+      "address": "139/59/38 Trần Quang Khải, Phường, Sơn Trà, Đà Nẵng, Việt Nam",
+      "latitude": 16.1022967,
+      "longitude": 108.2533986,
+      "rating": 4.2,
+      "hours": "Đang mở cửa · Đóng cửa vào 21:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqhIN5nQpmCSn8sschYy_VMXxT_v6m5cf-SwV_a_9iMa9BfU9afAPOPbkU9_J8q0veoyi2peKj8R7NHV29AYyACMyYVnKVEZ4v9ZluH6BYGxyp01MfTE2tQ7PuMIW1EQzSrkfO2=w122-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAweqhIN5nQpmCSn8sschYy_VMXxT_v6m5cf-SwV_a_9iMa9BfU9afAPOPbkU9_J8q0veoyi2peKj8R7NHV29AYyACMyYVnKVEZ4v9ZluH6BYGxyp01MfTE2tQ7PuMIW1EQzSrkfO2=w122-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJkYkOmOMXQjEREz4KLKpwAOE",
+        "reviews_count": 6542,
+        "type": "Nhà hàng hải sản"
+      },
+      "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJkYkOmOMXQjEREz4KLKpwAOE"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Ăn Thôi",
+      "address": "114 Bạch Đằng, Hải Châu, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.0682463,
+      "longitude": 108.2248133,
+      "rating": 4.8,
+      "hours": "Đang mở cửa · Đóng cửa vào 21:30",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepX7ZID3H8e8XvVbx9sLJmMha_9KtkfU99EcnnuNBenFIPAmcC5MQ7iCYDgLLn0SnprqV10pxqvpFVB-aIolM-rKeBjR7IckTlw44_MQ0pnMt-ftc0p2c56dZ742dNhthH6zvY2_WNoJnqs=w163-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepX7ZID3H8e8XvVbx9sLJmMha_9KtkfU99EcnnuNBenFIPAmcC5MQ7iCYDgLLn0SnprqV10pxqvpFVB-aIolM-rKeBjR7IckTlw44_MQ0pnMt-ftc0p2c56dZ742dNhthH6zvY2_WNoJnqs=w163-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJYVPRIUkZQjERH-v3yrc3lt0",
+        "reviews_count": 6911,
+        "type": "Nhà hàng Việt Nam"
+      },
+      "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJYVPRIUkZQjERH-v3yrc3lt0"
+    },
+    {
+      "destination": "đà nẵng",
+      "category": "FOOD",
+      "name": "Cô Ba Phở bò",
+      "address": "154 Bạch Đằng, Hải Châu, Đà Nẵng 550000, Việt Nam",
+      "latitude": 16.0669705,
+      "longitude": 108.22471879999999,
+      "rating": 4.8,
+      "hours": "Đang mở cửa · Đóng cửa vào 22:00",
+      "cover_image": "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepWDEzVqMOAXdKvVqXsHTTigmpjM6iWInD4diWq_sVU8leRuQU0TAq-w07EMWmWH_7tXhzA_4hLXKunlAF2eLI9eW3QhcmzzqpTZZ6us4Z-Y0Vrtls3PA_qB1E72rUjbQnFhKFY5A=w122-h92-k-no",
+      "images": [
+        "https://lh3.googleusercontent.com/gps-cs-s/AHVAwepWDEzVqMOAXdKvVqXsHTTigmpjM6iWInD4diWq_sVU8leRuQU0TAq-w07EMWmWH_7tXhzA_4hLXKunlAF2eLI9eW3QhcmzzqpTZZ6us4Z-Y0Vrtls3PA_qB1E72rUjbQnFhKFY5A=w122-h92-k-no"
+      ],
+      "base_price": null,
+      "metadata": {
+        "source": "serpapi",
+        "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJQYGTw4MZQjER9-WZcXZUfAM",
+        "reviews_count": 7919,
+        "type": "Nhà hàng"
+      },
+      "source_url": "https://serpapi.com/search.json?engine=google_maps&google_domain=google.com&hl=vi&place_id=ChIJQYGTw4MZQjER9-WZcXZUfAM"
+    }
+  ],
+  "combos": [
+    {
+      "destination": "đà nẵng",
+      "name": "Ba Na Hills + Golden Bridge Day Tour (Klook listing)",
+      "provider": "Klook",
+      "price_per_person": 48,
+      "includes": [
+        "Ba Na Hills entrance",
+        "Fantasy Park entrance",
+        "Cable car",
+        "Pick-up/drop-off from Da Nang center",
+        "English guide"
+      ],
+      "benefits": [
+        "One-day combo to major landmarks"
+      ],
+      "duration_days": 1,
+      "requires_overnight": false,
+      "book_url": "https://www.klook.com/en-US/activity/140403-da-nang-ba-na-hills-hoi-an-one-day-tour/"
+    },
+    {
+      "destination": "đà nẵng",
+      "name": "Cham Island Day Tour from Da Nang (Snorkeling + Boat + Lunch)",
+      "provider": "Hoi An Day Trip",
+      "price_per_person": null,
+      "includes": [
+        "Speed boat transfer",
+        "Snorkeling",
+        "Lunch"
+      ],
+      "benefits": [
+        "Marine activity combo in one day"
+      ],
+      "duration_days": 1,
+      "requires_overnight": false,
+      "book_url": "https://hoiandaytrip.com/cham-island-day-tour-from-da-nang/"
+    },
+    {
+      "destination": "đà nẵng",
+      "name": "Ba Na Hills Tour Package with Indian Buffet",
+      "provider": "Hoi An Day Trip",
+      "price_per_person": null,
+      "includes": [
+        "Car/bus",
+        "Cable car",
+        "Indian buffet option",
+        "English speaking support"
+      ],
+      "benefits": [
+        "Flexible itinerary for mixed preferences"
+      ],
+      "duration_days": 1,
+      "requires_overnight": false,
+      "book_url": "https://hoiandaytrip.com/ba-na-hills-tour-package/"
+    },
+    {
+      "destination": "đà nẵng",
+      "name": "Cham Island Tour (Direct price from 30 USD/person)",
+      "provider": "Culaochamtour",
+      "price_per_person": 30,
+      "includes": [
+        "Cham Island visit",
+        "Coral reef activities"
+      ],
+      "benefits": [
+        "Budget-friendly island combo"
+      ],
+      "duration_days": 1,
+      "requires_overnight": false,
+      "book_url": "https://culaochamtour.com/en"
+    },
+    {
+      "destination": "đà nẵng",
+      "name": "3-Day Package: Da Nang + Hoi An + Ba Na Hills + Golden Bridge",
+      "provider": "Tripadvisor listing",
+      "price_per_person": null,
+      "includes": [
+        "Da Nang city",
+        "Hoi An",
+        "Ba Na Hills",
+        "Golden Bridge"
+      ],
+      "benefits": [
+        "Multi-destination package over 3 days"
+      ],
+      "duration_days": 3,
+      "requires_overnight": true,
+      "book_url": "https://www.tripadvisor.com/AttractionProductReview-g298085-d28225530-Package_3_Day_Tour_DaNang_Hoi_An_Ba_Na_Hills_and_Golden_Bridge-Da_Nang.html"
+    }
+  ]
+}

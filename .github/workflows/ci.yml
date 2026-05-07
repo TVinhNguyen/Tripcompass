@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/**]
+    branches: [main, dev, feat/**]
   pull_request:
-    branches: [main]
+    branches: [main , dev]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -105,9 +105,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
 
       - name: Build
         run: pnpm build

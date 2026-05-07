@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -8,7 +9,51 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const UserIDKey = "userID"
+const (
+	UserIDKey     = "userID"
+	AdminEmailKey = "adminEmail"
+)
+
+// ParseJWT verifies tokenStr against secret and returns the userID (sub claim).
+// Returns an error if the token is invalid, expired, or missing the sub claim.
+func ParseJWT(secret, tokenStr string) (userID string, err error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(secret), nil
+	})
+	if err != nil || !token.Valid {
+		return "", errors.New("invalid or expired token")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", errors.New("invalid token claims")
+	}
+	sub, ok := claims["sub"].(string)
+	if !ok || sub == "" {
+		return "", errors.New("invalid token subject")
+	}
+	return sub, nil
+}
+
+// parseJWTClaims is like ParseJWT but also returns the full claims map.
+func parseJWTClaims(secret, tokenStr string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(secret), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, errors.New("invalid or expired token")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("invalid token claims")
+	}
+	return claims, nil
+}
 
 func JWTAuth(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -20,21 +65,9 @@ func JWTAuth(secret string) gin.HandlerFunc {
 
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
-		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
-			}
-			return []byte(secret), nil
-		})
-
-		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
-			return
-		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
+		claims, err := parseJWTClaims(secret, tokenStr)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -45,6 +78,12 @@ func JWTAuth(secret string) gin.HandlerFunc {
 		}
 
 		c.Set(UserIDKey, userID)
+
+		// Set email claim if present (used by admin middleware)
+		if email, ok := claims["email"].(string); ok && email != "" {
+			c.Set(AdminEmailKey, email)
+		}
+
 		c.Next()
 	}
 }

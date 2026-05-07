@@ -35,7 +35,7 @@ func (h *LookupHandler) Lookup(c *gin.Context) {
 
 	result, err := h.svc.Lookup(dest, staleDays)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, result)

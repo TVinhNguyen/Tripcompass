@@ -80,11 +80,23 @@ CREATE TABLE "collaborators" (
 
 CREATE TABLE "ai_chat_messages" (
     "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid (),
-    "itinerary_id" UUID NOT NULL,
+    "session_id" UUID,
+    "itinerary_id" UUID,
     "role" "role_ai_chat_message" NOT NULL,
     "content" TEXT NOT NULL,
     "metadata" JSONB,
     "created_at" TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE "ai_chat_sessions" (
+    "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid (),
+    "user_id" UUID NOT NULL,
+    "title" TEXT NOT NULL,
+    "destination" TEXT,
+    "message_count" INTEGER NOT NULL DEFAULT 0,
+    "saved_itinerary_id" UUID,
+    "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+    "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE "places" (
@@ -93,15 +105,28 @@ CREATE TABLE "places" (
     "category" "place_category" NOT NULL,
     "name" VARCHAR(255) NOT NULL,
     "name_en" VARCHAR(255),
+    "description" TEXT,
     "address" TEXT,
     "area" VARCHAR(255),
     "latitude" DOUBLE PRECISION,
     "longitude" DOUBLE PRECISION,
     "cover_image" TEXT,
+    "images" TEXT [] DEFAULT '{}',
     "rating" DOUBLE PRECISION,
+    "review_count" INTEGER NOT NULL DEFAULT 0,
+    "must_visit" BOOLEAN NOT NULL DEFAULT FALSE,
+    "priority_score" INTEGER NOT NULL DEFAULT 0,
+    "best_time_of_day" VARCHAR(255),
+    "tags" TEXT [] DEFAULT '{}',
+    "open_time" TIME,
+    "close_time" TIME,
     "hours" TEXT,
     "recommended_duration" INTEGER,
     "base_price" INTEGER,
+    "phone" VARCHAR(50),
+    "website" TEXT,
+    "external_id" VARCHAR(100),
+    "external_source" VARCHAR(50),
     "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb,
     "source_url" TEXT,
     "price_updated_at" TIMESTAMP,
@@ -143,6 +168,11 @@ CREATE INDEX "idx_place_coords" ON "places" ("latitude", "longitude");
 
 CREATE INDEX "idx_place_rating" ON "places" ("rating");
 
+CREATE INDEX "idx_place_review_count" ON "places" ("review_count");
+
+CREATE UNIQUE INDEX "idx_place_external" ON "places" ("external_source", "external_id")
+    WHERE "external_id" IS NOT NULL;
+
 CREATE INDEX "idx_combo_dest" ON "combos" ("destination");
 
 CREATE INDEX "idx_combo_dest_price" ON "combos" (
@@ -181,6 +211,15 @@ ADD CONSTRAINT "fk_collaborators_invited_by" FOREIGN KEY ("invited_by") REFERENC
 
 ALTER TABLE "ai_chat_messages"
 ADD CONSTRAINT "fk_chat_itinerary" FOREIGN KEY ("itinerary_id") REFERENCES "itineraries" ("id") ON DELETE CASCADE;
+
+ALTER TABLE "ai_chat_sessions"
+ADD CONSTRAINT "fk_ai_chat_sessions_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE;
+
+ALTER TABLE "ai_chat_sessions"
+ADD CONSTRAINT "fk_ai_chat_sessions_saved_itinerary" FOREIGN KEY ("saved_itinerary_id") REFERENCES "itineraries" ("id") ON DELETE SET NULL;
+
+ALTER TABLE "ai_chat_messages"
+ADD CONSTRAINT "fk_chat_session" FOREIGN KEY ("session_id") REFERENCES "ai_chat_sessions" ("id") ON DELETE CASCADE;
 
 ALTER TABLE "user_saved_places"
 ADD CONSTRAINT "fk_saved_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE;

@@ -5,7 +5,9 @@ import (
 	"strconv"
 	"strings"
 	"tripcompass-backend/internal/middleware"
+	"tripcompass-backend/internal/pagination"
 	"tripcompass-backend/internal/services"
+	"tripcompass-backend/internal/viewcounter"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -15,21 +17,39 @@ type ItineraryHandler struct {
 	svc *services.ItineraryService
 }
 
-func NewItineraryHandler(db *gorm.DB) *ItineraryHandler {
-	return &ItineraryHandler{svc: services.NewItineraryService(db)}
+func NewItineraryHandler(db *gorm.DB, vc *viewcounter.Counter) *ItineraryHandler {
+	svc := services.NewItineraryService(db)
+	if vc != nil {
+		svc = svc.WithViewCounter(vc)
+	}
+	return &ItineraryHandler{svc: svc}
 }
 
-func userID(c *gin.Context) string {
-	v, _ := c.Get(middleware.UserIDKey)
-	s, _ := v.(string)
-	return s
+// mustUserID extracts the authenticated user ID from gin context.
+// It aborts with 401 and returns false if the key is missing (middleware misconfiguration).
+func mustUserID(c *gin.Context) (string, bool) {
+	v, exists := c.Get(middleware.UserIDKey)
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return "", false
+	}
+	s, ok := v.(string)
+	if !ok || s == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return "", false
+	}
+	return s, true
 }
 
 // GET /itineraries
 func (h *ItineraryHandler) GetMyItineraries(c *gin.Context) {
-	list, err := h.svc.GetMyItineraries(userID(c))
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	list, err := h.svc.GetMyItineraries(uid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": list})
@@ -37,15 +57,18 @@ func (h *ItineraryHandler) GetMyItineraries(c *gin.Context) {
 
 // POST /itineraries
 func (h *ItineraryHandler) Create(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var input services.CreateItineraryInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	it, err := h.svc.Create(userID(c), input)
+	it, err := h.svc.Create(uid, input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, it)
@@ -53,13 +76,13 @@ func (h *ItineraryHandler) Create(c *gin.Context) {
 
 // GET /itineraries/:id
 func (h *ItineraryHandler) GetOne(c *gin.Context) {
-	it, err := h.svc.GetOne(c.Param("id"), userID(c))
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	it, err := h.svc.GetOne(c.Param("id"), uid)
 	if err != nil {
-		if err.Error() == "forbidden" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		} else {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-		}
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, it)
@@ -67,15 +90,18 @@ func (h *ItineraryHandler) GetOne(c *gin.Context) {
 
 // PATCH /itineraries/:id
 func (h *ItineraryHandler) Update(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
 	var input services.UpdateItineraryInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	it, err := h.svc.Update(c.Param("id"), userID(c), input)
+	it, err := h.svc.Update(c.Param("id"), uid, input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, it)
@@ -83,8 +109,12 @@ func (h *ItineraryHandler) Update(c *gin.Context) {
 
 // DELETE /itineraries/:id
 func (h *ItineraryHandler) Delete(c *gin.Context) {
-	if err := h.svc.Delete(c.Param("id"), userID(c)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.Delete(c.Param("id"), uid); err != nil {
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusNoContent, nil)
@@ -92,19 +122,35 @@ func (h *ItineraryHandler) Delete(c *gin.Context) {
 
 // POST /itineraries/:id/clone
 func (h *ItineraryHandler) Clone(c *gin.Context) {
-	it, err := h.svc.Clone(c.Param("id"), userID(c))
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	it, err := h.svc.Clone(c.Param("id"), uid)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, it)
 }
 
 // PATCH /itineraries/:id/publish
+// Body: {"status": "PUBLISHED"|"DRAFT"}
 func (h *ItineraryHandler) Publish(c *gin.Context) {
-	it, err := h.svc.Publish(c.Param("id"), userID(c))
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	var body struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status field required (PUBLISHED or DRAFT)"})
+		return
+	}
+	it, err := h.svc.Publish(c.Param("id"), uid, body.Status)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, it)
@@ -112,15 +158,18 @@ func (h *ItineraryHandler) Publish(c *gin.Context) {
 
 // GET /explore
 func (h *ItineraryHandler) Explore(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	page, limit, _ := pagination.Parse(c, 20, 50)
 	minBudget, _ := strconv.ParseFloat(c.DefaultQuery("min_budget", "0"), 64)
 	maxBudget, _ := strconv.ParseFloat(c.DefaultQuery("max_budget", "0"), 64)
 
 	filter := services.ExploreFilter{
+		Q:              c.Query("q"),
 		Destination:    strings.ReplaceAll(c.Query("destination"), "+", " "),
 		BudgetCategory: c.Query("budget_category"),
-		Tags:           c.Query("tags"),
+		Tags:           splitCSV(c.Query("tags")),
+		MinDays:        parseOptionalInt(c.Query("min_days")),
+		MaxDays:        parseOptionalInt(c.Query("max_days")),
+		GuestCount:     parseOptionalInt(c.Query("guest_count")),
 		Sort:           c.DefaultQuery("sort", "created_at"),
 		MinBudget:      minBudget,
 		MaxBudget:      maxBudget,
@@ -130,7 +179,7 @@ func (h *ItineraryHandler) Explore(c *gin.Context) {
 
 	list, total, err := h.svc.Explore(filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
 
@@ -140,4 +189,14 @@ func (h *ItineraryHandler) Explore(c *gin.Context) {
 		"page":  page,
 		"limit": limit,
 	})
+}
+
+// GET /itineraries/:id/public — view a published itinerary without login
+func (h *ItineraryHandler) GetPublic(c *gin.Context) {
+	it, err := h.svc.GetPublic(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(http.StatusOK, it)
 }

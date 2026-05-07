@@ -1,0 +1,415 @@
+package handlers
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+	"tripcompass-backend/internal/models"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+type AIChatHandler struct {
+	db           *gorm.DB
+	plannerAIURL string
+	httpClient   *http.Client
+}
+
+func NewAIChatHandler(db *gorm.DB, plannerAIURL string) *AIChatHandler {
+	return &AIChatHandler{
+		db:           db,
+		plannerAIURL: strings.TrimRight(plannerAIURL, "/"),
+		httpClient:   &http.Client{Timeout: 180 * time.Second},
+	}
+}
+
+type aiChatSessionResponse struct {
+	SessionID    string  `json:"session_id"`
+	CreatedAt    string  `json:"created_at,omitempty"`
+	LastActive   string  `json:"last_active,omitempty"`
+	MessageCount int     `json:"message_count"`
+	Destination  *string `json:"destination,omitempty"`
+	Title        string  `json:"title,omitempty"`
+}
+
+type aiChatMessageResponse struct {
+	Role      string          `json:"role"`
+	Content   string          `json:"content"`
+	ToolCalls []string        `json:"tool_calls,omitempty"`
+	Plan      json.RawMessage `json:"plan,omitempty"`
+	CreatedAt string          `json:"created_at"`
+}
+
+type aiChatStreamRequest struct {
+	SessionID *string `json:"session_id"`
+	Message   string  `json:"message" binding:"required"`
+}
+
+func (h *AIChatHandler) ListSessions(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	userID, err := uuid.Parse(uid)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	var sessions []models.AIChatSession
+	if err := h.db.
+		Where("user_id = ?", userID).
+		Order("updated_at DESC").
+		Find(&sessions).Error; err != nil {
+		respondInternalError(c, err)
+		return
+	}
+
+	out := make([]aiChatSessionResponse, 0, len(sessions))
+	for _, s := range sessions {
+		out = append(out, sessionResponse(s))
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *AIChatHandler) GetHistory(c *gin.Context) {
+	session, ok := h.mustOwnedSession(c, c.Param("id"))
+	if !ok {
+		return
+	}
+
+	var messages []models.AIChatMessage
+	if err := h.db.
+		Where("session_id = ?", session.ID).
+		Order("created_at ASC").
+		Find(&messages).Error; err != nil {
+		respondInternalError(c, err)
+		return
+	}
+
+	out := make([]aiChatMessageResponse, 0, len(messages))
+	for _, m := range messages {
+		out = append(out, messageResponse(m))
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"session_id":    session.ID.String(),
+		"messages":      out,
+		"message_count": len(out),
+		"meta":          sessionResponse(session),
+	})
+}
+
+func (h *AIChatHandler) DeleteSession(c *gin.Context) {
+	session, ok := h.mustOwnedSession(c, c.Param("id"))
+	if !ok {
+		return
+	}
+	if err := h.db.Delete(&session).Error; err != nil {
+		respondInternalError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted": true, "session_id": session.ID.String()})
+}
+
+func (h *AIChatHandler) Stream(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	userID, err := uuid.Parse(uid)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
+		return
+	}
+	if h.plannerAIURL == "" {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "planner-ai is not configured"})
+		return
+	}
+
+	var req aiChatStreamRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.Message = strings.TrimSpace(req.Message)
+	if req.Message == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "message is required"})
+		return
+	}
+
+	sessionID := uuid.New()
+	if req.SessionID != nil && strings.TrimSpace(*req.SessionID) != "" {
+		parsed, err := uuid.Parse(strings.TrimSpace(*req.SessionID))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session_id"})
+			return
+		}
+		if _, ok := h.ownedSession(c.Request.Context(), parsed, userID); !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+			return
+		}
+		sessionID = parsed
+	}
+
+	proxyBody, err := json.Marshal(gin.H{
+		"session_id": sessionID.String(),
+		"message":    req.Message,
+	})
+	if err != nil {
+		respondInternalError(c, err)
+		return
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		c.Request.Context(),
+		http.MethodPost,
+		h.plannerAIURL+"/chat/stream",
+		bytes.NewReader(proxyBody),
+	)
+	if err != nil {
+		respondInternalError(c, err)
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := h.httpClient.Do(httpReq)
+	if err != nil {
+		respondInternalError(c, fmt.Errorf("proxy to planner-ai chat: %w", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		c.JSON(resp.StatusCode, gin.H{"error": string(body)})
+		return
+	}
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(http.StatusOK)
+
+	done := streamDonePayload{}
+	if err := h.proxySSE(c, resp.Body, &done); err != nil && !errors.Is(err, context.Canceled) {
+		return
+	}
+
+	if done.Type == "done" {
+		if err := h.persistExchange(c.Request.Context(), userID, sessionID, req.Message, done); err != nil {
+			// Streaming has already completed; log through gin error channel instead of corrupting SSE.
+			_ = c.Error(err)
+		}
+	}
+}
+
+type streamDonePayload struct {
+	Type      string          `json:"type"`
+	SessionID string          `json:"session_id"`
+	FullText  string          `json:"full_text"`
+	Plan      json.RawMessage `json:"plan"`
+	ToolCalls []string        `json:"tool_calls"`
+}
+
+func (h *AIChatHandler) proxySSE(c *gin.Context, body io.Reader, done *streamDonePayload) error {
+	flusher, _ := c.Writer.(http.Flusher)
+	buf := make([]byte, 4096)
+	var pending string
+
+	for {
+		n, err := body.Read(buf)
+		if n > 0 {
+			chunk := buf[:n]
+			if _, writeErr := c.Writer.Write(chunk); writeErr != nil {
+				return writeErr
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+			pending += string(chunk)
+			pending = parseSSEBuffer(pending, done)
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+func parseSSEBuffer(pending string, done *streamDonePayload) string {
+	for {
+		idx := strings.Index(pending, "\n\n")
+		if idx < 0 {
+			return pending
+		}
+		event := pending[:idx]
+		pending = pending[idx+2:]
+		for _, line := range strings.Split(event, "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+			var payload streamDonePayload
+			if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &payload); err == nil && payload.Type == "done" {
+				*done = payload
+			}
+		}
+	}
+}
+
+func (h *AIChatHandler) persistExchange(ctx context.Context, userID, sessionID uuid.UUID, userMessage string, done streamDonePayload) error {
+	return h.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var session models.AIChatSession
+		err := tx.First(&session, "id = ? AND user_id = ?", sessionID, userID).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			session = models.AIChatSession{
+				ID:     sessionID,
+				UserID: userID,
+				Title:  chatTitle(userMessage),
+			}
+			if dest := destinationFromPlan(done.Plan); dest != "" {
+				session.Destination = &dest
+			}
+			if err := tx.Create(&session).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+
+		metadata, err := assistantMetadata(done.ToolCalls, done.Plan)
+		if err != nil {
+			return err
+		}
+		messages := []models.AIChatMessage{
+			{SessionID: &sessionID, Role: "USER", Content: userMessage},
+			{SessionID: &sessionID, Role: "ASSISTANT", Content: done.FullText, Metadata: metadata},
+		}
+		if err := tx.Create(&messages).Error; err != nil {
+			return err
+		}
+
+		updates := map[string]interface{}{
+			"message_count": gorm.Expr("message_count + ?", len(messages)),
+			"updated_at":    time.Now(),
+		}
+		if session.Destination == nil {
+			if dest := destinationFromPlan(done.Plan); dest != "" {
+				updates["destination"] = dest
+			}
+		}
+		return tx.Model(&models.AIChatSession{}).
+			Where("id = ? AND user_id = ?", sessionID, userID).
+			Updates(updates).Error
+	})
+}
+
+func (h *AIChatHandler) mustOwnedSession(c *gin.Context, rawID string) (models.AIChatSession, bool) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return models.AIChatSession{}, false
+	}
+	userID, err := uuid.Parse(uid)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
+		return models.AIChatSession{}, false
+	}
+	sessionID, err := uuid.Parse(rawID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session id"})
+		return models.AIChatSession{}, false
+	}
+	session, ok := h.ownedSession(c.Request.Context(), sessionID, userID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return models.AIChatSession{}, false
+	}
+	return session, true
+}
+
+func (h *AIChatHandler) ownedSession(ctx context.Context, sessionID, userID uuid.UUID) (models.AIChatSession, bool) {
+	var session models.AIChatSession
+	if err := h.db.WithContext(ctx).First(&session, "id = ? AND user_id = ?", sessionID, userID).Error; err != nil {
+		return models.AIChatSession{}, false
+	}
+	return session, true
+}
+
+func sessionResponse(s models.AIChatSession) aiChatSessionResponse {
+	return aiChatSessionResponse{
+		SessionID:    s.ID.String(),
+		CreatedAt:    s.CreatedAt.Format(time.RFC3339),
+		LastActive:   s.UpdatedAt.Format(time.RFC3339),
+		MessageCount: s.MessageCount,
+		Destination:  s.Destination,
+		Title:        s.Title,
+	}
+}
+
+func messageResponse(m models.AIChatMessage) aiChatMessageResponse {
+	resp := aiChatMessageResponse{
+		Role:      strings.ToLower(m.Role),
+		Content:   m.Content,
+		CreatedAt: m.CreatedAt.Format(time.RFC3339),
+	}
+	if len(m.Metadata) == 0 {
+		return resp
+	}
+	var meta struct {
+		ToolCalls []string        `json:"tool_calls"`
+		Plan      json.RawMessage `json:"plan"`
+	}
+	if err := json.Unmarshal(m.Metadata, &meta); err == nil {
+		resp.ToolCalls = meta.ToolCalls
+		resp.Plan = meta.Plan
+	}
+	return resp
+}
+
+func assistantMetadata(toolCalls []string, plan json.RawMessage) (json.RawMessage, error) {
+	meta := map[string]interface{}{}
+	if len(toolCalls) > 0 {
+		meta["tool_calls"] = toolCalls
+	}
+	if len(plan) > 0 && string(plan) != "null" {
+		meta["plan"] = json.RawMessage(plan)
+	}
+	if len(meta) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(meta)
+}
+
+func destinationFromPlan(plan json.RawMessage) string {
+	if len(plan) == 0 || string(plan) == "null" {
+		return ""
+	}
+	var payload struct {
+		Days []struct {
+			PrimaryArea string `json:"primary_area"`
+		} `json:"days"`
+	}
+	if err := json.Unmarshal(plan, &payload); err != nil || len(payload.Days) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(payload.Days[0].PrimaryArea)
+}
+
+func chatTitle(message string) string {
+	msg := strings.TrimSpace(message)
+	if len([]rune(msg)) <= 80 {
+		return msg
+	}
+	runes := []rune(msg)
+	return string(runes[:80]) + "..."
+}

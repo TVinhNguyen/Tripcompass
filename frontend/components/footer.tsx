@@ -5,34 +5,32 @@ import { ArrowUpRight } from "lucide-react";
 
 const footerLinks = {
   product: [
-    { label: "Kham pha", href: "/explore" },
-    { label: "Lap lich trinh", href: "/planner" },
-    { label: "Cong dong", href: "/community" },
-    { label: "Cam nang", href: "/blog" },
+    { label: "Khám phá", href: "/explore" },
+    { label: "Lập lịch trình", href: "/planner" },
+    { label: "Địa điểm", href: "/places" },
+    { label: "Cẩm nang", href: "/blog" },
   ],
   destinations: [
-    { label: "Ha Noi", href: "/explore?destination=ha-noi" },
-    { label: "Da Nang", href: "/explore?destination=da-nang" },
-    { label: "Hoi An", href: "/explore?destination=hoi-an" },
-    { label: "Phu Quoc", href: "/explore?destination=phu-quoc" },
+    { label: "Hà Nội", href: "/explore?destination=ha-noi" },
+    { label: "Đà Nẵng", href: "/explore?destination=da-nang" },
+    { label: "Hội An", href: "/explore?destination=hoi-an" },
+    { label: "Phú Quốc", href: "/explore?destination=phu-quoc" },
   ],
   support: [
-    { label: "Trung tam ho tro", href: "/help" },
-    { label: "Lien he", href: "/contact" },
-    { label: "Dieu khoan", href: "/terms" },
-    { label: "Bao mat", href: "/privacy" },
+    { label: "Trung tâm hỗ trợ", href: "/help" },
+    { label: "Liên hệ", href: "/contact" },
+    { label: "Điều khoản", href: "/terms" },
+    { label: "Bảo mật", href: "/privacy" },
   ],
 };
 
 export function Footer() {
   return (
     <footer className="relative bg-[#1a1a1a]">
-      {/* Top Border */}
       <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8">
-          {/* Brand Column */}
           <div className="lg:col-span-5">
             <Link href="/" className="flex items-center gap-3 mb-6">
               <div className="relative w-12 h-12 flex items-center justify-center">
@@ -40,7 +38,7 @@ export function Footer() {
                 <div className="absolute inset-0 border-2 border-[#d4a853] rounded-full" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xl font-serif font-bold text-white tracking-wide">
+                <span className="text-xl font-serif font-semibold text-white tracking-wide">
                   TripCompass
                 </span>
                 <span className="text-[10px] text-white/40 tracking-[0.2em] uppercase">
@@ -49,31 +47,28 @@ export function Footer() {
               </div>
             </Link>
             <p className="text-white/50 mb-8 max-w-sm leading-relaxed">
-              Kham pha Viet Nam theo cach cua ban. Tao lich trinh hoan hao voi cong nghe AI trong vai phut.
+              Khám phá Việt Nam theo cách của bạn. Tạo lịch trình hoàn hảo với công nghệ AI trong vài phút.
             </p>
 
-            {/* Newsletter */}
             <div>
-              <p className="text-sm text-white/70 mb-3">Nhan thong tin moi nhat</p>
+              <p className="text-sm text-white/70 mb-3">Nhận thông tin mới nhất</p>
               <div className="flex">
                 <input
                   type="email"
-                  placeholder="Email cua ban"
+                  placeholder="Email của bạn"
                   className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-l-lg text-white placeholder-white/40 outline-none focus:border-[#d4a853]/50 transition-colors"
                 />
                 <button className="px-6 py-3 bg-[#d4a853] text-[#1a1a1a] font-medium rounded-r-lg hover:bg-[#c4985a] transition-colors">
-                  Dang ky
+                  Đăng ký
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Links Columns */}
           <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8">
-            {/* Product Links */}
             <div>
               <h3 className="text-sm text-white/40 uppercase tracking-wider mb-5">
-                San pham
+                Sản phẩm
               </h3>
               <ul className="space-y-4">
                 {footerLinks.product.map((link) => (
@@ -90,10 +85,9 @@ export function Footer() {
               </ul>
             </div>
 
-            {/* Destinations Links */}
             <div>
               <h3 className="text-sm text-white/40 uppercase tracking-wider mb-5">
-                Diem den
+                Điểm đến
               </h3>
               <ul className="space-y-4">
                 {footerLinks.destinations.map((link) => (
@@ -110,10 +104,9 @@ export function Footer() {
               </ul>
             </div>
 
-            {/* Support Links */}
             <div>
               <h3 className="text-sm text-white/40 uppercase tracking-wider mb-5">
-                Ho tro
+                Hỗ trợ
               </h3>
               <ul className="space-y-4">
                 {footerLinks.support.map((link) => (
@@ -132,13 +125,12 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Bottom Bar */}
         <div className="mt-16 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-white/40">
-            2024 TripCompass. All rights reserved.
+            © 2024 TripCompass. Tất cả quyền được bảo lưu.
           </p>
           <p className="text-sm text-white/40">
-            Made with care in Vietnam
+            Được tạo với tình yêu tại Việt Nam
           </p>
         </div>
       </div>

@@ -1,0 +1,509 @@
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0
+  }
+
+  .w {
+    padding: 1rem 0;
+    font-family: var(--font-sans)
+  }
+
+  .tabs {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem
+  }
+
+  .tab {
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-tertiary);
+    cursor: pointer;
+    background: var(--color-background-primary);
+    color: var(--color-text-secondary);
+    transition: all .15s;
+    white-space: nowrap
+  }
+
+  .tab.on {
+    background: #E1F5EE;
+    color: #085041;
+    border-color: #9FE1CB;
+    font-weight: 500
+  }
+
+  .pnl {
+    display: none
+  }
+
+  .pnl.on {
+    display: block
+  }
+
+  .card {
+    background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 11px 13px;
+    margin-bottom: 9px
+  }
+
+  .ct {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 5px
+  }
+
+  .cb {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.7
+  }
+
+  .code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 9px 11px;
+    line-height: 1.6;
+    color: var(--color-text-primary);
+    margin-top: 7px;
+    overflow-x: auto;
+    white-space: pre
+  }
+
+  .tg {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 20px;
+    margin: 2px 2px 2px 0
+  }
+
+  .tg-r {
+    background: #FCEBEB;
+    color: #791F1F
+  }
+
+  .tg-g {
+    background: #EAF3DE;
+    color: #27500A
+  }
+
+  .tg-t {
+    background: #E1F5EE;
+    color: #085041
+  }
+
+  .tg-a {
+    background: #FAEEDA;
+    color: #633806
+  }
+
+  .tg-p {
+    background: #EEEDFE;
+    color: #3C3489
+  }
+
+  .tg-b {
+    background: #E6F1FB;
+    color: #0C447C
+  }
+
+  .g2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px
+  }
+
+  .score-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary)
+  }
+
+  .score-row:last-child {
+    border-bottom: none
+  }
+
+  .score-label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    width: 110px;
+    flex-shrink: 0
+  }
+
+  .score-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--color-background-primary);
+    border-radius: 3px;
+    overflow: hidden
+  }
+
+  .score-bar {
+    height: 100%;
+    border-radius: 3px
+  }
+
+  .score-val {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    width: 32px;
+    text-align: right;
+    flex-shrink: 0
+  }
+
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 5px
+  }
+
+  .fn {
+    display: grid;
+    grid-template-columns: 120px 1fr 80px;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 11px;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-tertiary)
+  }
+
+  .fw {
+    font-size: 12px;
+    font-weight: 500
+  }
+
+  .fd {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.5
+  }
+
+  .fb {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 20px;
+    text-align: center
+  }
+
+  .arr {
+    text-align: center;
+    font-size: 11px;
+    color: var(--color-text-tertiary)
+  }
+
+  .warn {
+    background: #FAEEDA;
+    border: 0.5px solid #FAC775;
+    border-radius: var(--border-radius-md);
+    padding: 10px 13px;
+    font-size: 12px;
+    color: #633806;
+    line-height: 1.7;
+    margin-top: 8px
+  }
+
+  .ok {
+    background: #EAF3DE;
+    border: 0.5px solid #C0DD97;
+    border-radius: var(--border-radius-md);
+    padding: 10px 13px;
+    font-size: 12px;
+    color: #27500A;
+    line-height: 1.7;
+    margin-top: 8px
+  }
+</style>
+<div class="w">
+  <div class="tabs">
+    <div class="tab on" onclick="s('problems')">5 vấn đề cốt lõi</div>
+    <div class="tab" onclick="s('schema')">Confidence schema</div>
+    <div class="tab" onclick="s('ingestion')">Ingestion pipeline</div>
+    <div class="tab" onclick="s('sync')">Price sync</div>
+    <div class="tab" onclick="s('feedback')">Feedback loop</div>
+  </div>
+
+  <div class="pnl on" id="problems">
+    <div class="card">
+      <div class="ct" style="color:#A32D2D">Vấn đề 1 — Giá stale (đã thấy với Bà Nà)</div>
+      <div class="cb">Giá thay đổi nhưng DB không biết. Mindtrip hiển thị 700k, thực tế 1M. Xảy ra với mọi nơi có vé có
+        thu phí.</div>
+    </div>
+    <div class="card">
+      <div class="ct" style="color:#A32D2D">Vấn đề 2 — Place đóng cửa vĩnh viễn</div>
+      <div class="cb">Nhà hàng đóng, khách sạn chuyển chủ, địa điểm ngừng hoạt động. Nếu DB không biết → LLM recommend
+        chỗ không tồn tại.</div>
+    </div>
+    <div class="card">
+      <div class="ct" style="color:#BA7517">Vấn đề 3 — Missing / sai fields</div>
+      <div class="cb">
+        <span class="tg tg-r">lat/lng = null</span> → geo clustering sai<br>
+        <span class="tg tg-r">hours = null</span> → không validate opening hours<br>
+        <span class="tg tg-r">duration = 0</span> → slot scheduling sai<br>
+        <span class="tg tg-r">tags = []</span> → preference matching không hoạt động
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct" style="color:#BA7517">Vấn đề 4 — Sai destination assignment</div>
+      <div class="cb">Hội An seeded với <code>tourist_dest_id = "da-nang"</code>. Mỹ Sơn seeded với
+        <code>province = "Quảng Nam"</code> thay vì tourist destination. Đây là lỗi thủ công khi seed.</div>
+    </div>
+    <div class="card">
+      <div class="ct" style="color:#3B6D11">Vấn đề 5 — Duplicate entries</div>
+      <div class="cb">Cùng 1 địa điểm được import từ nhiều nguồn → xuất hiện 2-3 lần trong kết quả. Ví dụ: "Hang Sửng
+        Sốt", "Sung Sot Cave", "Động Sửng Sốt" → 3 records khác nhau.</div>
+    </div>
+  </div>
+
+  <div class="pnl" id="schema">
+    <div class="card">
+      <div class="ct">Mỗi field có 3 thuộc tính: value + confidence + verified_at</div>
+      <div class="cb">Không lưu "giá 1 triệu" mà lưu "giá 1 triệu, scraped, hôm qua". Khi serve data, hệ thống biết
+        field nào đáng tin, field nào cần cảnh báo.</div>
+      <div class="code">-- Thay vì lưu flat:
+        places { price_vnd INT, lat FLOAT, hours TEXT }
+
+        -- Lưu với provenance:
+        place_fields {
+        place_id UUID,
+        field_name TEXT, -- 'price_vnd', 'lat', 'hours', 'duration_min'
+        field_value TEXT, -- serialized value
+        confidence FLOAT, -- 0.0 → 1.0
+        source TEXT, -- 'manual_admin', 'scraped_official',
+        -- 'scraped_tripadvisor', 'llm_inferred', 'user_report'
+        verified_at TIMESTAMPTZ,
+        verified_by TEXT -- admin username hoặc 'crawler-v2'
+        }
+
+        -- Composite quality score
+        quality_score = AVG(confidence) OVER required_fields
+        -- Required fields: name, tourist_dest_id, lat, lng, place_type
+        -- place không được serve nếu quality_score < 0.5</div>
+      </div>
+      <div class="card">
+        <div class="ct">Quality score ví dụ — Hang Sửng Sốt</div>
+        <div class="score-row">
+          <div class="score-label">name</div>
+          <div class="score-bar-wrap">
+            <div class="score-bar" style="width:100%;background:#1D9E75"></div>
+          </div>
+          <div class="score-val">1.0</div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">lat/lng</div>
+          <div class="score-bar-wrap">
+            <div class="score-bar" style="width:95%;background:#1D9E75"></div>
+          </div>
+          <div class="score-val">0.95</div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">price_vnd</div>
+          <div class="score-bar-wrap">
+            <div class="score-bar" style="width:60%;background:#EF9F27"></div>
+          </div>
+          <div class="score-val">0.6</div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">hours</div>
+          <div class="score-bar-wrap">
+            <div class="score-bar" style="width:40%;background:#E24B4A"></div>
+          </div>
+          <div class="score-val">0.4</div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">duration_min</div>
+          <div class="score-bar-wrap">
+            <div class="score-bar" style="width:50%;background:#EF9F27"></div>
+          </div>
+          <div class="score-val">0.5</div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">tags</div>
+          <div class="score-bar-wrap">
+            <div class="score-bar" style="width:80%;background:#1D9E75"></div>
+          </div>
+          <div class="score-val">0.8</div>
+        </div>
+        <div style="margin-top:8px;font-size:12px;color:var(--color-text-secondary)">Overall quality score: <strong
+            style="color:var(--color-text-primary)">0.71</strong> → serve nhưng flag hours cần review</div>
+      </div>
+    </div>
+
+    <div class="pnl" id="ingestion">
+      <div class="flow">
+        <div class="fn" style="background:#E6F1FB;border-color:#B5D4F4">
+          <div class="fw" style="color:#0C447C">Source</div>
+          <div class="fd">Google Places API, TripAdvisor scraper, admin manual, user submit</div>
+          <div class="fb" style="background:#B5D4F4;color:#042C53">raw input</div>
+        </div>
+        <div class="arr">↓</div>
+        <div class="fn" style="background:#FAEEDA;border-color:#FAC775">
+          <div class="fw" style="color:#633806">Normalize</div>
+          <div class="fd">lowercase tên, chuẩn hóa VND format, parse "08:00-17:00", geocode address → lat/lng nếu thiếu
+          </div>
+          <div class="fb" style="background:#FAC775;color:#412402">transform</div>
+        </div>
+        <div class="arr">↓</div>
+        <div class="fn" style="background:#FAEEDA;border-color:#FAC775">
+          <div class="fw" style="color:#633806">Validate fields</div>
+          <div class="fd">lat range [-90,90], price > 0 AND &lt; 5M, duration 15-720min, hours parseable, place_type in
+            enum</div>
+          <div class="fb" style="background:#FAC775;color:#412402">rules</div>
+        </div>
+        <div class="arr">↓</div>
+        <div class="fn" style="background:#EEEDFE;border-color:#CECBF6">
+          <div class="fw" style="color:#3C3489">Dedup check</div>
+          <div class="fd">Vector similarity trên name + lat/lng. Nếu cosine > 0.9 → merge candidate, không insert mới
+          </div>
+          <div class="fb" style="background:#CECBF6;color:#26215C">vector</div>
+        </div>
+        <div class="arr">↓</div>
+        <div class="fn" style="background:#EEEDFE;border-color:#CECBF6">
+          <div class="fw" style="color:#3C3489">LLM enrichment</div>
+          <div class="fd">Nếu tags rỗng hoặc description ngắn → LLM infer từ name + place_type + location. Confidence =
+            0.5 (lower than manual)</div>
+          <div class="fb" style="background:#CECBF6;color:#26215C">LLM</div>
+        </div>
+        <div class="arr">↓</div>
+        <div class="fn" style="background:#EAF3DE;border-color:#C0DD97">
+          <div class="fw" style="color:#27500A">Quality gate</div>
+          <div class="fd">quality_score ≥ 0.5 AND required fields present → insert LIVE. Else → insert as DRAFT for
+            admin review</div>
+          <div class="fb" style="background:#C0DD97;color:#173404">gate</div>
+        </div>
+        <div class="arr">↓</div>
+        <div class="fn" style="background:#F1EFE8;border-color:#D3D1C7">
+          <div class="fw" style="color:#444441">Admin queue</div>
+          <div class="fd">DRAFT places hiện trong admin UI. Admin xác nhận hoặc reject. Sau 30 ngày không review → tự
+            archive</div>
+          <div class="fb" style="background:#D3D1C7;color:#2C2C2A">review</div>
+        </div>
+      </div>
+      <div class="ok" style="margin-top:10px">Quy tắc vàng: thà thiếu place còn hơn serve place sai. Quality gate reject
+        → DRAFT, không bao giờ silently insert bad data.</div>
+    </div>
+
+    <div class="pnl" id="sync">
+      <div class="g2">
+        <div class="card">
+          <div class="ct">Volatile fields — sync hàng ngày</div>
+          <div class="cb">
+            <span class="tg tg-r">price_vnd</span> thay đổi theo mùa, năm<br>
+            <span class="tg tg-a">is_open</span> có thể đóng cửa tạm<br>
+            <span class="tg tg-a">hours</span> thay đổi dịp lễ<br>
+            <span class="tg tg-a">capacity</span> giảm sau renovate
+          </div>
+        </div>
+        <div class="card">
+          <div class="ct">Stable fields — sync hàng tháng</div>
+          <div class="cb">
+            <span class="tg tg-g">lat/lng</span> hiếm khi đổi<br>
+            <span class="tg tg-g">description</span> thay đổi chậm<br>
+            <span class="tg tg-g">tags</span> khá ổn định<br>
+            <span class="tg tg-g">duration_min</span> ít thay đổi
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ct">Anomaly detection — quan trọng nhất</div>
+        <div class="code">def sync_price(place, new_price):
+          last = get_last_price(place.id)
+
+          # Sanity check: thay đổi > 50% → không auto-accept
+          if last and abs(new_price - last) / last > 0.5:
+          create_review_task(
+          place_id = place.id,
+          field = 'price_vnd',
+          old_val = last,
+          new_val = new_price,
+          reason = f"Price changed {((new_price-last)/last*100):.0f}%"
+          )
+          return # Giữ giá cũ cho đến khi admin confirm
+
+          # Bình thường → update và lưu snapshot
+          upsert_price_snapshot(
+          place_id = place.id,
+          price_vnd = new_price,
+          confidence = 0.8, # scraped, không phải manual
+          source = 'official_site',
+          verified_at = now()
+          )</div>
+      </div>
+      <div class="card">
+        <div class="ct">Stale warning trong response</div>
+        <div class="cb">Khi serve place có price verified_at &gt; 30 ngày → thêm flag <span
+            class="tg tg-a">STALE_PRICE</span> vào response. LLM enrichment node sẽ viết: "Giá vé có thể đã thay đổi,
+          nên kiểm tra lại trước khi đặt."</div>
+      </div>
+    </div>
+
+    <div class="pnl" id="feedback">
+      <div class="card">
+        <div class="ct">3 nguồn feedback từ user</div>
+        <div class="cb">
+          <span class="tg tg-r">Flag wrong</span> User báo sai giá, địa điểm đóng cửa, thông tin không đúng<br>
+          <span class="tg tg-a">Trip completed</span> Sau chuyến đi, user confirm "đã đến, giá đúng" → tăng
+          confidence<br>
+          <span class="tg tg-p">Click-through rate</span> Place được recommend nhưng không click → signal quality thấp
+        </div>
+      </div>
+      <div class="card">
+        <div class="ct">Feedback xử lý như thế nào</div>
+        <div class="code">-- Khi user flag "địa điểm này đóng cửa rồi"
+          UPDATE places SET status = 'flagged', review_required = TRUE
+          WHERE id = $place_id;
+
+          -- Tự động: nếu >= 3 users flag cùng 1 vấn đề
+          -- → SUSPEND place (ẩn khỏi recommendations)
+          -- → tạo urgent review task cho admin
+          SELECT place_id, COUNT(*) as flag_count
+          FROM user_flags
+          WHERE created_at > NOW() - INTERVAL '7 days'
+          GROUP BY place_id
+          HAVING COUNT(*) >= 3;
+          -- → suspend + notify admin
+
+          -- Khi user confirm "đã đến, thông tin đúng"
+          UPDATE place_fields
+          SET confidence = LEAST(confidence + 0.05, 1.0),
+          verified_at = NOW(),
+          verified_by = 'user_confirmed'
+          WHERE place_id = $place_id AND field_name = 'is_open';</div>
+      </div>
+      <div class="card">
+        <div class="ct">Confidence decay — quan trọng nhất</div>
+        <div class="cb">Confidence KHÔNG tự nhiên giữ nguyên. Nó decay theo thời gian nếu không có verification mới.
+        </div>
+        <div class="code">-- Chạy daily job
+          UPDATE place_fields
+          SET confidence = confidence * 0.98 -- decay 2%/ngày
+          WHERE verified_at < NOW() - INTERVAL '30 days' AND source !='manual_admin' ; -- Manual admin data decay chậm
+            hơn (0.5%/ngày) -- Kết quả: sau 6 tháng không verify, confidence tự xuống ~30% -- → tự động vào review queue
+            khi &lt; 0.4</div>
+        </div>
+        <div class="warn">Không có hệ thống nào giữ data sạch mãi mãi mà không cần người. Admin review queue là bắt
+          buộc. Mục tiêu là tối thiểu hóa manual work, không phải loại bỏ hoàn toàn.</div>
+      </div>
+    </div>
+    <script>
+      function s(id) {
+        document.querySelectorAll('.pnl').forEach(p => p.classList.remove('on'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+        document.getElementById(id).classList.add('on');
+        event.target.classList.add('on');
+      }
+    </script>

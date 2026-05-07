@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"tripcompass-backend/internal/models"
@@ -9,6 +10,17 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
+
+// parseHoursToOpenClose extracts open/close time strings from hours like "08:00 - 17:00"
+func parseHoursToOpenClose(hours string) (open, close *string) {
+	re := regexp.MustCompile(`(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})`)
+	m := re.FindStringSubmatch(hours)
+	if len(m) == 3 {
+		o, c := m[1], m[2]
+		return &o, &c
+	}
+	return nil, nil
+}
 
 type SeedService struct {
 	db *gorm.DB
@@ -58,46 +70,97 @@ func (s *SeedService) BulkUpsert(input SeedInput) (*SeedResult, error) {
 				metadata = datatypes.JSON([]byte("{}"))
 			}
 
+			var openTime, closeTime *string
+			if p.Hours != nil {
+				openTime, closeTime = parseHoursToOpenClose(*p.Hours)
+			}
+
 			place := models.Place{
 				Destination:         dest,
 				Category:            category,
 				Name:                strings.TrimSpace(p.Name),
 				NameEN:              p.NameEN,
+				Description:         p.Description,
 				Address:             p.Address,
 				Area:                p.Area,
 				Latitude:            p.Latitude,
 				Longitude:           p.Longitude,
 				CoverImage:          p.CoverImage,
+				Images:              nilSafePQArray(p.Images),
 				Rating:              p.Rating,
+				ReviewCount:         p.ReviewCount,
 				Hours:               p.Hours,
 				RecommendedDuration: p.RecommendedDuration,
 				BasePrice:           p.BasePrice,
+				Phone:               p.Phone,
+				Website:             p.Website,
+				ExternalID:          p.ExternalID,
+				ExternalSource:      p.ExternalSource,
 				Metadata:            metadata,
 				SourceURL:           p.SourceURL,
+				MustVisit:           p.MustVisit,
+				PriorityScore:       p.PriorityScore,
+				BestTimeOfDay:       p.BestTimeOfDay,
+				Tags:                nilSafePQArray(p.Tags),
+				OpenTime:            openTime,
+				CloseTime:           closeTime,
 				PriceUpdatedAt:      &now,
 			}
 
 			var existing models.Place
 			err := tx.Where("destination = ? AND category = ? AND name = ?", dest, place.Category, place.Name).First(&existing).Error
 			if err == gorm.ErrRecordNotFound {
-				if err := tx.Create(&place).Error; err != nil {
-					return fmt.Errorf("create place '%s': %w", place.Name, err)
+				// Use a savepoint so a constraint violation doesn't abort the whole transaction.
+				saveptID := "x"
+				if place.ExternalID != nil {
+					saveptID = strings.ReplaceAll(*place.ExternalID, "-", "")
+					if len(saveptID) > 20 { saveptID = saveptID[:20] }
+				}
+				savept := "sp_p" + saveptID
+				tx.Exec("SAVEPOINT " + savept)
+				if createErr := tx.Create(&place).Error; createErr != nil {
+					tx.Exec("ROLLBACK TO SAVEPOINT " + savept)
+					// If it's a unique constraint on external_id (cross-province duplicate),
+					// retry without external_id so the place is still created.
+					if strings.Contains(createErr.Error(), "23505") || strings.Contains(createErr.Error(), "unique constraint") {
+						place.ExternalID = nil
+						if err2 := tx.Create(&place).Error; err2 != nil {
+							return fmt.Errorf("create place '%s' (dedup retry): %w", place.Name, err2)
+						}
+					} else {
+						return fmt.Errorf("create place '%s': %w", place.Name, createErr)
+					}
+				} else {
+					tx.Exec("RELEASE SAVEPOINT " + savept)
 				}
 				result.PlacesCreated++
 			} else if err == nil {
 				updates := map[string]interface{}{
 					"name_en":               place.NameEN,
+					"description":           place.Description,
 					"address":               place.Address,
 					"area":                  place.Area,
 					"latitude":              place.Latitude,
 					"longitude":             place.Longitude,
 					"cover_image":           place.CoverImage,
+					"images":                place.Images,
 					"rating":                place.Rating,
+					"review_count":          place.ReviewCount,
 					"hours":                 place.Hours,
+					"open_time":             place.OpenTime,
+					"close_time":            place.CloseTime,
 					"recommended_duration":  place.RecommendedDuration,
 					"base_price":            place.BasePrice,
+					"phone":                 place.Phone,
+					"website":               place.Website,
+					"external_id":           place.ExternalID,
+					"external_source":       place.ExternalSource,
 					"metadata":              place.Metadata,
 					"source_url":            place.SourceURL,
+					"must_visit":            place.MustVisit,
+					"priority_score":        place.PriorityScore,
+					"best_time_of_day":      place.BestTimeOfDay,
+					"tags":                  place.Tags,
 					"price_updated_at":      now,
 				}
 				if err := tx.Model(&existing).Updates(updates).Error; err != nil {
@@ -117,8 +180,8 @@ func (s *SeedService) BulkUpsert(input SeedInput) (*SeedResult, error) {
 				CoverImage:        c.CoverImage,
 				Provider:          c.Provider,
 				PricePerPerson:    c.PricePerPerson,
-				Includes:          models.StringArray(c.Includes),
-				Benefits:          models.StringArray(c.Benefits),
+				Includes:          nilSafePQArray(c.Includes),
+				Benefits:          nilSafePQArray(c.Benefits),
 				DurationDays:      c.DurationDays,
 				RequiresOvernight: c.RequiresOvernight,
 				BookURL:           c.BookURL,

@@ -3,6 +3,7 @@ package services
 import (
 	"testing"
 
+	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
 
 	"github.com/google/uuid"
@@ -10,32 +11,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ─── isOwnerOfActivity ───────────────────────────────────────────────────────
+// ─── checkActivityEditAccess ─────────────────────────────────────────────────
 
-func TestActivityService_IsOwnerOfActivity(t *testing.T) {
+func TestActivityService_CheckActivityEditAccess(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewActivityService(db)
 	user := createTestUser(t, db)
 	it := createTestItinerary(t, db, user.ID)
 	act := createTestActivity(t, db, it.ID)
 
-	t.Run("success", func(t *testing.T) {
-		got, err := svc.isOwnerOfActivity(act.ID.String(), user.ID.String())
+	t.Run("owner success", func(t *testing.T) {
+		got, err := svc.checkActivityEditAccess(act.ID.String(), user.ID.String())
 		require.NoError(t, err)
 		assert.Equal(t, act.ID, got.ID)
 	})
 
 	t.Run("activity not found", func(t *testing.T) {
-		_, err := svc.isOwnerOfActivity(uuid.New().String(), user.ID.String())
+		_, err := svc.checkActivityEditAccess(uuid.New().String(), user.ID.String())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "activity not found")
+		assert.ErrorIs(t, err, apperror.ErrNotFound)
 	})
 
-	t.Run("wrong owner", func(t *testing.T) {
+	t.Run("wrong user (no collaborator)", func(t *testing.T) {
 		otherUser := createTestUserWith(t, db, "other@example.com")
-		_, err := svc.isOwnerOfActivity(act.ID.String(), otherUser.ID.String())
+		_, err := svc.checkActivityEditAccess(act.ID.String(), otherUser.ID.String())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "forbidden")
+		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 }
 
@@ -87,7 +88,7 @@ func TestActivityService_Create(t *testing.T) {
 		}
 		_, err := svc.Create(otherUser.ID.String(), input)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "itinerary not found or forbidden")
+		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 
 	t.Run("with optional fields", func(t *testing.T) {
@@ -180,7 +181,7 @@ func TestActivityService_Update(t *testing.T) {
 		input := UpdateActivityInput{Title: &newTitle}
 		_, err := svc.Update(act.ID.String(), otherUser.ID.String(), input)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "forbidden")
+		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 }
 
@@ -207,13 +208,13 @@ func TestActivityService_Delete(t *testing.T) {
 		otherUser := createTestUserWith(t, db, "other3@example.com")
 		err := svc.Delete(act.ID.String(), otherUser.ID.String())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "forbidden")
+		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 
 	t.Run("activity not found", func(t *testing.T) {
 		err := svc.Delete(uuid.New().String(), user.ID.String())
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "activity not found")
+		assert.ErrorIs(t, err, apperror.ErrNotFound)
 	})
 }
 
@@ -254,7 +255,7 @@ func TestActivityService_Reorder(t *testing.T) {
 		}
 		err := svc.Reorder(user.ID.String(), items)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "activity not found")
+		assert.ErrorIs(t, err, apperror.ErrNotFound)
 	})
 
 	t.Run("forbidden owner", func(t *testing.T) {
@@ -264,6 +265,6 @@ func TestActivityService_Reorder(t *testing.T) {
 		}
 		err := svc.Reorder(otherUser.ID.String(), items)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "forbidden")
+		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 }

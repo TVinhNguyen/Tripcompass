@@ -1,9 +1,6 @@
-.env
-.env.*
-!.env.example
-.git
-.gitignore
 node_modules
 .next
+.pnpm-store
+.git
 *.md
-.DS_Store
+.env*

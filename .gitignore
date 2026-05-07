@@ -85,3 +85,10 @@ docker-compose.override.yml
 # =========================
 *.tmp
 *.temp
+
+# =========================
+# TripAdvisor test/debug files (contain API keys or raw data)
+# =========================
+test_tripadvisor_api.py
+tripadvisor_list.json
+tripadvisor_detail.json

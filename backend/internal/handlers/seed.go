@@ -23,12 +23,10 @@ func (h *SeedHandler) BulkSeed(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	result, err := h.svc.BulkUpsert(input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondInternalError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, result)
 }

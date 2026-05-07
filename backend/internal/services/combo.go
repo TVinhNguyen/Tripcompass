@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/lib/pq"
 	"fmt"
 	"strings"
 	"tripcompass-backend/internal/apperror"
@@ -47,13 +48,33 @@ type UpdateComboInput struct {
 
 // ---------- Methods ----------
 
-func (s *ComboService) List(destination string) ([]models.Combo, error) {
-	var list []models.Combo
-	q := s.db.Order("destination ASC, name ASC")
+type ComboListResult struct {
+	Data  []models.Combo `json:"data"`
+	Total int64          `json:"total"`
+	Page  int            `json:"page"`
+	Limit int            `json:"limit"`
+}
+
+func (s *ComboService) List(destination string, page, limit int) (*ComboListResult, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	q := s.db.Model(&models.Combo{}).Order("destination ASC, name ASC")
 	if destination != "" {
 		q = q.Where("destination ILIKE ?", "%"+strings.TrimSpace(destination)+"%")
 	}
-	return list, q.Find(&list).Error
+
+	var total int64
+	q.Count(&total)
+
+	var list []models.Combo
+	err := q.Limit(limit).Offset(offset).Find(&list).Error
+	return &ComboListResult{Data: list, Total: total, Page: page, Limit: limit}, err
 }
 
 func (s *ComboService) GetByID(id string) (*models.Combo, error) {
@@ -71,8 +92,8 @@ func (s *ComboService) Create(input CreateComboInput) (*models.Combo, error) {
 		CoverImage:        input.CoverImage,
 		Provider:          input.Provider,
 		PricePerPerson:    input.PricePerPerson,
-		Includes:          models.StringArray(input.Includes),
-		Benefits:          models.StringArray(input.Benefits),
+		Includes:          nilSafePQArray(input.Includes),
+		Benefits:          nilSafePQArray(input.Benefits),
 		DurationDays:      input.DurationDays,
 		RequiresOvernight: input.RequiresOvernight,
 		BookURL:           input.BookURL,
@@ -106,10 +127,10 @@ func (s *ComboService) Update(id string, input UpdateComboInput) (*models.Combo,
 		updates["price_per_person"] = *input.PricePerPerson
 	}
 	if input.Includes != nil {
-		updates["includes"] = models.StringArray(input.Includes)
+		updates["includes"] = pq.StringArray(input.Includes)
 	}
 	if input.Benefits != nil {
-		updates["benefits"] = models.StringArray(input.Benefits)
+		updates["benefits"] = pq.StringArray(input.Benefits)
 	}
 	if input.DurationDays != nil {
 		updates["duration_days"] = *input.DurationDays
