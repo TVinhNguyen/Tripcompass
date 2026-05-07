@@ -1,7 +1,7 @@
 # ---- Dependencies stage ----
 FROM node:22-alpine AS deps
 
-RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ RUN pnpm install --frozen-lockfile
 # ---- Build stage ----
 FROM node:22-alpine AS builder
 
-RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 WORKDIR /app
 
