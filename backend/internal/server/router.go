@@ -62,6 +62,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 	plannerHandler := handlers.NewPlannerHandler(db, rdb, cfg)
 	aiChatHandler := handlers.NewAIChatHandler(db, cfg.PlannerAIURL)
 	wsHandler := handlers.NewWSHandler(db, hub, cfg.JWTSecret, cfg.AllowedOrigins)
+	collabHandler := handlers.NewCollaboratorHandler(db, cfg)
 
 	// ── Health check — public ─────────────────────────────────────────────────
 	r.GET("/health", func(c *gin.Context) {
@@ -84,6 +85,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 		api.GET("/explore", itineraryHandler.Explore)
 
 		api.GET("/places", placeHandler.List)
+		api.GET("/places/destinations", placeHandler.Destinations)
 		api.GET("/places/:id", placeHandler.Get)
 		api.GET("/combos", comboHandler.List)
 		api.GET("/combos/:id", comboHandler.Get)
@@ -114,6 +116,13 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 			protected.DELETE("/itineraries/:id", itineraryHandler.Delete)
 			protected.POST("/itineraries/:id/clone", itineraryHandler.Clone)
 			protected.PATCH("/itineraries/:id/publish", itineraryHandler.Publish)
+
+			protected.POST("/itineraries/:id/collaborators", collabHandler.Invite)
+			protected.GET("/itineraries/:id/collaborators", collabHandler.List)
+			protected.GET("/collaborators/pending", collabHandler.ListPending)
+			protected.POST("/collaborators/:id/accept", collabHandler.Accept)
+			protected.POST("/collaborators/:id/decline", collabHandler.Decline)
+			protected.DELETE("/collaborators/:id", collabHandler.Remove)
 
 			protected.POST("/activities", activityHandler.Create)
 			protected.PATCH("/activities/:id", activityHandler.Update)

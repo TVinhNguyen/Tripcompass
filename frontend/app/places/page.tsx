@@ -1,22 +1,18 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
+import type { FormEvent } from "react"
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { Search, Grid3X3, List, Map, X, ChevronDown, Loader2 } from "lucide-react"
+import { Search, Grid3X3, List, Map, X, ChevronDown } from "lucide-react"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import { PlaceCard } from "@/components/place-card"
 import { Button } from "@/components/ui/button"
 import { apiFetch } from "@/lib/api"
 import PlacesMapDynamic from "@/components/places-map-dynamic"
-import type { Place, PlaceCategory, PaginatedList } from "@/lib/types"
+import type { DestinationStat, Place, PlaceCategory, PaginatedList } from "@/lib/types"
 import { cn } from "@/lib/utils"
-
-const CITIES = [
-  "Hà Nội", "TP. Hồ Chí Minh", "Đà Nẵng", "Hội An", "Huế",
-  "Nha Trang", "Đà Lạt", "Phú Quốc", "Sapa", "Hạ Long",
-]
 
 const CATEGORIES: { id: PlaceCategory | "all"; label: string }[] = [
   { id: "all",        label: "Tất cả" },
@@ -27,48 +23,89 @@ const CATEGORIES: { id: PlaceCategory | "all"; label: string }[] = [
 
 export default function PlacesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid")
+  // searchInput = giá trị đang gõ; searchQuery = giá trị đã commit (Enter / nút Tìm)
+  const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCity, setSelectedCity] = useState<string>("all")
   const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | "all">("all")
   const [minRating, setMinRating] = useState(0)
+  const [sort, setSort] = useState("priority")
   const [showFilters, setShowFilters] = useState(true)
   const [places, setPlaces] = useState<Place[]>([])
+  const [destinations, setDestinations] = useState<DestinationStat[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const limit = viewMode === "map" ? 100 : 18
+  const pageCount = Math.max(1, Math.ceil(total / limit))
 
-  const fetchPlaces = useCallback(async () => {
+  useEffect(() => {
+    const ctrl = new AbortController()
     setLoading(true)
-    try {
-      const res = await apiFetch<PaginatedList<Place>>("/places", {
-        auth: false,
-        query: {
-          page,
-          limit: 18,
-          ...(searchQuery                   ? { q: searchQuery }                   : {}),
-          ...(selectedCity !== "all"        ? { destination: selectedCity }        : {}),
-          ...(selectedCategory !== "all"    ? { category: selectedCategory }       : {}),
-          ...(minRating > 0                 ? { min_rating: minRating }            : {}),
-        },
+    apiFetch<PaginatedList<Place>>("/places", {
+      auth: false,
+      signal: ctrl.signal,
+      query: {
+        page,
+        limit,
+        sort,
+        ...(searchQuery                   ? { q: searchQuery }                   : {}),
+        ...(selectedCity !== "all"        ? { destination: selectedCity }        : {}),
+        ...(selectedCategory !== "all"    ? { category: selectedCategory }       : {}),
+        ...(minRating > 0                 ? { min_rating: minRating }            : {}),
+      },
+    })
+      .then((res) => {
+        setPlaces(res.data || [])
+        setTotal(res.total || 0)
       })
-      setPlaces(res.data || [])
-      setTotal(res.total || 0)
-    } catch {
-      setPlaces([])
-    } finally {
-      setLoading(false)
-    }
-  }, [searchQuery, selectedCity, selectedCategory, minRating, page])
+      .catch((err) => {
+        // Ignore aborts triggered by stale-effect cleanup.
+        if (err?.name === "AbortError") return
+        setPlaces([])
+        setTotal(0)
+      })
+      .finally(() => {
+        if (!ctrl.signal.aborted) setLoading(false)
+      })
+    return () => ctrl.abort()
+  }, [searchQuery, selectedCity, selectedCategory, minRating, sort, page, limit])
 
-  useEffect(() => { fetchPlaces() }, [fetchPlaces])
+  useEffect(() => {
+    const ctrl = new AbortController()
+    apiFetch<{ data: DestinationStat[] }>("/places/destinations", {
+      auth: false,
+      signal: ctrl.signal,
+    })
+      .then((res) => setDestinations(res.data || []))
+      .catch((err) => {
+        if (err?.name !== "AbortError") setDestinations([])
+      })
+    return () => ctrl.abort()
+  }, [])
+
+  useEffect(() => {
+    setPage(1)
+  }, [viewMode])
 
   const resetFilters = () => {
     setSelectedCity("all")
     setSelectedCategory("all")
     setMinRating(0)
+    setSort("priority")
+    setSearchInput("")
     setSearchQuery("")
     setPage(1)
   }
+
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSearchQuery(searchInput.trim())
+    setPage(1)
+  }
+
+  const placesWithCoords = places.filter((place) => place.latitude && place.longitude)
+  const mapCapped = viewMode === "map" && total > limit
 
   return (
     <main className="min-h-screen bg-[#f5f0e8]">
@@ -100,16 +137,16 @@ export default function PlacesPage() {
             <p className="text-white/70 text-lg mb-8">
               Hàng nghìn quán ăn, điểm tham quan và nơi lưu trú được tuyển chọn khắp Việt Nam
             </p>
-            <div className="flex items-center gap-2 p-2 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 max-w-xl">
+            <form onSubmit={submitSearch} className="flex items-center gap-2 p-2 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 max-w-xl">
               <Search className="w-5 h-5 text-white/50 ml-3" />
               <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Tìm quán ăn, điểm tham quan, resort..."
                 className="flex-1 bg-transparent text-white placeholder-white/50 focus:outline-none py-2"
               />
-              <Button className="bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a1a] rounded-xl px-6">Tìm</Button>
-            </div>
+              <Button type="submit" className="bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a1a] rounded-xl px-6">Tìm</Button>
+            </form>
           </motion.div>
         </div>
       </section>
@@ -137,12 +174,14 @@ export default function PlacesPage() {
                   <div className="relative">
                     <select
                       value={selectedCity}
-                      onChange={(e) => setSelectedCity(e.target.value)}
+                      onChange={(e) => { setSelectedCity(e.target.value); setPage(1) }}
                       className="w-full appearance-none px-4 py-2.5 bg-[#f5f0e8] border border-[#e8e2d9] rounded-lg text-[#1a1a1a] focus:outline-none focus:border-[#3d5a3d]"
                     >
                       <option value="all">Tất cả thành phố</option>
-                      {CITIES.map((c) => (
-                        <option key={c} value={c}>{c}</option>
+                      {destinations.map((destination) => (
+                        <option key={destination.slug || destination.name} value={destination.name}>
+                          {destination.name} ({destination.count})
+                        </option>
                       ))}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8b8378] pointer-events-none" />
@@ -198,9 +237,20 @@ export default function PlacesPage() {
             <div className="flex-1">
               <div className="flex items-center justify-between mb-6">
                 <p className="text-[#6b6b6b]">
-                  <span className="text-[#1a1a1a] font-semibold">{total}</span> địa điểm
+                  <span className="text-[#1a1a1a] font-semibold">{places.length}</span> / {total} địa điểm
                 </p>
                 <div className="flex items-center gap-2">
+                  <select
+                    value={sort}
+                    onChange={(e) => { setSort(e.target.value); setPage(1) }}
+                    className="hidden sm:block px-3 py-2 bg-white border border-[#e8e2d9] rounded-lg text-sm text-[#1a1a1a] focus:outline-none focus:border-[#3d5a3d]"
+                    aria-label="Sắp xếp địa điểm"
+                  >
+                    <option value="priority">Đề xuất</option>
+                    <option value="popular">Phổ biến</option>
+                    <option value="rating">Đánh giá cao</option>
+                    <option value="name">A-Z</option>
+                  </select>
                   <button
                     onClick={() => setShowFilters(!showFilters)}
                     className="lg:hidden px-3 py-2 bg-white border border-[#e8e2d9] rounded-lg text-sm"
@@ -255,20 +305,55 @@ export default function PlacesPage() {
                   ))}
                 </div>
               ) : viewMode === "map" ? (
-                <div className="h-[600px] rounded-2xl overflow-hidden border border-[#e8e2d9]">
-                  <PlacesMapDynamic places={places} />
-                </div>
-              ) : places.length > 0 ? (
-                <div
-                  className={cn(
-                    "grid gap-6",
-                    viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "grid-cols-1",
+                <>
+                  {mapCapped && (
+                    <p className="mb-3 text-sm text-[#c4785a]">
+                      Bản đồ chỉ hiển thị tối đa {limit} địa điểm trên tổng {total}. Hãy thu hẹp bộ lọc (thành phố / loại / từ khoá) để xem đầy đủ.
+                    </p>
                   )}
-                >
-                  {places.map((place, i) => (
-                    <PlaceCard key={place.id} place={place} index={i} variant={viewMode} />
-                  ))}
-                </div>
+                  {placesWithCoords.length < places.length && (
+                    <p className="mb-3 text-sm text-[#8b8378]">
+                      {places.length - placesWithCoords.length}/{places.length} địa điểm chưa có tọa độ nên không hiển thị trên bản đồ.
+                    </p>
+                  )}
+                  <div className="h-[600px] rounded-2xl overflow-hidden border border-[#e8e2d9]">
+                    <PlacesMapDynamic places={placesWithCoords} />
+                  </div>
+                </>
+              ) : places.length > 0 ? (
+                <>
+                  <div
+                    className={cn(
+                      "grid gap-6",
+                      viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "grid-cols-1",
+                    )}
+                  >
+                    {places.map((place, i) => (
+                      <PlaceCard key={place.id} place={place} index={i} variant={viewMode} />
+                    ))}
+                  </div>
+                  {pageCount > 1 && (
+                    <div className="mt-8 flex items-center justify-center gap-2">
+                      <Button
+                        variant="outline"
+                        disabled={page <= 1}
+                        onClick={() => setPage((current) => Math.max(1, current - 1))}
+                      >
+                        Trước
+                      </Button>
+                      <span className="px-3 text-sm text-[#6b6b6b]">
+                        Trang <span className="font-semibold text-[#1a1a1a]">{page}</span> / {pageCount}
+                      </span>
+                      <Button
+                        variant="outline"
+                        disabled={page >= pageCount}
+                        onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                      >
+                        Sau
+                      </Button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-20 bg-white border border-[#e8e2d9] rounded-2xl">
                   <div className="w-16 h-16 rounded-full bg-[#f5f0e8] flex items-center justify-center mx-auto mb-4">

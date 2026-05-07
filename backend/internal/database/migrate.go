@@ -221,6 +221,28 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// GIN indexes on tags arrays for `tags && ARRAY[...]` overlap queries
+			// used by /places and /explore filter (services/place.go, services/itinerary.go).
+			ID: "202605070009_tags_gin_index",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`CREATE INDEX IF NOT EXISTS idx_places_tags_gin
+						ON schema_travel.places USING GIN (tags);`,
+					`CREATE INDEX IF NOT EXISTS idx_itineraries_tags_gin
+						ON schema_travel.itineraries USING GIN (tags);`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()

@@ -1,17 +1,18 @@
 package services
 
 import (
-	"github.com/lib/pq"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
 	"tripcompass-backend/internal/viewcounter"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -45,24 +46,28 @@ type CreateItineraryInput struct {
 }
 
 type UpdateItineraryInput struct {
-	Title          *string            `json:"title"`
-	Destination    *string            `json:"destination"`
-	Budget         *float64           `json:"budget"`
-	StartDate      *string            `json:"start_date"`
-	EndDate        *string            `json:"end_date"`
-	GuestCount     *int               `json:"guest_count"`
+	Title          *string        `json:"title"`
+	Destination    *string        `json:"destination"`
+	Budget         *float64       `json:"budget"`
+	StartDate      *string        `json:"start_date"`
+	EndDate        *string        `json:"end_date"`
+	GuestCount     *int           `json:"guest_count"`
 	Tags           pq.StringArray `json:"tags"`
-	BudgetCategory *string            `json:"budget_category"`
-	CoverImageURL  *string            `json:"cover_image_url"`
-	Status         *string            `json:"status"` // DRAFT | PUBLISHED
+	BudgetCategory *string        `json:"budget_category"`
+	CoverImageURL  *string        `json:"cover_image_url"`
+	Status         *string        `json:"status"` // DRAFT | PUBLISHED
 }
 
 // ---------- Queries ----------
 
 type ExploreFilter struct {
+	Q              string
 	Destination    string
 	BudgetCategory string
-	Tags           string
+	Tags           []string
+	MinDays        int
+	MaxDays        int
+	GuestCount     int
 	MinBudget      float64
 	MaxBudget      float64
 	Sort           string
@@ -146,9 +151,14 @@ func (s *ItineraryService) GetOne(id, ownerID string) (*models.Itinerary, error)
 		}
 		return nil, err
 	}
-	// Allow owner or collaborators – for now allow if owner or itinerary is published
+	// Owner, ACCEPTED collaborator, or any user when status=PUBLISHED.
 	if it.OwnerID.String() != ownerID && it.Status != "PUBLISHED" {
-		return nil, apperror.ErrForbidden
+		var collab models.Collaborator
+		err := s.db.Where("itinerary_id = ? AND user_id = ? AND status = ?",
+			it.ID, ownerID, "ACCEPTED").First(&collab).Error
+		if err != nil {
+			return nil, apperror.ErrForbidden
+		}
 	}
 	return &it, nil
 }
@@ -348,10 +358,26 @@ func (s *ItineraryService) Explore(filter ExploreFilter) ([]models.Itinerary, in
 		Where("status = ?", "PUBLISHED")
 
 	if filter.Destination != "" {
-		query = query.Where("destination ILIKE ?", "%"+strings.TrimSpace(filter.Destination)+"%")
+		query = query.Where("destination ILIKE ?", "%"+strings.TrimSpace(s.resolveDestinationAlias(filter.Destination))+"%")
+	}
+	if filter.Q != "" {
+		like := "%" + strings.TrimSpace(filter.Q) + "%"
+		query = query.Where("(title ILIKE ? OR destination ILIKE ?)", like, like)
 	}
 	if filter.BudgetCategory != "" {
-		query = query.Where("budget_category = ?", filter.BudgetCategory)
+		query = query.Where("budget_category = ?", strings.ToUpper(strings.TrimSpace(filter.BudgetCategory)))
+	}
+	if len(filter.Tags) > 0 {
+		query = query.Where("tags && ?", pq.Array(filter.Tags))
+	}
+	if filter.MinDays > 0 {
+		query = query.Where("(end_date - start_date + 1) >= ?", filter.MinDays)
+	}
+	if filter.MaxDays > 0 {
+		query = query.Where("(end_date - start_date + 1) <= ?", filter.MaxDays)
+	}
+	if filter.GuestCount > 0 {
+		query = query.Where("guest_count = ?", filter.GuestCount)
 	}
 	if filter.MinBudget > 0 {
 		query = query.Where("budget >= ?", filter.MinBudget)
@@ -376,6 +402,60 @@ func (s *ItineraryService) Explore(filter ExploreFilter) ([]models.Itinerary, in
 	var list []models.Itinerary
 	err := query.Order(sort).Limit(limit).Offset(offset).Find(&list).Error
 	return list, total, err
+}
+
+// destinationAliasCache memoizes slug→canonical-name for itineraries.destination,
+// rebuilt at most every aliasCacheTTL. Frontend now sends Vietnamese names directly
+// (places page reads /places/destinations), so this only handles legacy/URL-shared
+// slug params like ?destination=da-nang.
+var (
+	destinationAliasMu      sync.RWMutex
+	destinationAliasMap     map[string]string
+	destinationAliasLoadAt  time.Time
+)
+
+const aliasCacheTTL = 10 * time.Minute
+
+func (s *ItineraryService) refreshAliasCache() {
+	destinationAliasMu.Lock()
+	defer destinationAliasMu.Unlock()
+	if time.Since(destinationAliasLoadAt) < aliasCacheTTL && destinationAliasMap != nil {
+		return
+	}
+	var rows []struct{ Destination string }
+	if err := s.db.Model(&models.Itinerary{}).
+		Distinct("destination").
+		Where("destination <> ''").
+		Find(&rows).Error; err != nil {
+		return // keep stale cache on error
+	}
+	m := make(map[string]string, len(rows))
+	for _, r := range rows {
+		m[slugifyDestination(r.Destination)] = r.Destination
+	}
+	destinationAliasMap = m
+	destinationAliasLoadAt = time.Now()
+}
+
+func (s *ItineraryService) resolveDestinationAlias(raw string) string {
+	trimmed := strings.TrimSpace(strings.ReplaceAll(raw, "+", " "))
+	// Real names usually contain uppercase, spaces, or non-ASCII — pass through.
+	if trimmed == "" || strings.ContainsAny(trimmed, " ") || strings.ToLower(trimmed) != trimmed {
+		return trimmed
+	}
+	for _, r := range trimmed {
+		if r > 127 {
+			return trimmed
+		}
+	}
+	value := strings.ToLower(trimmed)
+	s.refreshAliasCache()
+	destinationAliasMu.RLock()
+	defer destinationAliasMu.RUnlock()
+	if resolved, ok := destinationAliasMap[value]; ok {
+		return resolved
+	}
+	return trimmed
 }
 
 // ---------- helpers ----------

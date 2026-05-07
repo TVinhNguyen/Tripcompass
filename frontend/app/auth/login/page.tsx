@@ -160,7 +160,6 @@ function LoginContent() {
             shape="rectangular"
             logo_alignment="left"
             width="360"
-            locale="vi"
           />
         </div>
         {/* Facebook — UI only, SDK deferred */}
