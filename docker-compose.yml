@@ -10,7 +10,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tripcompass_admin"]
+      test: ["CMD-SHELL", "pg_isready -U tripcompass_admin -d tripcompass"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -28,6 +28,7 @@ services:
     build:
       context: ./planner-ai
       dockerfile: Dockerfile
+    restart: always
     ports:
       - "8090:8090"
     env_file:
@@ -54,6 +55,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    restart: always
     ports:
       - "8080:8080"
     env_file:
@@ -88,6 +90,7 @@ services:
         NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1
         NEXT_PUBLIC_WS_URL: ws://localhost:8080/api/v1/ws
         NEXT_PUBLIC_PLANNER_AI_URL: http://localhost:8090
+    restart: always
     ports:
       - "3000:3000"
     depends_on:
