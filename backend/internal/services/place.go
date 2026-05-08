@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/lib/pq"
 	"fmt"
 	"strings"
 	"time"
