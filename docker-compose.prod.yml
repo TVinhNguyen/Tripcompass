@@ -1,41 +1,115 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  TripCompass — Production Docker Compose                                   ║
+# ║  Usage: docker compose --env-file .env.prod -f docker-compose.prod.yml up  ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+#
+# All secrets are read from .env.prod (see .env.prod.example).
+# Images are pre-built and pulled from Docker Hub — no build step on server.
+
 services:
-  # ---- Infrastructure ----
+  # ─────────────────────────── Infrastructure ──────────────────────────────────
+
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: tripcompass
-      POSTGRES_USER: tripcompass_admin
-      POSTGRES_PASSWORD: SecretPassword123!@#
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tripcompass_admin -d tripcompass"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+    volumes:
+      - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ---- AI Planner Service (LangGraph) ----
+  # ─────────────────────────── Application ─────────────────────────────────────
+
   planner-ai:
-    build:
-      context: ./planner-ai
-      dockerfile: Dockerfile
-    restart: always
-    ports:
-      - "8090:8090"
-    env_file:
-      - ./planner-ai/.env
-      REDIS_URL: redis://redis:6379
+    image: ${DOCKERHUB_USERNAME}/tripcompass-planner:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       DB_SCHEMA: schema_travel
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8090
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0}
+      LLM_MODEL_XIAOMI: ${LLM_MODEL_XIAOMI:-mimo-v2-pro}
+      LLM_MODEL_NVIDIA: ${LLM_MODEL_NVIDIA:-minimaxai/minimax-m2.7}
+      LLM_MODEL_OPENROUTER: ${LLM_MODEL_OPENROUTER:-qwen/qwen3.6-plus:free}
+      LLM_MODEL_NEBIUS: ${LLM_MODEL_NEBIUS:-meta-llama/llama-3.3-70b-instruct}
+      LLM_MODEL_ANTHROPIC: ${LLM_MODEL_ANTHROPIC:-claude-sonnet-4-20250514}
+      LLM_MODEL_AGENTROUTER: ${LLM_MODEL_AGENTROUTER:-deepseek-v3.2}
+      LLM_MODEL_MODAL: ${LLM_MODEL_MODAL:-zai-org/GLM-5.1-FP8}
+      XIAOMI_API_KEY: ${XIAOMI_API_KEY:-}
+      XIAOMI_BASE_URL: ${XIAOMI_BASE_URL:-https://api.xiaomimimo.com/v1}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_HTTP_REFERER: ${OPENROUTER_HTTP_REFERER:-}
+      OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-Tripcompass Planner}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AGENTROUTER_API_KEY: ${AGENTROUTER_API_KEY:-}
+      AGENTROUTER_BASE_URL: ${AGENTROUTER_BASE_URL:-https://agentrouter.org/v1}
+      MODAL_API_KEY: ${MODAL_API_KEY:-}
+      MODAL_BASE_URL: ${MODAL_BASE_URL:-https://api.us-west-2.modal.direct/v1}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-TripCompass Planner}
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY:-}
+      WEATHER_API_KEY: ${WEATHER_API_KEY:-}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-3600}
+      CACHE_ADMIN_TOKEN: ${CACHE_ADMIN_TOKEN}
+      ENABLE_HOTEL_SEARCH: ${ENABLE_HOTEL_SEARCH:-true}
+      ENABLE_FLIGHT_SEARCH: ${ENABLE_FLIGHT_SEARCH:-false}
+      ENABLE_WEATHER: ${ENABLE_WEATHER:-true}
+      ENABLE_REAL_PRICE_CHECK: ${ENABLE_REAL_PRICE_CHECK:-true}
+      MAX_TOOL_ROUNDS: ${MAX_TOOL_ROUNDS:-8}
+      TOOL_TIMEOUT_SECONDS: ${TOOL_TIMEOUT_SECONDS:-5}
+      MAX_SCHEDULE_RETRIES: ${MAX_SCHEDULE_RETRIES:-2}
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,27 +117,50 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=3).read()\""]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 30s
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
-  # ---- Go API Gateway ----
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    restart: always
-    ports:
-      - "8080:8080"
-    env_file:
-      - ./backend/.env
-      DB_PORT: 5432
+    image: ${DOCKERHUB_USERNAME}/tripcompass-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      DB_SCHEMA: schema_travel
       REDIS_ADDR: redis:6379
-      ALLOWED_ORIGINS: http://209.38.21.57:3000
-      # Feature flag: "true" = proxy /generate to planner-ai; "false" = use Go engine
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       USE_LLM_PLANNER: "true"
       PLANNER_AI_URL: "http://planner-ai:8090"
+      FRONTEND_URL: ${PUBLIC_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-72}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    ports:
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,24 +170,55 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health >/dev/null || exit 1"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
+    networks:
+      - internal
+      - public
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://209.38.21.57:8080/api/v1
-        NEXT_PUBLIC_WS_URL: ws://209.38.21.57:8080/api/v1/ws
-        NEXT_PUBLIC_PLANNER_AI_URL: http://209.38.21.57:8090
-    restart: always
+    image: ${DOCKERHUB_USERNAME}/tripcompass-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - public
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
+  redis_data:
+
+networks:
+  internal:
+    driver: bridge
+  public:
+    driver: bridge

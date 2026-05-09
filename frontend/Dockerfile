@@ -1,7 +1,7 @@
 # ---- Dependencies stage ----
 FROM node:22-alpine AS deps
 
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ RUN pnpm install --frozen-lockfile
 # ---- Build stage ----
 FROM node:22-alpine AS builder
 
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN corepack enable && corepack prepare pnpm@10.25.0 --activate
 
 WORKDIR /app
 
@@ -24,9 +24,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
 ARG NEXT_PUBLIC_WS_URL=ws://localhost:8080/api/v1/ws
 ARG NEXT_PUBLIC_PLANNER_AI_URL=http://localhost:8090
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 ENV NEXT_PUBLIC_PLANNER_AI_URL=$NEXT_PUBLIC_PLANNER_AI_URL
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 
 RUN pnpm build
 
@@ -52,5 +54,8 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://localhost:3000 >/dev/null || exit 1
 
 CMD ["node", "server.js"]
