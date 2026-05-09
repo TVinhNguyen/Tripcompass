@@ -77,6 +77,7 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 	// Send a notification email to the existing account instead.
 	var existing models.User
 	if err := s.db.Where("email = ?", input.Email).First(&existing).Error; err == nil {
+		slog.Info("registration requested for existing email; sending duplicate registration notice", "email", input.Email)
 		// Email already registered — fire a notification async but return an empty
 		// success response so callers cannot enumerate existing accounts or extract PII.
 		if s.email != nil {
@@ -199,8 +200,8 @@ func (s *AuthService) VerifyEmail(token string) error {
 	}
 
 	if err := s.db.Model(&user).Updates(map[string]interface{}{
-		"is_verified":              true,
-		"verify_token":             nil,
+		"is_verified":             true,
+		"verify_token":            nil,
 		"verify_token_expires_at": nil,
 	}).Error; err != nil {
 		return fmt.Errorf("verification failed: %w", err)
@@ -227,7 +228,7 @@ func (s *AuthService) ResendVerification(email string) error {
 	newToken := generateOTP6()
 	newExpiry := time.Now().Add(24 * time.Hour) // C6: refresh expiry window
 	if err := s.db.Model(&user).Updates(map[string]interface{}{
-		"verify_token":             newToken,
+		"verify_token":            newToken,
 		"verify_token_expires_at": newExpiry,
 	}).Error; err != nil {
 		return fmt.Errorf("failed to generate new token: %w", err)
