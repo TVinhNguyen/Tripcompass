@@ -1,31 +1,44 @@
 package services
 
 import (
-	"crypto/tls"
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"net/smtp"
-	"strings"
+	"io"
+	"log/slog"
+	"net/http"
+	"time"
 	"tripcompass-backend/internal/config"
 )
 
-// EmailService sends transactional emails via SMTP.
+// EmailService sends transactional emails via Resend.
 type EmailService struct {
-	cfg *config.Config
+	cfg        *config.Config
+	httpClient *http.Client
 }
 
 func NewEmailService(cfg *config.Config) *EmailService {
-	return &EmailService{cfg: cfg}
+	return &EmailService{
+		cfg: cfg,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}
 }
 
-// IsConfigured returns true if SMTP is configured.
+// IsConfigured returns true if Resend is configured.
 func (s *EmailService) IsConfigured() bool {
-	return s.cfg.SMTPHost != "" && s.cfg.SMTPUser != ""
+	return s.cfg.ResendAPIKey != "" && s.cfg.ResendFrom != ""
 }
 
 // SendVerificationEmail sends a verification link to the user.
 func (s *EmailService) SendVerificationEmail(toEmail, fullName, token string) error {
 	if !s.IsConfigured() {
 		// Dev fallback: print to stdout
+		slog.Warn("resend is not fully configured; printing verification link instead",
+			"api_key_set", s.cfg.ResendAPIKey != "",
+			"from_set", s.cfg.ResendFrom != "",
+		)
 		fmt.Printf("[EMAIL] Verification link for %s: %s/verify?token=%s\n",
 			toEmail, s.cfg.FrontendURL, token)
 		return nil
@@ -52,7 +65,11 @@ Nếu bạn không tạo tài khoản này, hãy bỏ qua email này.
 Trân trọng,
 Đội ngũ TripCompass`, fullName, verifyLink)
 
-	return s.sendMail(toEmail, subject, body)
+	if err := s.sendMail(toEmail, subject, body); err != nil {
+		return err
+	}
+	slog.Info("verification email sent", "email", toEmail)
+	return nil
 }
 
 // SendDuplicateRegistrationNotice notifies the account owner that someone tried
@@ -60,6 +77,10 @@ Trân trọng,
 // Sends a security notification — NOT a verification email.
 func (s *EmailService) SendDuplicateRegistrationNotice(toEmail, fullName string) error {
 	if !s.IsConfigured() {
+		slog.Warn("resend is not fully configured; skipping duplicate registration notice",
+			"api_key_set", s.cfg.ResendAPIKey != "",
+			"from_set", s.cfg.ResendFrom != "",
+		)
 		fmt.Printf("[EMAIL] Duplicate registration attempt for %s\n", toEmail)
 		return nil
 	}
@@ -77,7 +98,11 @@ Nếu không phải bạn, hãy bỏ qua email này.
 Trân trọng,
 Đội ngũ TripCompass`, fullName, s.cfg.FrontendURL)
 
-	return s.sendMail(toEmail, subject, body)
+	if err := s.sendMail(toEmail, subject, body); err != nil {
+		return err
+	}
+	slog.Info("duplicate registration notice sent", "email", toEmail)
+	return nil
 }
 
 // SendPasswordResetEmail sends a password reset link.
@@ -148,56 +173,46 @@ Trân trọng,
 }
 
 func (s *EmailService) sendMail(to, subject, body string) error {
-	from := s.cfg.SMTPFrom
-	if from == "" {
-		from = s.cfg.SMTPUser
+	payload := struct {
+		From    string   `json:"from"`
+		To      []string `json:"to"`
+		Subject string   `json:"subject"`
+		Text    string   `json:"text"`
+	}{
+		From:    s.cfg.ResendFrom,
+		To:      []string{to},
+		Subject: subject,
+		Text:    body,
 	}
 
-	msg := strings.Join([]string{
-		fmt.Sprintf("From: TripCompass <%s>", from),
-		fmt.Sprintf("To: %s", to),
-		fmt.Sprintf("Subject: %s", subject),
-		"MIME-Version: 1.0",
-		"Content-Type: text/plain; charset=utf-8",
-		"",
-		body,
-	}, "\r\n")
-
-	addr := fmt.Sprintf("%s:%s", s.cfg.SMTPHost, s.cfg.SMTPPort)
-	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPassword, s.cfg.SMTPHost)
-
-	// Try TLS first (port 465), fallback to STARTTLS (port 587/25)
-	if s.cfg.SMTPPort == "465" {
-		tlsCfg := &tls.Config{ServerName: s.cfg.SMTPHost}
-		conn, err := tls.Dial("tcp", addr, tlsCfg)
-		if err != nil {
-			return fmt.Errorf("smtp tls dial: %w", err)
-		}
-		client, err := smtp.NewClient(conn, s.cfg.SMTPHost)
-		if err != nil {
-			return fmt.Errorf("smtp client: %w", err)
-		}
-		defer client.Close()
-		if err = client.Auth(auth); err != nil {
-			return fmt.Errorf("smtp auth: %w", err)
-		}
-		if err = client.Mail(from); err != nil {
-			return err
-		}
-		if err = client.Rcpt(to); err != nil {
-			return err
-		}
-		w, err := client.Data()
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprint(w, msg)
-		if err != nil {
-			return err
-		}
-		return w.Close()
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("resend payload: %w", err)
 	}
 
-	// STARTTLS (port 587)
-	return smtp.SendMail(addr, auth, from, []string{to}, []byte(msg))
+	req, err := http.NewRequest(http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("resend request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+s.cfg.ResendAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("resend send: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("resend status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(respBody, &result); err == nil && result.ID != "" {
+		slog.Info("resend accepted email", "email", to, "id", result.ID)
+	}
+	return nil
 }

@@ -18,18 +18,15 @@ type Config struct {
 	RedisAddr      string
 	RedisPassword  string
 	JWTSecret      string
-	JWTExpireHours int    // L5: parsed at startup, default 72h
+	JWTExpireHours int // L5: parsed at startup, default 72h
 	Port           string
 	AllowedOrigins string
 	// LLM planner proxy
-	UseLLMPlanner  bool
-	PlannerAIURL   string
-	// Email / SMTP
-	SMTPHost     string
-	SMTPPort     string
-	SMTPUser     string
-	SMTPPassword string
-	SMTPFrom     string
+	UseLLMPlanner bool
+	PlannerAIURL  string
+	// Email / Resend
+	ResendAPIKey string
+	ResendFrom   string
 	FrontendURL  string
 	// Social OAuth
 	GoogleClientID     string
@@ -60,11 +57,8 @@ func Load() *Config {
 		UseLLMPlanner:  os.Getenv("USE_LLM_PLANNER") == "true",
 		PlannerAIURL:   os.Getenv("PLANNER_AI_URL"),
 		// Email
-		SMTPHost:     os.Getenv("SMTP_HOST"),
-		SMTPPort:     os.Getenv("SMTP_PORT"),
-		SMTPUser:     os.Getenv("SMTP_USER"),
-		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
-		SMTPFrom:     os.Getenv("SMTP_FROM"),
+		ResendAPIKey: os.Getenv("RESEND_API_KEY"),
+		ResendFrom:   os.Getenv("RESEND_FROM"),
 		FrontendURL:  os.Getenv("FRONTEND_URL"),
 		// Social OAuth
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
