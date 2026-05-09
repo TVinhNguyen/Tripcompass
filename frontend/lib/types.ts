@@ -51,7 +51,15 @@ export type Place = {
   base_price?: number;           // VND
   phone?: string;
   website?: string;
+  source_url?: string;
+  metadata?: Record<string, unknown>;
   created_at?: string;
+};
+
+export type DestinationStat = {
+  name: string;
+  slug: string;
+  count: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -283,6 +291,7 @@ export type SessionInfo = {
   last_active?: string;
   message_count: number;
   destination?: string;
+  title?: string;
 };
 
 export type SessionHistory = {

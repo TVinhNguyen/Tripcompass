@@ -61,9 +61,9 @@ export function useItineraryWS(
       wsRef.current = ws;
 
       ws.onopen = () => {
+        const wasReconnect = retryRef.current > 0; // capture before reset
         retryRef.current = 0;
-        // If this is a reconnect (not the first open), sync state
-        if (retryRef.current > 0) onReconnectRef.current?.();
+        if (wasReconnect) onReconnectRef.current?.(); // Bug 5: now fires correctly
       };
 
       ws.onmessage = (m) => {

@@ -115,6 +115,10 @@ export async function apiFetch<T = unknown>(
   // 401 — token expired / invalid
   if (res.status === 401 && auth) {
     localStorage.removeItem("token");
+    // Bug 3: also clear cookie to prevent middleware redirect loop
+    if (typeof document !== "undefined") {
+      document.cookie = "token=; path=/; max-age=0; SameSite=Lax";
+    }
     if (typeof window !== "undefined") {
       const here = window.location.pathname + window.location.search;
       window.location.href = `/auth/login?redirect=${encodeURIComponent(here)}`;
@@ -149,9 +153,10 @@ export async function apiUpload<T = unknown>(
   file: File,
   fieldName = "file",
   extra?: Record<string, string>,
+  base: ReqOpts["base"] = "backend",
 ): Promise<T> {
   const form = new FormData();
   form.append(fieldName, file);
   if (extra) for (const [k, v] of Object.entries(extra)) form.append(k, v);
-  return apiFetch<T>(path, { method: "POST", body: form });
+  return apiFetch<T>(path, { method: "POST", body: form, base });
 }

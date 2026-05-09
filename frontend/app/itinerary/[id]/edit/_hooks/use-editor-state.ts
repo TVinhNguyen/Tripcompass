@@ -102,7 +102,12 @@ export function useEditorState(id: string) {
         break;
       case "activity.created":
         if (evt.payload.activity)
-          setActivities((prev) => [...prev, fromApiActivity(evt.payload.activity)]);
+          // Bug 12: dedupe in case server echoes back to sender
+          setActivities((prev) =>
+            prev.some((a) => a.id === evt.payload.activity.id)
+              ? prev
+              : [...prev, fromApiActivity(evt.payload.activity)]
+          );
         break;
       case "activity.updated":
         if (evt.payload.activity)

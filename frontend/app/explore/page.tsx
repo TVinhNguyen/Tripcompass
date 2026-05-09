@@ -1,22 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import type { FormEvent } from "react";
 import { motion } from "framer-motion";
 import { Navigation } from "@/components/navigation";
 import { Footer } from "@/components/footer";
 import { ItineraryCard } from "@/components/itinerary-card";
-const DESTINATIONS = [
-  { id: "da-nang",   name: "Đà Nẵng" },
-  { id: "hoi-an",    name: "Hội An" },
-  { id: "da-lat",    name: "Đà Lạt" },
-  { id: "nha-trang", name: "Nha Trang" },
-  { id: "ha-noi",    name: "Hà Nội" },
-  { id: "sapa",      name: "Sapa" },
-  { id: "phu-quoc",  name: "Phú Quốc" },
-  { id: "ha-long",   name: "Vịnh Hạ Long" },
-];
 import { apiFetch } from "@/lib/api";
-import type { Itinerary, PaginatedList } from "@/lib/types";
+import type { DestinationStat, Itinerary, PaginatedList } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
   Search,
@@ -59,41 +50,70 @@ const tagOptions = [
 ];
 
 export default function ExplorePage() {
+  // searchInput = giá trị đang gõ; searchQuery = giá trị đã commit (Enter / nút Tìm)
+  const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDestination, setSelectedDestination] = useState("all");
   const [selectedDuration, setSelectedDuration] = useState("all");
   const [selectedBudget, setSelectedBudget] = useState("all");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [sort, setSort] = useState("created_at");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
+  const [destinations, setDestinations] = useState<DestinationStat[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const limit = 12;
+  const pageCount = Math.max(1, Math.ceil(total / limit));
 
-  const fetchItineraries = useCallback(async () => {
+  useEffect(() => {
+    const ctrl = new AbortController()
     setLoading(true)
-    try {
-      const q: Record<string, string | number | undefined> = {
-        status: "PUBLISHED",
-        limit: 12,
-        page,
-        ...(searchQuery              ? { q: searchQuery }                     : {}),
-        ...(selectedDestination !== "all" ? { destination: selectedDestination } : {}),
-        ...(selectedBudget !== "all"     ? { budget_category: selectedBudget.toUpperCase() } : {}),
-        ...(selectedTags.length         ? { tags: selectedTags.join(",") }     : {}),
-      }
-      const res = await apiFetch<PaginatedList<Itinerary>>("/itineraries", { query: q, auth: false })
-      setItineraries(res.data || [])
-      setTotal(res.total || 0)
-    } catch {
-      setItineraries([])
-    } finally {
-      setLoading(false)
+    const durationQuery =
+      selectedDuration === "1-3" ? { min_days: 1, max_days: 3 } :
+      selectedDuration === "4-5" ? { min_days: 4, max_days: 5 } :
+      selectedDuration === "6+"  ? { min_days: 6 } :
+      {}
+    const query: Record<string, string | number | undefined> = {
+      limit,
+      page,
+      sort,
+      ...durationQuery,
+      ...(searchQuery                   ? { q: searchQuery }                                 : {}),
+      ...(selectedDestination !== "all" ? { destination: selectedDestination }               : {}),
+      ...(selectedBudget !== "all"      ? { budget_category: selectedBudget.toUpperCase() }  : {}),
+      ...(selectedTags.length            ? { tags: selectedTags.join(",") }                   : {}),
     }
-  }, [searchQuery, selectedDestination, selectedBudget, selectedTags, page])
+    apiFetch<PaginatedList<Itinerary>>("/explore", { query, auth: false, signal: ctrl.signal })
+      .then((res) => {
+        setItineraries(res.data || [])
+        setTotal(res.total || 0)
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return
+        setItineraries([])
+        setTotal(0)
+      })
+      .finally(() => {
+        if (!ctrl.signal.aborted) setLoading(false)
+      })
+    return () => ctrl.abort()
+  }, [searchQuery, selectedDestination, selectedBudget, selectedDuration, selectedTags, sort, page, limit])
 
-  useEffect(() => { fetchItineraries() }, [fetchItineraries])
+  useEffect(() => {
+    const ctrl = new AbortController()
+    apiFetch<{ data: DestinationStat[] }>("/places/destinations", {
+      auth: false,
+      signal: ctrl.signal,
+    })
+      .then((res) => setDestinations(res.data || []))
+      .catch((err) => {
+        if (err?.name !== "AbortError") setDestinations([])
+      })
+    return () => ctrl.abort()
+  }, [])
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -103,11 +123,19 @@ export default function ExplorePage() {
   };
 
   const clearFilters = () => {
+    setSearchInput("");
     setSearchQuery("");
     setSelectedDestination("all");
     setSelectedDuration("all");
     setSelectedBudget("all");
     setSelectedTags([]);
+    setSort("created_at");
+    setPage(1);
+  };
+
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSearchQuery(searchInput.trim());
     setPage(1);
   };
 
@@ -159,44 +187,21 @@ export default function ExplorePage() {
             </p>
 
             {/* Search bar */}
-            <div className="flex items-center gap-2 p-1.5 bg-white/5 border border-white/10 rounded-full max-w-2xl backdrop-blur-sm">
+            <form onSubmit={submitSearch} className="flex items-center gap-2 p-1.5 bg-white/5 border border-white/10 rounded-full max-w-2xl backdrop-blur-sm">
               <div className="flex-1 flex items-center gap-2 px-4">
                 <Search className="w-5 h-5 text-white/40" />
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="Bạn muốn đi đâu?"
                   className="w-full bg-transparent text-white placeholder-white/40 py-2.5 outline-none"
                 />
               </div>
-              <Button className="bg-[#d4a853] hover:bg-[#c4985a] text-[#1a1a1a] rounded-full px-6 font-semibold">
+              <Button type="submit" className="bg-[#d4a853] hover:bg-[#c4985a] text-[#1a1a1a] rounded-full px-6 font-semibold">
                 Tìm kiếm
               </Button>
-            </div>
-
-            {/* Quick stats row */}
-            <div className="flex flex-wrap items-center gap-8 mt-10 text-white/70">
-              <div>
-                <p className="text-2xl font-bold text-white">500+</p>
-                <p className="text-xs text-white/50">Lịch trình</p>
-              </div>
-              <div className="w-px h-10 bg-white/10" />
-              <div>
-                <p className="text-2xl font-bold text-white">63</p>
-                <p className="text-xs text-white/50">Tỉnh thành</p>
-              </div>
-              <div className="w-px h-10 bg-white/10" />
-              <div>
-                <p className="text-2xl font-bold text-white">10k+</p>
-                <p className="text-xs text-white/50">Người dùng</p>
-              </div>
-              <div className="w-px h-10 bg-white/10" />
-              <div>
-                <p className="text-2xl font-bold text-white">4.9</p>
-                <p className="text-xs text-white/50">Đánh giá</p>
-              </div>
-            </div>
+            </form>
           </motion.div>
         </div>
       </section>
@@ -227,7 +232,7 @@ export default function ExplorePage() {
             {/* Quick destination chips */}
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
               <button
-                onClick={() => setSelectedDestination("all")}
+                onClick={() => { setSelectedDestination("all"); setPage(1) }}
                 className={cn(
                   "px-3.5 py-2 text-sm rounded-full border transition-all whitespace-nowrap",
                   selectedDestination === "all"
@@ -237,13 +242,13 @@ export default function ExplorePage() {
               >
                 Tất cả
               </button>
-              {DESTINATIONS.slice(0, 6).map((dest) => (
+              {destinations.slice(0, 6).map((dest) => (
                 <button
-                  key={dest.id}
-                  onClick={() => setSelectedDestination(dest.id)}
+                  key={dest.slug || dest.name}
+                  onClick={() => { setSelectedDestination(dest.name); setPage(1) }}
                   className={cn(
                     "px-3.5 py-2 text-sm rounded-full border transition-all whitespace-nowrap",
-                    selectedDestination === dest.id
+                    selectedDestination === dest.name
                       ? "bg-[#1a1a1a] border-[#1a1a1a] text-white"
                       : "bg-white border-[#e8e2d9] text-[#6b6b6b] hover:border-[#1a1a1a]"
                   )}
@@ -257,6 +262,17 @@ export default function ExplorePage() {
               <span className="text-sm text-[#6b6b6b] hidden sm:block">
                 <span className="font-semibold text-[#1a1a1a]">{total}</span> kết quả
               </span>
+              <select
+                value={sort}
+                onChange={(e) => { setSort(e.target.value); setPage(1) }}
+                className="hidden md:block px-3 py-2 bg-white border border-[#e8e2d9] rounded-full text-sm text-[#1a1a1a] focus:outline-none focus:border-[#3d5a3d]"
+                aria-label="Sắp xếp lịch trình"
+              >
+                <option value="created_at">Mới nhất</option>
+                <option value="popular">Xem nhiều</option>
+                <option value="clone">Clone nhiều</option>
+                <option value="rating">Đánh giá cao</option>
+              </select>
               <div className="flex items-center bg-white rounded-full p-1 border border-[#e8e2d9]">
                 <button
                   onClick={() => setViewMode("grid")}
@@ -305,7 +321,7 @@ export default function ExplorePage() {
                       {durationOptions.map((option) => (
                         <button
                           key={option.value}
-                          onClick={() => setSelectedDuration(option.value)}
+                          onClick={() => { setSelectedDuration(option.value); setPage(1) }}
                           className={cn(
                             "px-3 py-1.5 text-sm rounded-full border transition-all",
                             selectedDuration === option.value
@@ -328,7 +344,7 @@ export default function ExplorePage() {
                       {budgetOptions.map((option) => (
                         <button
                           key={option.value}
-                          onClick={() => setSelectedBudget(option.value)}
+                          onClick={() => { setSelectedBudget(option.value); setPage(1) }}
                           className={cn(
                             "px-3 py-1.5 text-sm rounded-full border transition-all",
                             selectedBudget === option.value
@@ -349,12 +365,12 @@ export default function ExplorePage() {
                     </label>
                     <select
                       value={selectedDestination}
-                      onChange={(e) => setSelectedDestination(e.target.value)}
+                      onChange={(e) => { setSelectedDestination(e.target.value); setPage(1) }}
                       className="w-full px-3 py-2 bg-[#f5f0e8] border border-[#e8e2d9] rounded-lg text-sm text-[#1a1a1a] focus:outline-none focus:border-[#3d5a3d] transition-colors"
                     >
                       <option value="all">Tất cả điểm đến</option>
-                      {DESTINATIONS.map((dest) => (
-                        <option key={dest.id} value={dest.id}>
+                      {destinations.map((dest) => (
+                        <option key={dest.slug || dest.name} value={dest.name}>
                           {dest.name}
                         </option>
                       ))}
@@ -410,22 +426,45 @@ export default function ExplorePage() {
               <Loader2 className="w-8 h-8 animate-spin text-[#3d5a3d]" />
             </div>
           ) : itineraries.length > 0 ? (
-            <div
-              className={cn(
-                "grid gap-6 lg:gap-8",
-                viewMode === "grid"
-                  ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-                  : "grid-cols-1 max-w-4xl mx-auto"
+            <>
+              <div
+                className={cn(
+                  "grid gap-6 lg:gap-8",
+                  viewMode === "grid"
+                    ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+                    : "grid-cols-1 max-w-4xl mx-auto"
+                )}
+              >
+                {itineraries.map((itinerary, index) => (
+                  <ItineraryCard
+                    key={itinerary.id}
+                    itinerary={itinerary}
+                    index={index}
+                  />
+                ))}
+              </div>
+              {pageCount > 1 && (
+                <div className="mt-8 flex items-center justify-center gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={page <= 1}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  >
+                    Trước
+                  </Button>
+                  <span className="px-3 text-sm text-[#6b6b6b]">
+                    Trang <span className="font-semibold text-[#1a1a1a]">{page}</span> / {pageCount}
+                  </span>
+                  <Button
+                    variant="outline"
+                    disabled={page >= pageCount}
+                    onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                  >
+                    Sau
+                  </Button>
+                </div>
               )}
-            >
-              {itineraries.map((itinerary, index) => (
-                <ItineraryCard
-                  key={itinerary.id}
-                  itinerary={itinerary}
-                  index={index}
-                />
-              ))}
-            </div>
+            </>
           ) : (
             <div className="text-center py-20">
               <div className="w-20 h-20 mx-auto mb-6 bg-white border border-[#e8e2d9] rounded-full flex items-center justify-center">

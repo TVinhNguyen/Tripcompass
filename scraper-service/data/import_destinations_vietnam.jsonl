@@ -1,0 +1,56 @@
+{"group":"official_province_2025","region":"Đồng Bằng Sông Hồng","type":"province","destination":"Hà Nội","query":"Hanoi","pages":2,"aliases":["Phố Cổ"],"notes":"Thành phố Hà Nội"}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Hồng","type":"province","destination":"Hải Phòng","query":"Hai Phong","pages":2,"notes":"Sáp nhập Hải Dương"}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Hồng","type":"province","destination":"Quảng Ninh","query":"Quang Ninh Province","pages":2}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Hồng","type":"province","destination":"Ninh Bình","query":"Ninh Binh Province","pages":2,"aliases":["Tràng An","Tam Cốc","Hang Múa"],"notes":"Sáp nhập Hà Nam, Nam Định"}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Hồng","type":"province","destination":"Bắc Ninh","query":"Bac Ninh Province","pages":2,"notes":"Sáp nhập Bắc Giang"}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Hồng","type":"province","destination":"Hưng Yên","query":"Hung Yen Province","pages":2,"notes":"Sáp nhập Thái Bình"}
+{"group":"official_province_2025","region":"Trung Du và Miền Núi Phía Bắc","type":"province","destination":"Lào Cai","query":"Lao Cai Province","pages":2,"notes":"Sáp nhập Yên Bái"}
+{"group":"official_province_2025","region":"Trung Du và Miền Núi Phía Bắc","type":"province","destination":"Phú Thọ","query":"Phu Tho Province","pages":2,"notes":"Sáp nhập Vĩnh Phúc, Hòa Bình"}
+{"group":"official_province_2025","region":"Trung Du và Miền Núi Phía Bắc","type":"province","destination":"Tuyên Quang","query":"Tuyen Quang Province","pages":2,"notes":"Sáp nhập Hà Giang"}
+{"group":"official_province_2025","region":"Trung Du và Miền Núi Phía Bắc","type":"province","destination":"Thái Nguyên","query":"Thai Nguyen Province","pages":2,"notes":"Sáp nhập Bắc Kạn"}
+{"group":"official_province_2025","region":"Trung Du và Miền Núi Phía Bắc","type":"province","destination":"Lạng Sơn","query":"Lang Son Province","pages":2}
+{"group":"official_province_2025","region":"Trung Du và Miền Núi Phía Bắc","type":"province","destination":"Cao Bằng","query":"Cao Bang Province","pages":2}
+{"group":"official_province_2025","region":"Trung Du và Miền Núi Phía Bắc","type":"province","destination":"Lai Châu","query":"Lai Chau Province","pages":2}
+{"group":"official_province_2025","region":"Trung Du và Miền Núi Phía Bắc","type":"province","destination":"Điện Biên","query":"Dien Bien Province","pages":2}
+{"group":"official_province_2025","region":"Trung Du và Miền Núi Phía Bắc","type":"province","destination":"Sơn La","query":"Son La Province","pages":2}
+{"group":"official_province_2025","region":"Bắc Trung Bộ","type":"province","destination":"Huế","query":"Hue","pages":2,"aliases":["Cố đô Huế","Đại Nội Huế"]}
+{"group":"official_province_2025","region":"Bắc Trung Bộ","type":"province","destination":"Quảng Trị","query":"Quang Tri Province","pages":2,"notes":"Sáp nhập Quảng Bình"}
+{"group":"official_province_2025","region":"Bắc Trung Bộ","type":"province","destination":"Thanh Hóa","query":"Thanh Hoa Province","pages":2}
+{"group":"official_province_2025","region":"Bắc Trung Bộ","type":"province","destination":"Nghệ An","query":"Nghe An Province","pages":2}
+{"group":"official_province_2025","region":"Bắc Trung Bộ","type":"province","destination":"Hà Tĩnh","query":"Ha Tinh Province","pages":2}
+{"group":"official_province_2025","region":"Duyên Hải Nam Trung Bộ & Tây Nguyên","type":"province","destination":"Đà Nẵng","query":"Da Nang","pages":2,"aliases":["Bà Nà Hills","Biển Mỹ Khê"],"notes":"Sáp nhập Quảng Nam"}
+{"group":"official_province_2025","region":"Duyên Hải Nam Trung Bộ & Tây Nguyên","type":"province","destination":"Lâm Đồng","query":"Lam Dong Province","pages":2,"notes":"Sáp nhập Đắk Nông, Bình Thuận"}
+{"group":"official_province_2025","region":"Duyên Hải Nam Trung Bộ & Tây Nguyên","type":"province","destination":"Khánh Hòa","query":"Khanh Hoa Province","pages":2,"notes":"Sáp nhập Ninh Thuận"}
+{"group":"official_province_2025","region":"Duyên Hải Nam Trung Bộ & Tây Nguyên","type":"province","destination":"Gia Lai","query":"Gia Lai Province","pages":2,"notes":"Sáp nhập Bình Định"}
+{"group":"official_province_2025","region":"Duyên Hải Nam Trung Bộ & Tây Nguyên","type":"province","destination":"Đắk Lắk","query":"Dak Lak Province","pages":2,"notes":"Sáp nhập Phú Yên"}
+{"group":"official_province_2025","region":"Duyên Hải Nam Trung Bộ & Tây Nguyên","type":"province","destination":"Quảng Ngãi","query":"Quang Ngai Province","pages":2,"notes":"Sáp nhập Kon Tum"}
+{"group":"official_province_2025","region":"Đông Nam Bộ","type":"province","destination":"TP. Hồ Chí Minh","query":"Ho Chi Minh City","pages":2,"aliases":["Sài Gòn"],"notes":"Sáp nhập Bình Dương, Bà Rịa - Vũng Tàu"}
+{"group":"official_province_2025","region":"Đông Nam Bộ","type":"province","destination":"Đồng Nai","query":"Dong Nai Province","pages":2,"notes":"Sáp nhập Bình Phước"}
+{"group":"official_province_2025","region":"Đông Nam Bộ","type":"province","destination":"Tây Ninh","query":"Tay Ninh Province","pages":2,"aliases":["Núi Bà Đen"],"notes":"Sáp nhập Long An"}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Cửu Long","type":"province","destination":"Cần Thơ","query":"Can Tho","pages":2,"aliases":["Chợ nổi Cái Răng"],"notes":"Sáp nhập Hậu Giang, Sóc Trăng"}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Cửu Long","type":"province","destination":"An Giang","query":"An Giang Province","pages":2,"notes":"Sáp nhập Kiên Giang"}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Cửu Long","type":"province","destination":"Vĩnh Long","query":"Vinh Long Province","pages":2,"notes":"Sáp nhập Bến Tre, Trà Vinh"}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Cửu Long","type":"province","destination":"Đồng Tháp","query":"Dong Thap Province","pages":2,"notes":"Sáp nhập Tiền Giang"}
+{"group":"official_province_2025","region":"Đồng Bằng Sông Cửu Long","type":"province","destination":"Cà Mau","query":"Ca Mau Province","pages":2,"notes":"Sáp nhập Bạc Liêu"}
+{"group":"destination_brand","region":"Miền Bắc","type":"brand","destination":"Sa Pa","query":"Sapa","pages":2,"aliases":["Đỉnh Fansipan"]}
+{"group":"destination_brand","region":"Miền Bắc","type":"brand","destination":"Hà Giang","query":"Ha Giang Province","pages":2,"aliases":["Đồng Văn","Mã Pí Lèng","Sông Nho Quế"]}
+{"group":"destination_brand","region":"Miền Bắc","type":"brand","destination":"Mù Cang Chải","query":"Mu Cang Chai","pages":2}
+{"group":"destination_brand","region":"Miền Bắc","type":"brand","destination":"Mộc Châu","query":"Moc Chau","pages":2}
+{"group":"destination_brand","region":"Miền Bắc","type":"brand","destination":"Tà Xùa","query":"Ta Xua","pages":2}
+{"group":"destination_brand","region":"Miền Bắc","type":"brand","destination":"Vịnh Hạ Long","query":"Ha Long Bay","pages":2}
+{"group":"destination_brand","region":"Miền Bắc","type":"brand","destination":"Đảo Cát Bà","query":"Cat Ba","pages":2}
+{"group":"destination_brand","region":"Miền Bắc","type":"brand","destination":"Tam Đảo","query":"Tam Dao","pages":2}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Phong Nha - Kẻ Bàng","query":"Phong Nha Ke Bang","pages":2,"aliases":["Sơn Đoòng","Động Thiên Đường"]}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Hội An","query":"Hoi An","pages":2}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Lý Sơn","query":"Ly Son","pages":2}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Quy Nhơn","query":"Quy Nhon","pages":2,"aliases":["Eo Gió","Kỳ Co"]}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Phú Yên","query":"Tuy Hoa","pages":2,"aliases":["Gành Đá Đĩa"],"notes":"omkar search không resolve tốt 'Phu Yen', dùng Tuy Hoa để lấy attractions Phú Yên"}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Măng Đen","query":"Mang Den","pages":2}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Đà Lạt","query":"Da Lat","pages":2}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Nha Trang","query":"Nha Trang","pages":2,"aliases":["VinWonders"]}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Mũi Né","query":"Mui Ne","pages":2}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Đảo Phú Quý","query":"Phu Quy","pages":2,"notes":"Nếu /list rỗng, importer fallback sang search results"}
+{"group":"destination_brand","region":"Miền Trung & Tây Nguyên","type":"brand","destination":"Vĩnh Hy","query":"Vinh Hai","pages":2,"aliases":["Vịnh Vĩnh Hy"],"notes":"Dùng Vinh Hai vì query Vinh Hy resolve attraction và /list rỗng"}
+{"group":"destination_brand","region":"Miền Nam","type":"brand","destination":"Vũng Tàu","query":"Vung Tau","pages":2}
+{"group":"destination_brand","region":"Miền Nam","type":"brand","destination":"Côn Đảo","query":"Con Dao","pages":2}
+{"group":"destination_brand","region":"Miền Nam","type":"brand","destination":"Phú Quốc","query":"Phu Quoc","pages":2}

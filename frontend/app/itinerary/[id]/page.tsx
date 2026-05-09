@@ -28,6 +28,7 @@ import {
   Copy,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatVND } from "@/lib/format"
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   FOOD:       <Utensils className="w-3.5 h-3.5" />,
@@ -44,8 +45,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   STAY:       "Lưu trú",
   ACTIVITY:   "Hoạt động",
 }
-
-const nf = new Intl.NumberFormat("vi-VN")
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -164,12 +163,12 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
               <Meta label="Thời gian" value={`${formatDate(itinerary.start_date)} – ${formatDate(itinerary.end_date)}`} />
               <Meta label="Ngân sách" value={budgetLabel[itinerary.budget_category] ?? itinerary.budget_category} />
               <Meta label="Hoạt động" value={`${activities.length}`} />
-              <Meta label="Tổng chi phí" value={`${nf.format(totalCost)} đ`} />
+              <Meta label="Tổng chi phí" value={formatVND(totalCost)} />
             </div>
 
             <div className="border-t border-[#e8e2d9] p-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-4 text-sm text-[#8b8378]">
-                <span className="flex items-center gap-1"><Eye className="w-4 h-4" />{nf.format(itinerary.view_count)} lượt xem</span>
+                <span className="flex items-center gap-1"><Eye className="w-4 h-4" />{itinerary.view_count.toLocaleString("vi-VN")} lượt xem</span>
                 {itinerary.rating > 0 && (
                   <span className="flex items-center gap-1"><Star className="w-4 h-4 fill-[#d4a853] text-[#d4a853]" />{itinerary.rating.toFixed(1)}</span>
                 )}
@@ -247,7 +246,7 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
                         </span>
                         <div className="text-right">
                           <div className="text-[11px] opacity-70 tabular-nums">{acts.length} hoạt động</div>
-                          <div className="text-xs font-medium tabular-nums mt-0.5">{nf.format(cost)} đ</div>
+                          <div className="text-xs font-medium tabular-nums mt-0.5">{formatVND(cost)}</div>
                         </div>
                       </button>
                     )
@@ -268,7 +267,7 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
                   </div>
                   <div className="text-right">
                     <div className="text-[11px] tracking-[0.2em] uppercase text-[#8b8378]">Chi phí</div>
-                    <div className="text-xl font-semibold text-[#1a1a1a] tabular-nums">{nf.format(dayCost)} đ</div>
+                    <div className="text-xl font-semibold text-[#1a1a1a] tabular-nums">{formatVND(dayCost)}</div>
                   </div>
                 </div>
 
@@ -318,7 +317,7 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
                           )}
                           {activity.estimated_cost > 0 && (
                             <span className="ml-auto text-sm font-semibold text-[#1a1a1a] tabular-nums">
-                              {nf.format(activity.estimated_cost)} đ
+                              {formatVND(activity.estimated_cost)}
                             </span>
                           )}
                         </div>

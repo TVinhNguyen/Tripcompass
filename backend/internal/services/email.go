@@ -112,6 +112,41 @@ Trân trọng,
 	return s.sendMail(toEmail, subject, body)
 }
 
+// SendCollaboratorInvite notifies the invitee that they've been invited to edit/view an itinerary.
+func (s *EmailService) SendCollaboratorInvite(toEmail, inviteeName, inviterName, itineraryTitle, role string) error {
+	frontendURL := s.cfg.FrontendURL
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+	invitesLink := fmt.Sprintf("%s/invitations", frontendURL)
+
+	if !s.IsConfigured() {
+		fmt.Printf("[EMAIL] Collab invite to %s for %q (role=%s, by %s) → %s\n",
+			toEmail, itineraryTitle, role, inviterName, invitesLink)
+		return nil
+	}
+
+	roleLabel := "biên tập"
+	if role == "VIEWER" {
+		roleLabel = "xem"
+	}
+
+	subject := fmt.Sprintf("Bạn được mời cộng tác lịch trình \"%s\" — TripCompass", itineraryTitle)
+	body := fmt.Sprintf(`Xin chào %s,
+
+%s đã mời bạn %s lịch trình "%s" trên TripCompass.
+
+Truy cập trang lời mời để chấp nhận hoặc từ chối:
+%s
+
+Nếu bạn không sử dụng TripCompass, hãy bỏ qua email này.
+
+Trân trọng,
+Đội ngũ TripCompass`, inviteeName, inviterName, roleLabel, itineraryTitle, invitesLink)
+
+	return s.sendMail(toEmail, subject, body)
+}
+
 func (s *EmailService) sendMail(to, subject, body string) error {
 	from := s.cfg.SMTPFrom
 	if from == "" {

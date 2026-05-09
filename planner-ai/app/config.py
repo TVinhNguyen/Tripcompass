@@ -1,7 +1,7 @@
 """
 Settings for planner-ai service.
 Follows the same pattern as scraper-service/app/config/settings.py.
-Supports multiple LLM providers: xiaomi / openrouter / nebius / anthropic / agentrouter / modal.
+Supports multiple LLM providers: xiaomi / nvidia / openrouter / nebius / anthropic / agentrouter / modal.
 """
 import os
 from pathlib import Path
@@ -47,6 +47,7 @@ def _get_env_first(*keys: str, default: str = "") -> str:
 def _default_model_for(provider: str) -> str:
     defaults = {
         "xiaomi":       "mimo-v2-pro",
+        "nvidia":       "minimaxai/minimax-m2.7",
         "openrouter":   "qwen/qwen3.6-plus:free",
         "nebius":       "meta-llama/llama-3.3-70b-instruct",
         "anthropic":    "claude-sonnet-4-20250514",
@@ -60,6 +61,9 @@ def _resolve_model(provider: str) -> str:
     p = (provider or "").strip().lower()
     if p == "xiaomi":
         return _get_env_first("LLM_MODEL_Xiaomi", "LLM_MODEL_XIAOMI", "LLM_MODEL",
+                              default=_default_model_for(p))
+    if p == "nvidia":
+        return _get_env_first("LLM_MODEL_Nvidia", "LLM_MODEL_NVIDIA", "LLM_MODEL",
                               default=_default_model_for(p))
     if p == "openrouter":
         return _get_env_first("LLM_MODEL_Openrouter", "LLM_MODEL_OPENROUTER", "LLM_MODEL",
@@ -89,6 +93,15 @@ def _build_llm(provider: str, model: str) -> Any:
         base_url = os.environ.get("XIAOMI_BASE_URL", "https://api.xiaomimimo.com/v1").strip()
         if not api_key:
             raise RuntimeError("XIAOMI_API_KEY required when LLM_PROVIDER=xiaomi")
+        return ChatOpenAI(model=model, temperature=LLM_TEMPERATURE,
+                          api_key=api_key, base_url=base_url)
+
+    if p == "nvidia":
+        from langchain_openai import ChatOpenAI
+        api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
+        base_url = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1").strip()
+        if not api_key:
+            raise RuntimeError("NVIDIA_API_KEY required when LLM_PROVIDER=nvidia")
         return ChatOpenAI(model=model, temperature=LLM_TEMPERATURE,
                           api_key=api_key, base_url=base_url)
 
@@ -137,7 +150,7 @@ def _build_llm(provider: str, model: str) -> Any:
                           api_key=api_key, base_url=base_url)
 
     raise ValueError(f"Unsupported LLM_PROVIDER: '{provider}'. "
-                     f"Use xiaomi/openrouter/nebius/anthropic/agentrouter/modal.")
+                     f"Use xiaomi/nvidia/openrouter/nebius/anthropic/agentrouter/modal.")
 
 
 # ── Build LLM instance ────────────────────────────────────────────────────────

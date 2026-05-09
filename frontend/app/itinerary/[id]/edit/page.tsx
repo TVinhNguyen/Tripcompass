@@ -22,6 +22,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatVND } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import ItineraryMapDynamic from "@/components/itinerary-map-dynamic";
 
@@ -34,6 +35,7 @@ import { AIChatPanel }           from "./_components/ai-chat-panel";
 import { CollaboratorsPanel }    from "./_components/collaborators-panel";
 import { DroppableDay }          from "./_components/droppable-day";
 import { ActivityTemplateCard }  from "./_components/activity-template-card";
+import { PresenceStack }         from "@/components/presence-stack";
 
 // ── Drag overlay mini-card ────────────────────────────────────────────────────
 
@@ -130,7 +132,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
         <div className="hidden lg:flex items-center gap-3 pr-1">
           <div className="flex items-baseline gap-1.5">
             <span className="text-[10px] font-mono tracking-[0.2em] uppercase text-[#8b8378]">Budget</span>
-            <span className="text-sm font-mono nums text-[#f5f0e8]">{totalBudget.toLocaleString("vi-VN")} ₫</span>
+            <span className="text-sm font-mono nums text-[#f5f0e8]">{formatVND(totalBudget)}</span>
           </div>
           <div className="h-5 w-px bg-white/10" />
           <div className="flex items-baseline gap-1.5">
@@ -142,7 +144,11 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
 
         {/* Actions */}
         <div className="flex items-center gap-0.5 sm:gap-1">
-          <div className="hidden sm:block [&_button]:text-[#f5f0e8]/80 [&_button:hover]:text-[#f5f0e8] [&_button:hover]:bg-white/10">
+          <div className="hidden sm:flex items-center gap-1 [&_button]:text-[#f5f0e8]/80 [&_button:hover]:text-[#f5f0e8] [&_button:hover]:bg-white/10">
+            <PresenceStack
+              users={onlineUsers.map((u) => ({ user_id: u.id, full_name: u.name }))}
+              className="mr-1"
+            />
             <CollaboratorsPanel collaborators={onlineUsers} />
           </div>
 
@@ -201,7 +207,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                 <span><span className="text-[#8b8378]">ACTS </span><span className="text-[#1a1a1a]">{String(totalActivities).padStart(2, "0")}</span></span>
                 <span className="hidden sm:inline lg:hidden">
                   <span className="text-[#8b8378]">₫ </span>
-                  <span className="text-[#1a1a1a]">{totalBudget.toLocaleString("vi-VN")}</span>
+                  <span className="text-[#1a1a1a]">{formatVND(totalBudget)}</span>
                 </span>
               </div>
 

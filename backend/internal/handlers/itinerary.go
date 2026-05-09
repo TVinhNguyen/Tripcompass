@@ -163,9 +163,13 @@ func (h *ItineraryHandler) Explore(c *gin.Context) {
 	maxBudget, _ := strconv.ParseFloat(c.DefaultQuery("max_budget", "0"), 64)
 
 	filter := services.ExploreFilter{
+		Q:              c.Query("q"),
 		Destination:    strings.ReplaceAll(c.Query("destination"), "+", " "),
 		BudgetCategory: c.Query("budget_category"),
-		Tags:           c.Query("tags"),
+		Tags:           splitCSV(c.Query("tags")),
+		MinDays:        parseOptionalInt(c.Query("min_days")),
+		MaxDays:        parseOptionalInt(c.Query("max_days")),
+		GuestCount:     parseOptionalInt(c.Query("guest_count")),
 		Sort:           c.DefaultQuery("sort", "created_at"),
 		MinBudget:      minBudget,
 		MaxBudget:      maxBudget,

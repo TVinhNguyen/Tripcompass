@@ -21,7 +21,11 @@ router = APIRouter(tags=["chat"])
 
 
 def _extract_result(result: dict) -> tuple[str, list[str], dict | None]:
-    """Extract (ai_text, tools_used, plan_data) from agent result."""
+    """Extract (ai_text, tools_used, plan_data) from agent result.
+
+    plan_data is unwrapped to GenerateResponse shape: {days: [...], ...}
+    (FE expects `plan.days` at top-level, not `plan.plan.days`).
+    """
     ai_text    = ""
     tools_used = []
     plan_data  = None
@@ -35,8 +39,13 @@ def _extract_result(result: dict) -> tuple[str, list[str], dict | None]:
         if getattr(msg, "name", None) == "create_travel_plan":
             try:
                 parsed = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
-                if isinstance(parsed, dict) and parsed.get("plan"):
-                    plan_data = parsed
+                if isinstance(parsed, dict):
+                    # Unwrap: planning_service returns {success, plan: {days}, ...}
+                    inner = parsed.get("plan")
+                    if isinstance(inner, dict) and isinstance(inner.get("days"), list):
+                        plan_data = inner
+                    elif isinstance(parsed.get("days"), list):
+                        plan_data = parsed
             except (json.JSONDecodeError, TypeError):
                 pass
 

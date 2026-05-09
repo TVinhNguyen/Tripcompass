@@ -3,6 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatVND } from "@/lib/format";
 import type { Activity } from "../_lib/types";
 import { TYPE_COLOR, TYPE_ICONS } from "../_lib/constants";
 
@@ -43,7 +44,7 @@ export function ActivityTemplateCard({
             {template.cost > 0 && (
               <>
                 <span className="text-[#d4cfc5]">·</span>
-                <span className="nums font-mono">~{template.cost.toLocaleString("vi-VN")} ₫</span>
+                <span className="nums font-mono">~{formatVND(template.cost)}</span>
               </>
             )}
           </div>

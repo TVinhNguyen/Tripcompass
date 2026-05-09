@@ -17,6 +17,15 @@ import {
 import { apiFetch, ApiError } from "@/lib/api";
 import type { User } from "@/lib/types";
 
+// Cookie max-age matches backend JWT_EXPIRE_HOURS (default 24h)
+const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24; // 86400s
+
+/** Clear auth token from both localStorage and cookie */
+function clearAuthToken() {
+  localStorage.removeItem("token");
+  document.cookie = "token=; path=/; max-age=0; SameSite=Lax";
+}
+
 // ---------------------------------------------------------------------------
 // Context type
 // ---------------------------------------------------------------------------
@@ -65,8 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { user: u } = await apiFetch<{ user: User }>("/auth/me");
       setUser(u);
       setToken(t);
+      // Bug 6: Sync cookie for users who logged in before cookie support was added
+      document.cookie = `token=${t}; path=/; max-age=${AUTH_COOKIE_MAX_AGE}; SameSite=Lax`;
     } catch {
-      localStorage.removeItem("token");
+      clearAuthToken(); // Bug 3: clear both localStorage and cookie
       setUser(null);
       setToken(null);
     }
@@ -79,6 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ---- helpers ----
   const persist = (t: string, u: User) => {
     localStorage.setItem("token", t);
+    // Set cookie so middleware can read it (middleware cannot access localStorage)
+    document.cookie = `token=${t}; path=/; max-age=${AUTH_COOKIE_MAX_AGE}; SameSite=Lax`;
     setToken(t);
     setUser(u);
   };
@@ -108,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
+    clearAuthToken(); // Bug 3: clears both localStorage and cookie atomically
     setUser(null);
     setToken(null);
     if (typeof window !== "undefined") window.location.href = "/";

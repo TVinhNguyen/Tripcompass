@@ -36,6 +36,52 @@ function tierToCategory(tier: BudgetTier): BudgetCategory {
   return "MODERATE";
 }
 
+function formatDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function isIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value).getTime());
+}
+
+function addDays(date: string, days: number): string {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return formatDate(next);
+}
+
+function normalizeSaveMeta(plan: GenerateResponse, meta: SavePlanMeta): SavePlanMeta {
+  const firstPlanDate = plan.days?.find((day) => isIsoDate(day.date_str))?.date_str;
+  const totalDays = Math.max(plan.days?.length ?? 1, 1);
+  const startDate = isIsoDate(meta.start_date)
+    ? meta.start_date
+    : firstPlanDate ?? formatDate(new Date());
+  const endDate = isIsoDate(meta.end_date)
+    ? meta.end_date
+    : addDays(startDate, totalDays - 1);
+  const spent =
+    (plan.budget_recap?.attraction_spent_vnd ?? 0) +
+    (plan.budget_recap?.food_spent_vnd ?? 0);
+  const requestedBudget = Math.max(
+    plan.budget_recap?.total_budget_vnd ?? 0,
+    spent + Math.max(plan.budget_recap?.remaining_vnd ?? 0, 0),
+    spent,
+  );
+  const budget = Math.max(
+    Number.isFinite(meta.budget_vnd) ? meta.budget_vnd : 0,
+    requestedBudget,
+    1,
+  );
+
+  return {
+    ...meta,
+    start_date: startDate,
+    end_date: endDate,
+    budget_vnd: budget,
+    guest_count: Math.max(meta.guest_count || 1, 1),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
@@ -54,17 +100,19 @@ export async function savePlanAsItinerary(
   plan: GenerateResponse,
   meta: SavePlanMeta,
 ): Promise<Itinerary> {
+  const safeMeta = normalizeSaveMeta(plan, meta);
+
   // 1. Create empty itinerary
   const itinerary = await apiFetch<Itinerary>("/itineraries", {
     method: "POST",
     body: {
-      title: meta.title,
-      destination: meta.destination,
-      start_date: meta.start_date,
-      end_date: meta.end_date,
-      budget: meta.budget_vnd,
-      guest_count: meta.guest_count,
-      tags: meta.tags,
+      title: safeMeta.title,
+      destination: safeMeta.destination,
+      start_date: safeMeta.start_date,
+      end_date: safeMeta.end_date,
+      budget: safeMeta.budget_vnd,
+      guest_count: safeMeta.guest_count,
+      tags: safeMeta.tags,
       budget_category: tierToCategory(plan.budget_tier),
     },
   });

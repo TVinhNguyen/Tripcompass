@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Allow: /explore
+Allow: /places
+Allow: /combos
+Allow: /ai-planner/quick
+
+Disallow: /admin
+Disallow: /profile
+Disallow: /settings
+Disallow: /planner
+Disallow: /saved
+Disallow: /ai-planner
+
+Sitemap: /sitemap.xml

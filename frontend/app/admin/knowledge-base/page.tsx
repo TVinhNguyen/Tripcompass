@@ -1,10 +1,12 @@
 "use client"
+import { RequireAdmin } from "@/components/require-auth"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, useRef } from "react"
 import { Brain, FileText, Upload, Search, Plus, MoreVertical, Trash2, Edit2, Eye, FileCheck2, FileClock, Link as LinkIcon, Loader2, RefreshCw } from "lucide-react"
 import { AdminShell } from "@/components/admin/admin-shell"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { apiUpload } from "@/lib/api"
 
 const PLANNER_AI = process.env.NEXT_PUBLIC_PLANNER_AI_URL ?? ""
 
@@ -45,6 +47,7 @@ export default function KnowledgeBasePage() {
   const [docs, setDocs] = useState<KBDoc[]>([])
   const [sources, setSources] = useState<KBSource[]>([])
   const [loading, setLoading] = useState(true)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -100,18 +103,39 @@ export default function KnowledgeBasePage() {
   const filteredDocs = docs.filter((d) => !search || d.title.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <AdminShell
+    <RequireAdmin>
+      <AdminShell
       title="Knowledge Base"
       description="Tài liệu và nguồn kiến thức cho AI Planner"
       action={
         <div className="flex gap-2">
           <button
-            onClick={() => toast.info("Upload modal sẽ mở")}
+            onClick={() => fileInputRef.current?.click()}
             className="px-4 py-2 bg-white border border-[#e8e2d9] rounded-lg text-sm font-medium text-[#1a1a1a] hover:bg-[#f5f0e8] inline-flex items-center gap-2"
           >
             <Upload className="w-4 h-4" />
             Tải lên
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.txt,.md,.docx"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              try {
+                // Bug 14: use apiUpload so Bearer token is attached, targeting AI service
+                await apiUpload("/knowledge/documents", file, "file", undefined, "ai")
+                toast.success(`Đã tải lên ${file.name}`)
+                load()
+              } catch {
+                toast.error("Tải lên thất bại")
+              } finally {
+                e.target.value = ""
+              }
+            }}
+          />
           <button
             onClick={load}
             className="px-4 py-2 bg-white border border-[#e8e2d9] rounded-lg text-sm font-medium text-[#1a1a1a] hover:bg-[#f5f0e8] inline-flex items-center gap-2"
@@ -302,5 +326,6 @@ export default function KnowledgeBasePage() {
         </>
       )}
     </AdminShell>
+    </RequireAdmin>
   )
 }

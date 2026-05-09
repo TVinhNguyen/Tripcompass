@@ -1,4 +1,5 @@
 "use client"
+import { RequireAdmin } from "@/components/require-auth"
 
 import { useCallback, useEffect, useState } from "react"
 import { Database, Zap, Clock, TrendingUp, Search, Trash2, RefreshCw, Eye } from "lucide-react"
@@ -110,7 +111,8 @@ export default function PlannerCachePage() {
     : queries
 
   return (
-    <AdminShell
+    <RequireAdmin>
+      <AdminShell
       title="Planner Cache"
       description="Quản lý cache kết quả AI Planner để tối ưu chi phí và độ trễ"
       action={
@@ -136,7 +138,7 @@ export default function PlannerCachePage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           { label: "Hit rate trung bình", value: `${hr.toFixed(1)}%`,                                               icon: Zap,      trend: "", accent: "bg-[#3d5a3d]" },
-          { label: "Tổng entries",        value: entries.toLocaleString("vi-VN"),                                  icon: Database, trend: "", accent: "bg-[#c4785a]" },
+          { label: "Tổng entries",        value: entries.toLocaleString("vi-VN"),                                                icon: Database, trend: "", accent: "bg-[#c4785a]" },
           { label: "Tokens tiết kiệm",   value: tokensSaved >= 1e6 ? `${(tokensSaved/1e6).toFixed(1)}M` : String(tokensSaved), icon: TrendingUp, trend: "", accent: "bg-[#d4a853]" },
           { label: "Avg response",        value: `${avgMs}ms`,                                                       icon: Clock,    trend: "", accent: "bg-[#8b6f47]" },
         ].map((s) => (
@@ -276,5 +278,6 @@ export default function PlannerCachePage() {
         </div>
       </div>
     </AdminShell>
+    </RequireAdmin>
   )
 }

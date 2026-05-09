@@ -9,6 +9,7 @@ import { apiFetch } from "@/lib/api"
 import type { Place, PlaceCategory, PaginatedList } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { formatVND } from "@/lib/format"
 
 const CATEGORIES: { id: PlaceCategory | "all"; label: string }[] = [
   { id: "all",        label: "Tất cả danh mục" },
@@ -176,7 +177,7 @@ export default function AdminPlacesPage() {
                       ) : <span className="text-[#8b8378] text-xs">Chưa có</span>}
                     </td>
                     <td className="px-5 py-4 hidden lg:table-cell text-[#6b6b6b]">
-                      {place.base_price != null ? `${place.base_price.toLocaleString("vi-VN")}đ` : "—"}
+                      {place.base_price != null ? formatVND(place.base_price) : "—"}
                     </td>
                     <td className="px-5 py-4 relative">
                       <button
