@@ -14,6 +14,7 @@ export type Activity = {
   cost: number;
   lat?: number;
   lng?: number;
+  coverImage?: string;
 };
 
 export interface ChatMessage {

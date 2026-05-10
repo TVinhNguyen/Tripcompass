@@ -7,6 +7,7 @@ interface Props {
   activities: MapActivity[];
   activeActivityId?: string | null;
   onMarkerClick?: (activityId: string) => void;
+  destination?: string;
 }
 
 // react-leaflet uses window on import - must be client-only
