@@ -39,6 +39,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.Itinerary{},
+		&models.Place{},
 		&models.Activity{},
 		&models.Collaborator{},
 		&models.AIChatMessage{},
@@ -49,7 +50,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 
 	// Clean tables before each test for isolation
 	t.Cleanup(func() {
-		db.Exec("TRUNCATE TABLE activities, collaborators, ai_chat_messages, itineraries, users CASCADE")
+		db.Exec("TRUNCATE TABLE activities, collaborators, ai_chat_messages, itineraries, places, users CASCADE")
 	})
 
 	return db

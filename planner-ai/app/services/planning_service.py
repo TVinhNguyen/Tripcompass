@@ -138,6 +138,7 @@ async def generate_travel_plan(
         "destination": dest_name,
         "destination_id": dest_id,
         "num_days": num_days,
+        "budget_vnd": state.get("budget_vnd", budget_vnd),
         "budget_tier": state.get("budget_tier", "standard"),
         "budget_breakdown": {
             "attr_budget": state.get("attr_budget", 0),

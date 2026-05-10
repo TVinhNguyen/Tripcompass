@@ -199,8 +199,8 @@ export type SlotPlace = {
   name: string;
   category: PlaceCategory;
   area?: string;
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
   cover_image?: string;
   images?: string[];
   base_price: number;

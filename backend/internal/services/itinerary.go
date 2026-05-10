@@ -80,7 +80,11 @@ type ExploreFilter struct {
 func (s *ItineraryService) GetMyItineraries(ownerID string) ([]models.Itinerary, error) {
 	var list []models.Itinerary
 	err := s.db.Where("owner_id = ?", ownerID).
-		Preload("Activities").
+		Preload("Activities", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_number ASC, order_index ASC").Preload("Place", func(db *gorm.DB) *gorm.DB {
+				return db.Select("id, name, latitude, longitude, cover_image, category")
+			})
+		}).
 		Order("created_at DESC").
 		Find(&list).Error
 	return list, err
@@ -141,7 +145,7 @@ func (s *ItineraryService) GetOne(id, ownerID string) (*models.Itinerary, error)
 	var it models.Itinerary
 	err := s.db.
 		Preload("Activities", func(db *gorm.DB) *gorm.DB {
-			return db.Order("day_number ASC, order_index ASC")
+			return db.Order("day_number ASC, order_index ASC").Preload("Place")
 		}).
 		Preload("Owner").
 		Where("id = ?", id).First(&it).Error
@@ -238,7 +242,9 @@ func (s *ItineraryService) Delete(id, ownerID string) error {
 
 func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, error) {
 	var original models.Itinerary
-	if err := s.db.Preload("Activities").Where("id = ?", id).First(&original).Error; err != nil {
+	if err := s.db.Preload("Activities", func(db *gorm.DB) *gorm.DB {
+		return db.Order("day_number ASC, order_index ASC").Preload("Place")
+	}).Where("id = ?", id).First(&original).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperror.ErrNotFound
 		}
@@ -297,7 +303,9 @@ func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, err
 		return nil, err
 	}
 
-	s.db.Preload("Activities").First(&clone, "id = ?", clone.ID)
+	s.db.Preload("Activities", func(db *gorm.DB) *gorm.DB {
+		return db.Order("day_number ASC, order_index ASC").Preload("Place")
+	}).First(&clone, "id = ?", clone.ID)
 	return &clone, nil
 }
 
@@ -322,7 +330,7 @@ func (s *ItineraryService) GetPublic(id string) (*models.Itinerary, error) {
 	var it models.Itinerary
 	err := s.db.
 		Preload("Activities", func(db *gorm.DB) *gorm.DB {
-			return db.Order("day_number ASC, order_index ASC")
+			return db.Order("day_number ASC, order_index ASC").Preload("Place")
 		}).
 		Preload("Owner").
 		Where("id = ? AND status = ?", id, "PUBLISHED").First(&it).Error
@@ -353,7 +361,9 @@ func (s *ItineraryService) Explore(filter ExploreFilter) ([]models.Itinerary, in
 	query := s.db.Model(&models.Itinerary{}).
 		Preload("Owner").
 		Preload("Activities", func(db *gorm.DB) *gorm.DB {
-			return db.Order("day_number ASC, order_index ASC")
+			return db.Order("day_number ASC, order_index ASC").Preload("Place", func(db *gorm.DB) *gorm.DB {
+				return db.Select("id, name, latitude, longitude, cover_image, category")
+			})
 		}).
 		Where("status = ?", "PUBLISHED")
 
