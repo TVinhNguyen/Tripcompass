@@ -2,6 +2,11 @@
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TripCompass — Production Deploy Script                                    ║
 # ║  Runs on the server via CD pipeline or manually.                           ║
+# ║                                                                            ║
+# ║  Inputs (env):                                                             ║
+# ║    DEPLOY_DIR — project root on the server (default /opt/tripcompass)      ║
+# ║    IMAGE_TAG  — image tag to deploy (e.g. sha-abc1234). Falls back to the  ║
+# ║                 value in .env.prod, then to "latest".                      ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 set -euo pipefail
 
@@ -17,9 +22,23 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
+if [ ! -f "caddy/Caddyfile" ]; then
+  echo "❌ Missing $DEPLOY_DIR/caddy/Caddyfile — required for the reverse proxy"
+  exit 1
+fi
+
 if ! command -v docker &>/dev/null; then
   echo "❌ Docker not installed"
   exit 1
+fi
+
+# ── Compose invocation: forward IMAGE_TAG if the CD pipeline pinned one ──────
+COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+if [ -n "${IMAGE_TAG:-}" ]; then
+  export IMAGE_TAG
+  echo "🏷  Image tag: $IMAGE_TAG (pinned)"
+else
+  echo "🏷  Image tag: from $ENV_FILE (falls back to 'latest')"
 fi
 
 echo "🚀 Deploying TripCompass from $DEPLOY_DIR"
@@ -27,13 +46,20 @@ echo "   Compose: $COMPOSE_FILE"
 echo "   Env:     $ENV_FILE"
 echo ""
 
-# ── Pull latest images ───────────────────────────────────────────────────────
-echo "📦 Pulling latest images..."
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull
+# ── Validate Caddyfile before swapping containers ────────────────────────────
+echo "🔍 Validating Caddyfile..."
+docker run --rm \
+  -v "$DEPLOY_DIR/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+  --env-file "$ENV_FILE" \
+  caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+# ── Pull pinned images ───────────────────────────────────────────────────────
+echo "📦 Pulling images..."
+"${COMPOSE[@]}" pull
 
 # ── Bring up services ────────────────────────────────────────────────────────
 echo "🔄 Starting services..."
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans
+"${COMPOSE[@]}" up -d --remove-orphans
 
 # ── Wait for health checks ───────────────────────────────────────────────────
 echo "⏳ Waiting for services to become healthy..."
@@ -41,7 +67,7 @@ sleep 10
 
 echo ""
 echo "📊 Service status:"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+"${COMPOSE[@]}" ps
 
 # ── Cleanup old images ───────────────────────────────────────────────────────
 echo ""
