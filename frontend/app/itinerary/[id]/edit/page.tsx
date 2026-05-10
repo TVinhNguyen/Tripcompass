@@ -249,6 +249,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
               <ItineraryMapDynamic
                 activities={activities}
                 activeActivityId={hoveredId}
+                destination={itinerary?.destination}
                 onMarkerClick={(markerId) => {
                   const a = activities.find((x) => x.id === markerId);
                   if (a) setEditingActivity(a);

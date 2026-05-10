@@ -38,6 +38,14 @@ export function DroppableDay({
   const dayCost  = realActivities.reduce((s, a) => s + (a.cost || 0), 0);
   const color    = dayColor(day);
 
+  // Map markers number activities-with-coords by time within the day. Mirror
+  // that ordering here so each card can show the same number as its marker.
+  const mapIndexById = new Map<string, number>();
+  [...realActivities]
+    .filter((a) => a.lat != null && a.lng != null)
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .forEach((a, i) => mapIndexById.set(a.id, i + 1));
+
   return (
     <div
       ref={setNodeRef}
@@ -70,6 +78,8 @@ export function DroppableDay({
             <SortableActivityCard
               key={activity.id}
               activity={activity}
+              mapIndex={mapIndexById.get(activity.id)}
+              dayColor={color}
               onRemove={() => onRemoveActivity(activity.id)}
               onEdit={() => onEditActivity(activity)}
               onHover={onHoverActivity}

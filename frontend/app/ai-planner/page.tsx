@@ -457,10 +457,10 @@ function MessageBubble({ message, onRetry }: MessageBubbleProps) {
         {/* Tool badges */}
         {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
-            {message.toolCalls.map((tc) => {
+            {message.toolCalls.map((tc, index) => {
               const lbl = getToolLabel(tc)
               return (
-                <span key={tc} className="text-xs px-2 py-0.5 bg-[#d4a853]/10 text-[#a8842a] rounded-full border border-[#d4a853]/30">
+                <span key={`${tc}-${index}`} className="text-xs px-2 py-0.5 bg-[#d4a853]/10 text-[#a8842a] rounded-full border border-[#d4a853]/30">
                   {lbl.icon} {tc}
                 </span>
               )

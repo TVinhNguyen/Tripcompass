@@ -23,6 +23,8 @@ type Activity struct {
 	ImageURL      *string    `gorm:"column:image_url" json:"image_url"`
 	Notes         *string    `json:"notes"`
 	CreatedAt     time.Time  `json:"created_at"`
+
+	Place *Place `gorm:"foreignKey:PlaceID;references:ID" json:"place,omitempty"`
 }
 
 func (a *Activity) BeforeCreate(tx *gorm.DB) error {

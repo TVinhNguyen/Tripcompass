@@ -43,13 +43,13 @@ type Place struct {
 	BasePrice           *int           `gorm:"column:base_price" json:"base_price"`
 	Phone               *string        `gorm:"column:phone" json:"phone"`
 	Website             *string        `json:"website"`
-	ExternalID          *string        `gorm:"column:external_id;uniqueIndex:idx_place_external" json:"external_id"`
-	ExternalSource      *string        `gorm:"column:external_source;uniqueIndex:idx_place_external" json:"external_source"`
-	Metadata            datatypes.JSON `gorm:"type:jsonb" json:"metadata"`
-	SourceURL           *string        `gorm:"column:source_url" json:"source_url"`
-	PriceUpdatedAt      *time.Time     `gorm:"column:price_updated_at" json:"price_updated_at"`
-	CreatedAt           time.Time      `json:"created_at"`
-	UpdatedAt           time.Time      `json:"updated_at"`
+	ExternalID          *string        `gorm:"column:external_id;uniqueIndex:idx_place_external" json:"-"`
+	ExternalSource      *string        `gorm:"column:external_source;uniqueIndex:idx_place_external" json:"-"`
+	Metadata            datatypes.JSON `gorm:"type:jsonb" json:"-"`
+	SourceURL           *string        `gorm:"column:source_url" json:"-"`
+	PriceUpdatedAt      *time.Time     `gorm:"column:price_updated_at" json:"-"`
+	CreatedAt           time.Time      `json:"-"`
+	UpdatedAt           time.Time      `json:"-"`
 }
 
 func (p *Place) BeforeCreate(tx *gorm.DB) error {

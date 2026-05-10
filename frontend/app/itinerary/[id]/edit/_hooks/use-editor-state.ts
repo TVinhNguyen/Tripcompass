@@ -27,20 +27,23 @@ function mapApiCategory(cat: string): Activity["type"] {
 }
 
 export function fromApiActivity(a: ApiActivity): Activity {
+  // Coords/description fall back to the linked Place when the activity row
+  // doesn't have its own snapshot (AI-planner saves leave lat/lng/notes NULL).
   return {
     id: a.id,
     day: a.day_number,
     time: a.start_time ?? "09:00",
     title: a.title,
     titleEn: a.title,
-    description: a.notes ?? "",
-    descriptionEn: a.notes ?? "",
+    description: a.notes ?? a.place?.description ?? "",
+    descriptionEn: a.notes ?? a.place?.description ?? "",
     type: mapApiCategory(a.category),
     location: a.place?.address ?? a.place?.name ?? "",
     duration: a.place?.recommended_duration ?? 60,
     cost: a.estimated_cost ?? 0,
-    lat: a.lat,
-    lng: a.lng,
+    lat: a.lat ?? a.place?.latitude,
+    lng: a.lng ?? a.place?.longitude,
+    coverImage: a.image_url ?? a.place?.cover_image,
   };
 }
 
