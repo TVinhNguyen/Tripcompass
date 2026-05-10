@@ -207,10 +207,26 @@ func TestItineraryService_GetOne(t *testing.T) {
 
 	it := createTestItinerary(t, db, user.ID)
 
+	// Create a place and activity with place
+	place := models.Place{
+		ID:          uuid.New(),
+		Destination: "Da Nang",
+		Category:    "ATTRACTION",
+		Name:        "Dragon Bridge",
+	}
+	db.Create(&place)
+
+	act := createTestActivity(t, db, it.ID)
+	act.PlaceID = &place.ID
+	db.Save(&act)
+
 	t.Run("owner can access", func(t *testing.T) {
 		got, err := svc.GetOne(it.ID.String(), user.ID.String())
 		require.NoError(t, err)
 		assert.Equal(t, it.ID, got.ID)
+		require.Len(t, got.Activities, 1)
+		assert.NotNil(t, got.Activities[0].Place)
+		assert.Equal(t, "Dragon Bridge", got.Activities[0].Place.Name)
 	})
 
 	t.Run("published accessible by non-owner", func(t *testing.T) {

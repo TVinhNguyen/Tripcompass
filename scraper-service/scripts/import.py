@@ -343,6 +343,18 @@ PRICE_RANGE_VND = {
 }
 
 
+def is_in_vietnam_bounds(lat: Optional[float], lng: Optional[float]) -> bool:
+    """Coarse guardrail against provider resolver mistakes.
+
+    Omkar can occasionally resolve a Vietnamese destination name to a similarly
+    named place overseas. Vietnam's broad bounding box is enough to reject those
+    rows before they reach Postgres.
+    """
+    if lat is None or lng is None:
+        return False
+    return 8.0 <= lat <= 24.5 and 102.0 <= lng <= 110.5
+
+
 def restaurant_tags(omkar_item: dict) -> list[str]:
     tags: list[str] = []
     seen: set[str] = set()
@@ -463,6 +475,8 @@ def map_place(omkar_item: dict, ta_detail: Optional[dict],
         lng = None
     if lat == 0 and lng == 0:
         lat = lng = None
+    if not is_in_vietnam_bounds(lat, lng):
+        return None
 
     addr_obj = ta_d.get("address_obj") or {}
     open_t, close_t, hours_str = parse_hours_periods(ta_d.get("hours"))
