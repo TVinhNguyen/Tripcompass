@@ -1,0 +1,56 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  TripCompass — Caddy reverse proxy                                         ║
+# ║  Auto Let's Encrypt (HTTP-01) + HSTS + gzip/zstd                           ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+{
+	email {$ACME_EMAIL}
+	# Set ACME_STAGING=true in .env.prod when testing to avoid LE rate limits.
+	# When unset, Caddy uses the production CA.
+}
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# Security headers — applied to every response.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+		# Caddy adds Server: Caddy by default; hide for less fingerprinting.
+		-Server
+	}
+
+	# Backend API + WebSocket. SSE (text/event-stream) flows through here too;
+	# Caddy handles streaming responses without extra config.
+	handle /api/* {
+		reverse_proxy backend:8080 {
+			# Long timeout for SSE / planner streaming.
+			transport http {
+				read_timeout 5m
+			}
+		}
+	}
+
+	# Backend health (so external monitors can ping it without exposing 8080).
+	handle /health {
+		reverse_proxy backend:8080
+	}
+
+	# Planner-AI direct (admin pages + ai-chat-panel use NEXT_PUBLIC_PLANNER_AI_URL).
+	# Strip the /planner prefix so planner-ai sees its native paths (/health, /chat, etc).
+	handle_path /planner/* {
+		reverse_proxy planner-ai:8090 {
+			transport http {
+				read_timeout 5m
+			}
+		}
+	}
+
+	# Everything else → Next.js frontend.
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
