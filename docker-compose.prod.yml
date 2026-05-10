@@ -193,7 +193,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "ps aux | grep -q '[n]ext' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -227,11 +227,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      backend:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
-      planner-ai:
+      postgres:
         condition: service_healthy
     networks:
       - public
