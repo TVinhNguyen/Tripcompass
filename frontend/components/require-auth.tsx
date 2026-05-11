@@ -9,6 +9,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { useUserNotifications } from "@/hooks/use-user-notifications";
 
 type RequireAuthProps = {
   children: ReactNode;
@@ -48,7 +49,23 @@ export function RequireAuth({ children, fallback = null }: RequireAuthProps) {
   }, [loading, user, pathname, router]);
 
   if (loading || !user) return <>{fallback}</>;
-  return <>{children}</>;
+  return (
+    <>
+      <NotificationsBridge />
+      {children}
+    </>
+  );
+}
+
+/**
+ * Mounts the per-user WS notification channel for the logged-in user.
+ * Extracted so the hook only runs once we know `user` is non-null — calling
+ * it inside RequireAuth's main body would mount it during the loading state
+ * too and open a socket with a stale/empty token.
+ */
+function NotificationsBridge() {
+  useUserNotifications();
+  return null;
 }
 
 // ---------------------------------------------------------------------------

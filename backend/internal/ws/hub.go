@@ -36,8 +36,18 @@ const (
 	EventActivityDeleted   = "activity.deleted"
 	EventActivityReordered = "activity.reordered"
 	EventItineraryUpdated  = "itinerary.updated"
-	EventError             = "error"
+
+	// User-scope events — delivered via per-user channels rather than
+	// itinerary rooms. See BroadcastToUser.
+	EventCollaboratorInvited  = "collaborator.invited"
+	EventCollaboratorAccepted = "collaborator.accepted"
+
+	EventError = "error"
 )
+
+// UserRoomPrefix marks a "room" id as targeting a user channel rather than
+// an itinerary. Used so the same hub map can carry both routing semantics.
+const UserRoomPrefix = "user:"
 
 // ─── Client ───────────────────────────────────────────────────────────────────
 
@@ -444,6 +454,13 @@ func (h *Hub) BroadcastToRoom(roomID string, data []byte, exclude *Client) {
 		return
 	}
 	room.Broadcast(data, exclude)
+}
+
+// BroadcastToUser fans an event out to every active tab a user has open.
+// Internally it reuses the room infrastructure with the "user:" prefix —
+// connecting to /ws/user joins room "user:<id>".
+func (h *Hub) BroadcastToUser(userID string, data []byte) {
+	h.BroadcastToRoom(UserRoomPrefix+userID, data, nil)
 }
 
 func (h *Hub) GetRoom(roomID string) *Room {

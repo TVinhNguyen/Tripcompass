@@ -130,3 +130,37 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	go client.WritePump()
 	go client.ReadPump()
 }
+
+// HandleUserWebSocket opens a user-scoped WebSocket. The "room" for this
+// client is "user:<id>" — used to deliver per-user notifications (invites,
+// future role changes) without coupling to an itinerary.
+//
+// Route: GET /api/v1/ws/user (token via Sec-WebSocket-Protocol).
+func (h *WSHandler) HandleUserWebSocket(c *gin.Context) {
+	tokenStr := tokenFromRequest(c.Request, c.Query("token"))
+	if tokenStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing bearer subprotocol"})
+		return
+	}
+	userIDStr, err := middleware.ParseJWT(h.jwtSecret, tokenStr)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+		return
+	}
+	fullName, err := h.userSvc.GetFullName(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+		return
+	}
+
+	conn, err := h.newUpgrader().Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		return
+	}
+	roomID := ws.UserRoomPrefix + userIDStr
+	client := ws.NewClient(h.hub, conn, roomID, userIDStr, fullName, "")
+	h.hub.Register <- client
+
+	go client.WritePump()
+	go client.ReadPump()
+}

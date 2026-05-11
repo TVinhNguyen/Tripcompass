@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"tripcompass-backend/internal/config"
 	"tripcompass-backend/internal/services"
+	"tripcompass-backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -13,9 +14,12 @@ type AuthHandler struct {
 	svc *services.AuthService
 }
 
-func NewAuthHandler(db *gorm.DB, cfg *config.Config) *AuthHandler {
+func NewAuthHandler(db *gorm.DB, cfg *config.Config, pub ws.Publisher) *AuthHandler {
 	emailSvc := services.NewEmailService(cfg)
 	collabSvc := services.NewCollaboratorService(db, emailSvc)
+	if pub != nil {
+		collabSvc = collabSvc.WithPublisher(pub)
+	}
 	authSvc := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpireHours, emailSvc, cfg.GoogleClientID, cfg.FacebookAppSecret).
 		WithCollaboratorService(collabSvc)
 	return &AuthHandler{svc: authSvc}

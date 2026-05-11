@@ -56,8 +56,12 @@ export function useItineraryWS(
     let cancelled = false;
 
     const connect = () => {
-      const url = `${WS_URL}/itinerary/${itineraryId}?token=${encodeURIComponent(token)}`;
-      const ws  = new WebSocket(url);
+      // Token rides on Sec-WebSocket-Protocol — browsers expose this through
+      // the second argument of `new WebSocket(url, protocols)`. The server
+      // advertises "bearer" and the second protocol entry IS the JWT, so the
+      // raw token never appears in the URL or in proxy access logs.
+      const url = `${WS_URL}/itinerary/${itineraryId}`;
+      const ws  = new WebSocket(url, ["bearer", token]);
       wsRef.current = ws;
 
       ws.onopen = () => {

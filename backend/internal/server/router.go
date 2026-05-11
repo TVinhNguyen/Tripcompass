@@ -51,9 +51,9 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 	})
 
 	// ── Handlers ───────────────────────────────────────────────────────────────
-	authHandler := handlers.NewAuthHandler(db, cfg)
-	userHandler := handlers.NewUserHandler(db)
 	wsPublisher := ws.NewPublisher(hub)
+	authHandler := handlers.NewAuthHandler(db, cfg, wsPublisher)
+	userHandler := handlers.NewUserHandler(db)
 	itineraryHandler := handlers.NewItineraryHandler(db, vc, wsPublisher) // H10: buffered view counter
 	activityHandler := handlers.NewActivityHandler(db, wsPublisher)
 	placeHandler := handlers.NewPlaceHandler(db)
@@ -63,7 +63,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 	plannerHandler := handlers.NewPlannerHandler(db, rdb, cfg)
 	aiChatHandler := handlers.NewAIChatHandler(db, cfg.PlannerAIURL)
 	wsHandler := handlers.NewWSHandler(db, hub, cfg.JWTSecret, cfg.AllowedOrigins)
-	collabHandler := handlers.NewCollaboratorHandler(db, cfg)
+	collabHandler := handlers.NewCollaboratorHandler(db, cfg, wsPublisher)
 
 	// ── Health check — public ─────────────────────────────────────────────────
 	r.GET("/health", func(c *gin.Context) {
@@ -96,6 +96,10 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 		api.GET("/knowledge-base/lookup", lookupHandler.Lookup)
 		api.POST("/planner/generate", middleware.RateLimitRedis(rdb, 30, 60), plannerHandler.Generate)
 		api.GET("/ws/itinerary/:id", wsHandler.HandleWebSocket)
+		// Per-user notification channel. Same JWT-via-subprotocol auth path
+		// as the itinerary socket, but no itinerary param — the "room" is
+		// "user:<id>" so server-side publishers can target a single user.
+		api.GET("/ws/user", wsHandler.HandleUserWebSocket)
 
 		// Protected routes (JWT required) ────────────────────────────────────
 		protected := api.Group("/")

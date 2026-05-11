@@ -11,7 +11,12 @@ import (
 // Used by HTTP handlers after a successful mutation, so collaborative editing
 // no longer depends on the client looping the event back through WebSocket.
 type Publisher interface {
+	// PublishEvent broadcasts to an itinerary room.
 	PublishEvent(roomID, eventType string, payload any)
+	// PublishToUser broadcasts to every tab the user has open. Used for
+	// per-user notifications (invites, role changes, etc.) — the
+	// underlying implementation maps userID → room "user:<id>".
+	PublishToUser(userID, eventType string, payload any)
 }
 
 // NewPublisher wires the hub (local fan-out) and pubsub (cross-instance) into
@@ -24,7 +29,7 @@ type hubPublisher struct {
 	hub *Hub
 }
 
-func (p *hubPublisher) PublishEvent(roomID, eventType string, payload any) {
+func (p *hubPublisher) publish(roomID, eventType string, payload any) {
 	if p.hub == nil || roomID == "" {
 		return
 	}
@@ -47,4 +52,15 @@ func (p *hubPublisher) PublishEvent(roomID, eventType string, payload any) {
 	if p.hub.redisPubSub != nil {
 		p.hub.redisPubSub.Publish(p.hub.redisPubSub.ctx, roomID, data)
 	}
+}
+
+func (p *hubPublisher) PublishEvent(roomID, eventType string, payload any) {
+	p.publish(roomID, eventType, payload)
+}
+
+func (p *hubPublisher) PublishToUser(userID, eventType string, payload any) {
+	if userID == "" {
+		return
+	}
+	p.publish(UserRoomPrefix+userID, eventType, payload)
 }

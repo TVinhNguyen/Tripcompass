@@ -13,13 +13,29 @@ import (
 	"gorm.io/gorm"
 )
 
+// WSPublisher decouples this package from internal/ws (which would create an
+// import cycle: ws → services for GetCollaboratorRole). Any implementation
+// that emits an event to a user channel satisfies it. internal/ws's
+// hubPublisher implements this directly.
+type WSPublisher interface {
+	PublishToUser(userID, eventType string, payload any)
+}
+
 type CollaboratorService struct {
 	db    *gorm.DB
 	email *EmailService
+	pub   WSPublisher // optional; nil-safe
 }
 
 func NewCollaboratorService(db *gorm.DB, emailSvc *EmailService) *CollaboratorService {
 	return &CollaboratorService{db: db, email: emailSvc}
+}
+
+// WithPublisher injects the WS publisher so Invite / Accept /
+// LinkPendingInvites can emit per-user notification events. Chainable.
+func (s *CollaboratorService) WithPublisher(pub WSPublisher) *CollaboratorService {
+	s.pub = pub
+	return s
 }
 
 type InviteInput struct {
@@ -134,6 +150,19 @@ func (s *CollaboratorService) Invite(itineraryID, ownerID string, input InviteIn
 		}(toEmail, toName, owner.FullName, it.Title, role)
 	}
 
+	// In-app notification: if the invitee already has an account, ping their
+	// user channel so an open browser tab shows a toast / badge update.
+	// Pending-by-email invites get the event later when LinkPendingInvites
+	// runs in Register.
+	if s.pub != nil && inviteeExists {
+		s.pub.PublishToUser(invitee.ID.String(), "collaborator.invited", map[string]any{
+			"invite":         collab,
+			"inviter_name":   owner.FullName,
+			"itinerary_id":   it.ID.String(),
+			"itinerary_name": it.Title,
+		})
+	}
+
 	return &collab, nil
 }
 
@@ -142,7 +171,9 @@ func (s *CollaboratorService) Invite(itineraryID, ownerID string, input InviteIn
 // transaction that creates the user.
 //
 // Returns the number of rows linked so callers (or tests) can verify the
-// attachment without a follow-up SELECT.
+// attachment without a follow-up SELECT. If a publisher is wired, one
+// collaborator.invited event is emitted per linked invite so the new user
+// sees the pending list in real time.
 func (s *CollaboratorService) LinkPendingInvites(tx *gorm.DB, userID uuid.UUID, email string) (int64, error) {
 	em := strings.ToLower(strings.TrimSpace(email))
 	if em == "" {
@@ -152,13 +183,34 @@ func (s *CollaboratorService) LinkPendingInvites(tx *gorm.DB, userID uuid.UUID, 
 	if db == nil {
 		db = s.db
 	}
+
+	// Capture the rows we're about to link so we can replay them as
+	// notifications after the UPDATE commits.
+	var pending []models.Collaborator
+	if s.pub != nil {
+		_ = db.Where("user_id IS NULL AND lower(email) = ?", em).Find(&pending).Error
+	}
+
 	res := db.Model(&models.Collaborator{}).
 		Where("user_id IS NULL AND lower(email) = ?", em).
 		Updates(map[string]interface{}{
 			"user_id": userID,
 			"email":   nil,
 		})
-	return res.RowsAffected, res.Error
+	if res.Error != nil {
+		return 0, res.Error
+	}
+
+	uidStr := userID.String()
+	for _, p := range pending {
+		p.UserID = &userID
+		p.Email = nil
+		s.pub.PublishToUser(uidStr, "collaborator.invited", map[string]any{
+			"invite":       p,
+			"itinerary_id": p.ItineraryID.String(),
+		})
+	}
+	return res.RowsAffected, nil
 }
 
 // List returns all collaborators of an itinerary.

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"tripcompass-backend/internal/config"
 	"tripcompass-backend/internal/services"
+	"tripcompass-backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -13,9 +14,16 @@ type CollaboratorHandler struct {
 	svc *services.CollaboratorService
 }
 
-func NewCollaboratorHandler(db *gorm.DB, cfg *config.Config) *CollaboratorHandler {
+// NewCollaboratorHandler wires the service together with a WS publisher so
+// new invites trigger a per-user notification in addition to the email.
+// Passing pub=nil leaves the notification path disabled (used in tests).
+func NewCollaboratorHandler(db *gorm.DB, cfg *config.Config, pub ws.Publisher) *CollaboratorHandler {
 	emailSvc := services.NewEmailService(cfg)
-	return &CollaboratorHandler{svc: services.NewCollaboratorService(db, emailSvc)}
+	svc := services.NewCollaboratorService(db, emailSvc)
+	if pub != nil {
+		svc = svc.WithPublisher(pub)
+	}
+	return &CollaboratorHandler{svc: svc}
 }
 
 // POST /itineraries/:id/collaborators — owner invites by email.
