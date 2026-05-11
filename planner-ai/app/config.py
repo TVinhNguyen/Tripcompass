@@ -199,6 +199,12 @@ ENABLE_REAL_PRICES    = os.environ.get("ENABLE_REAL_PRICE_CHECK", "true").lower(
 MAX_TOOL_ROUNDS       = int(os.environ.get("MAX_TOOL_ROUNDS",         "8"))
 TOOL_TIMEOUT          = int(os.environ.get("TOOL_TIMEOUT_SECONDS",    "5"))
 MAX_SCHEDULE_RETRIES  = int(os.environ.get("MAX_SCHEDULE_RETRIES",    "2"))
+# Schedule LLM is the long step — free-tier providers easily exceed 40s on a
+# full Đà Nẵng / Hà Nội payload. Default 90s; override per env if needed.
+SCHEDULE_LLM_TIMEOUT  = int(os.environ.get("SCHEDULE_LLM_TIMEOUT_SECONDS", "90"))
+# Enrichment is cosmetic (descriptions / tips). Keep it short so a slow LLM
+# doesn't tank total planning latency; if it times out we just skip prose.
+ENRICH_LLM_TIMEOUT    = int(os.environ.get("ENRICH_LLM_TIMEOUT_SECONDS", "30"))
 
 TODAY = datetime.now().strftime("%B %d, %Y")
 
