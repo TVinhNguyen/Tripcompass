@@ -32,6 +32,7 @@ type AuthService struct {
 	jwtSecret string
 	jwtExpire int // hours
 	email     *EmailService
+	collab    *CollaboratorService // optional; used to link pending invites on register
 	// OAuth config
 	googleClientID    string
 	facebookAppSecret string
@@ -46,6 +47,14 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc 
 		googleClientID:    googleClientID,
 		facebookAppSecret: facebookAppSecret,
 	}
+}
+
+// WithCollaboratorService injects the collaborator service so Register can
+// claim any pending-by-email invites that match the new user's address.
+// Returned so the call can chain in router wiring.
+func (s *AuthService) WithCollaboratorService(c *CollaboratorService) *AuthService {
+	s.collab = c
+	return s
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,7 +124,26 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 		VerifyTokenExpiresAt: &expiry,
 	}
 
-	if err := s.db.Create(&user).Error; err != nil {
+	// Create the user and claim any pending invites in a single Tx so the
+	// outbox enqueues from LinkPendingInvites commit atomically with the new
+	// row. Falling back to the direct-publish path would still ship the
+	// event but lose at-least-once safety on a crash.
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+		if s.collab != nil {
+			linked, err := s.collab.LinkPendingInvites(tx, user.ID, user.Email)
+			if err != nil {
+				// Don't fail registration on notification plumbing — log
+				// loudly and continue. The invites are still in the DB.
+				slog.Warn("link pending invites failed", "user_id", user.ID, "err", err)
+			} else if linked > 0 {
+				slog.Info("linked pending invites", "user_id", user.ID, "count", linked)
+			}
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 

@@ -71,12 +71,38 @@ CREATE TABLE "activities" (
 CREATE TABLE "collaborators" (
     "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid (),
     "itinerary_id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    -- Either user_id (registered invitee) or email (pending invite for a
+    -- not-yet-registered address) must be set. The CHECK below enforces it.
+    "user_id" UUID,
+    "email" TEXT,
     "invited_by" UUID NOT NULL,
     "role" "role" NOT NULL DEFAULT 'VIEWER',
     "status" "status_collab" NOT NULL DEFAULT 'PENDING',
-    "joined_at" TIMESTAMP
+    "joined_at" TIMESTAMP,
+    CONSTRAINT collaborators_invitee_present CHECK (user_id IS NOT NULL OR email IS NOT NULL)
 );
+
+-- Block re-inviting the same email on the same itinerary (pending case only).
+CREATE UNIQUE INDEX collaborators_pending_email_uniq
+    ON "collaborators" (itinerary_id, lower(email))
+    WHERE email IS NOT NULL;
+
+-- Transactional outbox for WebSocket broadcasts. Handlers INSERT inside the
+-- same Tx as the mutation; a background worker drains the table.
+CREATE TABLE "outbox" (
+    "id"            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    "event_type"    TEXT         NOT NULL,
+    "room_id"       TEXT         NOT NULL,
+    "payload"       JSONB        NOT NULL,
+    "created_at"    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    "dispatched_at" TIMESTAMPTZ,
+    "retry_count"   INT          NOT NULL DEFAULT 0,
+    "last_error"    TEXT
+);
+
+CREATE INDEX outbox_pending_idx
+    ON "outbox" (created_at)
+    WHERE dispatched_at IS NULL;
 
 CREATE TABLE "ai_chat_messages" (
     "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid (),

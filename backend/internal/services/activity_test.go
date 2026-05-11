@@ -195,8 +195,9 @@ func TestActivityService_Delete(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		act := createTestActivity(t, db, it.ID)
-		err := svc.Delete(act.ID.String(), user.ID.String())
+		itID, err := svc.Delete(act.ID.String(), user.ID.String())
 		assert.NoError(t, err)
+		assert.Equal(t, it.ID, itID)
 
 		var count int64
 		db.Model(&models.Activity{}).Where("id = ?", act.ID).Count(&count)
@@ -206,13 +207,13 @@ func TestActivityService_Delete(t *testing.T) {
 	t.Run("forbidden", func(t *testing.T) {
 		act := createTestActivity(t, db, it.ID)
 		otherUser := createTestUserWith(t, db, "other3@example.com")
-		err := svc.Delete(act.ID.String(), otherUser.ID.String())
+		_, err := svc.Delete(act.ID.String(), otherUser.ID.String())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})
 
 	t.Run("activity not found", func(t *testing.T) {
-		err := svc.Delete(uuid.New().String(), user.ID.String())
+		_, err := svc.Delete(uuid.New().String(), user.ID.String())
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, apperror.ErrNotFound)
 	})
@@ -234,8 +235,9 @@ func TestActivityService_Reorder(t *testing.T) {
 			{ID: act1.ID.String(), DayNumber: 2, OrderIndex: 1},
 			{ID: act2.ID.String(), DayNumber: 2, OrderIndex: 2},
 		}
-		err := svc.Reorder(user.ID.String(), items)
+		itID, err := svc.Reorder(user.ID.String(), items)
 		assert.NoError(t, err)
+		assert.Equal(t, it.ID, itID)
 
 		// Verify changes
 		var a1 models.Activity
@@ -253,7 +255,7 @@ func TestActivityService_Reorder(t *testing.T) {
 		items := []ReorderItem{
 			{ID: uuid.New().String(), DayNumber: 1, OrderIndex: 0},
 		}
-		err := svc.Reorder(user.ID.String(), items)
+		_, err := svc.Reorder(user.ID.String(), items)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, apperror.ErrNotFound)
 	})
@@ -263,7 +265,7 @@ func TestActivityService_Reorder(t *testing.T) {
 		items := []ReorderItem{
 			{ID: act1.ID.String(), DayNumber: 3, OrderIndex: 0},
 		}
-		err := svc.Reorder(otherUser.ID.String(), items)
+		_, err := svc.Reorder(otherUser.ID.String(), items)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, apperror.ErrForbidden)
 	})

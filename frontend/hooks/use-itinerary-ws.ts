@@ -56,8 +56,12 @@ export function useItineraryWS(
     let cancelled = false;
 
     const connect = () => {
-      const url = `${WS_URL}/itinerary/${itineraryId}?token=${encodeURIComponent(token)}`;
-      const ws  = new WebSocket(url);
+      // Token rides on Sec-WebSocket-Protocol — browsers expose this through
+      // the second argument of `new WebSocket(url, protocols)`. The server
+      // advertises "bearer" and the second protocol entry IS the JWT, so the
+      // raw token never appears in the URL or in proxy access logs.
+      const url = `${WS_URL}/itinerary/${itineraryId}`;
+      const ws  = new WebSocket(url, ["bearer", token]);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -80,8 +84,10 @@ export function useItineraryWS(
       ws.onclose = () => {
         wsRef.current = null;
         if (cancelled) return;
-        // Reconnect with exponential backoff — max 30s
-        const delay = Math.min(30_000, 1_000 * 2 ** retryRef.current);
+        // Exponential backoff with ±20% jitter so a server restart doesn't
+        // produce a thundering herd of simultaneous reconnects. Max 30s.
+        const base = Math.min(30_000, 1_000 * 2 ** retryRef.current);
+        const delay = Math.round(base * (0.8 + Math.random() * 0.4));
         retryRef.current += 1;
         setTimeout(connect, delay);
       };

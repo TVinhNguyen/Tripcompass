@@ -168,6 +168,157 @@ def _extract_plan(raw: str) -> dict | None:
     return None
 
 
+class _ThinkStripper:
+    """Stream-friendly filter that suppresses <think>...</think> reasoning.
+
+    Reasoning models (minimax, qwen-thinking, etc.) emit chain-of-thought
+    wrapped in <think>...</think>. The wrapping is sometimes asymmetric — a
+    lone </think> shows up because the API dropped the opening tag. We treat
+    both cases as thinking:
+
+      explicit:    <think>plan a plan</think>actual reply
+      implicit:    plan a plan</think>actual reply
+
+    Initial buffer:
+      To prevent leaked-reasoning from flashing in the UI before we see the
+      first </think>, we hold the FIRST ``initial_buffer_chars`` of output
+      for up to ``initial_buffer_seconds``. If </think> arrives in that
+      window we drop the prefix; otherwise we treat the model as
+      non-reasoning and flush.
+
+    Beyond that window the stripper holds back only ``_HOLD`` bytes so a tag
+    straddling two tokens isn't mistakenly emitted.
+    """
+
+    _OPEN = "<think>"
+    _CLOSE = "</think>"
+    _HOLD = 8  # len("</think>")
+
+    def __init__(
+        self,
+        initial_buffer_chars: int = 300,
+        initial_buffer_seconds: float = 2.0,
+    ) -> None:
+        self._pending = ""
+        self._in_think = False
+        self._initial_buffer_chars = initial_buffer_chars
+        self._initial_buffer_seconds = initial_buffer_seconds
+        self._initial_started: float | None = None
+        self._initial_done = False
+        self._buffered_initial = ""
+
+    def _initial_phase_active(self) -> bool:
+        if self._initial_done or self._initial_buffer_chars <= 0:
+            return False
+        import time
+        if self._initial_started is None:
+            self._initial_started = time.monotonic()
+        if len(self._buffered_initial) >= self._initial_buffer_chars:
+            return False
+        if (time.monotonic() - self._initial_started) >= self._initial_buffer_seconds:
+            return False
+        return True
+
+    def _close_initial(self) -> str:
+        """Finalize the initial buffering window.
+
+        If a lone </think> appeared inside the window (no preceding <think>),
+        drop everything up to it — that prefix was leaked reasoning. For an
+        explicit <think>...</think> pair we leave the text alone; the regular
+        state machine downstream will strip the block.
+        """
+        self._initial_done = True
+        text = self._buffered_initial
+        self._buffered_initial = ""
+        close_idx = text.find(self._CLOSE)
+        open_idx = text.find(self._OPEN)
+        if close_idx >= 0 and (open_idx < 0 or close_idx < open_idx):
+            text = text[close_idx + len(self._CLOSE):].lstrip()
+        return text
+
+    def feed(self, token: str) -> str:
+        # Initial-buffer phase: accumulate, don't emit yet. Exit the phase
+        # the moment we see ANY think marker, then push what we held through
+        # the regular state machine so it handles both lone-close drops AND
+        # explicit <think>...</think> blocks correctly.
+        if self._initial_phase_active():
+            self._buffered_initial += token
+            saw_marker = (
+                self._CLOSE in self._buffered_initial
+                or self._OPEN in self._buffered_initial
+            )
+            if not saw_marker:
+                return ""
+            token = self._close_initial()
+            if not token:
+                return ""
+        elif self._buffered_initial:
+            # Budget exhausted before any marker — flush whatever we held.
+            token = self._close_initial() + token
+
+        self._pending += token
+        out: list[str] = []
+        while True:
+            if self._in_think:
+                idx = self._pending.find(self._CLOSE)
+                if idx >= 0:
+                    self._pending = self._pending[idx + len(self._CLOSE):].lstrip()
+                    self._in_think = False
+                    continue
+                if len(self._pending) > self._HOLD:
+                    self._pending = self._pending[-self._HOLD:]
+                return "".join(out)
+
+            open_idx = self._pending.find(self._OPEN)
+            close_idx = self._pending.find(self._CLOSE)
+
+            # Lone </think> before any <think> — treat what came before as
+            # leaked reasoning, drop it. Tokens already emitted to the FE will
+            # be replaced by clean_text in the final `done` event.
+            if close_idx >= 0 and (open_idx < 0 or close_idx < open_idx):
+                self._pending = self._pending[close_idx + len(self._CLOSE):].lstrip()
+                continue
+
+            if open_idx >= 0:
+                out.append(self._pending[:open_idx])
+                self._pending = self._pending[open_idx + len(self._OPEN):]
+                self._in_think = True
+                continue
+
+            if len(self._pending) > self._HOLD:
+                out.append(self._pending[:-self._HOLD])
+                self._pending = self._pending[-self._HOLD:]
+            return "".join(out)
+
+    def flush(self) -> str:
+        # If the stream ended while we were still in the initial buffer
+        # window, finalize it (drop any lone </think> prefix) before
+        # spilling the pending tail.
+        prefix = ""
+        if self._buffered_initial:
+            prefix = self._close_initial()
+        if self._in_think:
+            return prefix
+        out = prefix + self._pending
+        self._pending = ""
+        return out
+
+
+def _strip_thinking(text: str) -> str:
+    """Regex pass for the final clean_text — removes any <think>...</think>
+    blocks plus a lone </think> + everything before it, so the FE's `done`
+    event always carries a clean reply.
+    """
+    import re
+    # 1. Explicit blocks anywhere.
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    # 2. Lone </think> — drop preceding leaked reasoning, keep the rest.
+    text = re.sub(r"^.*?</think>", "", text, count=1, flags=re.DOTALL)
+    # 3. Any stray closer that survived.
+    text = text.replace("</think>", "")
+    return text.lstrip()
+
+
 def _strip_json_objects(text: str) -> str:
     """Remove all JSON blocks from text, keeping only the markdown summary.
 
@@ -258,6 +409,7 @@ async def stream_chat_response(
     plan_data: dict | None = None
     full_text = ""
     stream_dropped = False  # True if upstream LLM closed the connection mid-stream
+    think_stripper = _ThinkStripper()
 
     # Per-request scratch space. create_travel_plan stashes the full plan dict
     # here so we can ship it to the FE without bloating the agent's context.
@@ -318,7 +470,9 @@ async def stream_chat_response(
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     token = chunk.content
                     full_text += token
-                    yield _sse({"type": "token", "content": token})
+                    clean_token = think_stripper.feed(token)
+                    if clean_token:
+                        yield _sse({"type": "token", "content": clean_token})
 
     except Exception as e:
         # Detect the "peer closed connection" family — free-tier LLM gateways
@@ -356,10 +510,21 @@ async def stream_chat_response(
         if plan_data:
             logger.info("[stream] Plan extracted from full_text fallback")
 
-    # ── Clean full_text: strip all JSON, keep only markdown summary ────
-    clean_text = _strip_json_objects(full_text)
+    # Emit anything still buffered by the think-stripper (post-</think> tail).
+    trailing = think_stripper.flush()
+    if trailing:
+        yield _sse({"type": "token", "content": trailing})
+
+    # ── Clean full_text: strip thinking blocks, then JSON, keep markdown ──
+    clean_text = _strip_json_objects(_strip_thinking(full_text))
     if stream_dropped and clean_text:
         clean_text += "\n\n_⚠️ Phần trả lời bị cắt giữa chừng do nhà cung cấp LLM ngắt kết nối — lịch trình đã được giữ lại._"
+
+    # If the LLM returned nothing after create_travel_plan (free-tier
+    # providers occasionally drop the second call), synthesise a short
+    # Vietnamese summary from plan_data so the user still sees a reply.
+    if not clean_text.strip() and plan_data:
+        clean_text = _deterministic_summary(plan_data, stream_dropped)
 
     # ── Final event ────────────────────────────────────────────────────
     yield _sse({
@@ -369,6 +534,58 @@ async def stream_chat_response(
         "plan":       plan_data,
         "full_text":  clean_text,
     })
+
+
+_DAY_LABEL = {"arrival": "Đến nơi", "departure": "Trở về", "standard": ""}
+
+
+def _deterministic_summary(plan: dict, stream_dropped: bool) -> str:
+    """Produce a short Vietnamese reply from a GenerateResponse-shaped plan.
+
+    Used as a fallback when the agent's post-tool LLM call returned no text
+    (e.g. the upstream provider dropped the connection). The reply is
+    intentionally terse: the FE renders the plan card right below it.
+    """
+    days = plan.get("days") or []
+    dest = (days[0].get("primary_area") if days else None) or "chuyến đi"
+    num_days = len(days) or "?"
+
+    lines: list[str] = [
+        f"Mình đã lên xong lịch trình **{num_days} ngày tại {dest}** cho bạn rồi! 🎉",
+        "",
+    ]
+    for d in days[:7]:
+        names = [
+            s["place"]["name"]
+            for s in (d.get("slots") or [])
+            if isinstance(s.get("place"), dict) and s["place"].get("name")
+        ]
+        if not names:
+            continue
+        label = _DAY_LABEL.get(d.get("day_type", ""), "")
+        prefix = f"**Ngày {d.get('day_num')}**" + (f" — {label}" if label else "")
+        lines.append(f"- {prefix}: {' · '.join(names)}")
+
+    recap = plan.get("budget_recap") or {}
+    total = recap.get("total_budget_vnd")
+    spent = (recap.get("attraction_spent_vnd") or 0) + (recap.get("food_spent_vnd") or 0)
+    if total:
+        lines += [
+            "",
+            f"💰 Ngân sách: **{int(spent):,}₫ / {int(total):,}₫**".replace(",", "."),
+        ]
+
+    if stream_dropped:
+        lines += [
+            "",
+            "_⚠️ Phần mô tả chi tiết bị cắt do nhà cung cấp LLM ngắt kết nối — bạn vẫn lưu và chỉnh sửa được lịch trình bên dưới._",
+        ]
+    else:
+        lines += [
+            "",
+            "Bạn muốn mình **điều chỉnh** chỗ nào hay **lưu thành lịch trình** luôn?",
+        ]
+    return "\n".join(lines)
 
 
 def _sse(data: dict) -> str:

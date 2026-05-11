@@ -11,6 +11,9 @@ import (
 )
 
 // ─── Message protocol ─────────────────────────────────────────────────────────
+// Event types match docs/integration/04-ITINERARY-COLLAB-FLOW.md §5 — and the
+// WSEventType union in frontend/lib/types.ts. Anything emitted from the server
+// MUST match a case in that union or the FE will silently drop it.
 
 type Message struct {
 	Type    string          `json:"type"`
@@ -22,6 +25,29 @@ type SenderInfo struct {
 	UserID   string `json:"user_id"`
 	FullName string `json:"full_name"`
 }
+
+const (
+	EventPresenceJoin   = "presence.join"
+	EventPresenceLeave  = "presence.leave"
+	EventPresenceOnline = "presence.online" // initial roster sent to the joiner
+
+	EventActivityCreated   = "activity.created"
+	EventActivityUpdated   = "activity.updated"
+	EventActivityDeleted   = "activity.deleted"
+	EventActivityReordered = "activity.reordered"
+	EventItineraryUpdated  = "itinerary.updated"
+
+	// User-scope events — delivered via per-user channels rather than
+	// itinerary rooms. See BroadcastToUser.
+	EventCollaboratorInvited  = "collaborator.invited"
+	EventCollaboratorAccepted = "collaborator.accepted"
+
+	EventError = "error"
+)
+
+// UserRoomPrefix marks a "room" id as targeting a user channel rather than
+// an itinerary. Used so the same hub map can carry both routing semantics.
+const UserRoomPrefix = "user:"
 
 // ─── Client ───────────────────────────────────────────────────────────────────
 
@@ -37,22 +63,36 @@ type Client struct {
 	UserID    string
 	FullName  string
 	RoomID    string
+	// Role cached at upgrade time ("OWNER" | "EDITOR" | "VIEWER"). Empty for
+	// user-scope clients (notification channels) where role doesn't apply.
+	Role      string
 	Hub       *Hub
 	Conn      *websocket.Conn
 	Send      chan []byte
 	closeOnce sync.Once
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, roomID, userID, fullName string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, roomID, userID, fullName, role string) *Client {
 	return &Client{
 		ID:       uuid.New().String(),
 		UserID:   userID,
 		FullName: fullName,
 		RoomID:   roomID,
+		Role:     role,
 		Hub:      hub,
 		Conn:     conn,
 		Send:     make(chan []byte, 256),
 	}
+}
+
+// allowedClientEventTypes lists the only message types a connected client may
+// originate. After the server-authoritative refactor, every mutation
+// (activity.created / updated / deleted / reordered, itinerary.updated) is
+// emitted by the HTTP handlers themselves; clients only ever send presence /
+// hover / typing pings. Anything else is rejected with an error frame.
+var allowedClientEventTypes = map[string]bool{
+	"cursor": true,
+	"typing": true,
 }
 
 // ReadPump đọc messages từ WebSocket connection
@@ -81,6 +121,21 @@ func (c *Client) ReadPump() {
 		var msg Message
 		if err := json.Unmarshal(raw, &msg); err != nil {
 			c.sendError("invalid JSON format")
+			continue
+		}
+
+		// Whitelist client-originated events. Everything else (mutations,
+		// presence join/leave) is emitted by the server itself.
+		if !allowedClientEventTypes[msg.Type] {
+			c.sendError("event type not allowed for clients: " + msg.Type)
+			continue
+		}
+
+		// Even within the whitelist, VIEWERs can hover/cursor but typing
+		// (which implies editing) is editor-only. Loosen later if VIEWER
+		// commenting lands.
+		if msg.Type == "typing" && c.Role != "OWNER" && c.Role != "EDITOR" {
+			c.sendError("typing requires editor role")
 			continue
 		}
 
@@ -183,13 +238,14 @@ func (r *Room) IsEmpty() bool {
 	return len(r.Clients) == 0
 }
 
-// Broadcast sends data to all clients except exclude client
+// Broadcast sends data to every client in the room except `exclude`.
+//
+// The hot path takes only a read lock while iterating clients — a write lock
+// is only taken after the loop, and only if buffer-full evictions are needed.
+// Without this split a 50-client room would serialise every broadcast.
 func (r *Room) Broadcast(data []byte, exclude *Client) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
+	r.mu.RLock()
 	var toClose []*Client
-
 	for client := range r.Clients {
 		if client == exclude {
 			continue
@@ -197,16 +253,21 @@ func (r *Room) Broadcast(data []byte, exclude *Client) {
 		select {
 		case client.Send <- data:
 		default:
-			// Buffer full — close send channel and evict
+			// Buffer full — close send channel and queue for eviction.
 			client.closeSend()
 			toClose = append(toClose, client)
 		}
 	}
+	r.mu.RUnlock()
 
-	// Remove closed clients after iteration
+	if len(toClose) == 0 {
+		return
+	}
+	r.mu.Lock()
 	for _, client := range toClose {
 		delete(r.Clients, client)
 	}
+	r.mu.Unlock()
 }
 
 func (r *Room) OnlineUsers() []SenderInfo {
@@ -300,13 +361,17 @@ func (h *Hub) addClient(c *Client) {
 		h.redisPubSub.TrackOnline(h.redisPubSub.ctx, c.RoomID, c.UserID)
 	}
 
-	// Notify room: user joined
+	// Notify room: user joined. Payload mirrors the FE's WSEvent shape so
+	// frontend/app/itinerary/[id]/edit/_hooks/use-editor-state.ts handles it
+	// directly (it switches on type === "presence.join").
+	joinPayload, _ := json.Marshal(map[string]string{
+		"user_id":   c.UserID,
+		"full_name": c.FullName,
+	})
 	joinMsg := Message{
-		Type: "user_joined",
-		Sender: &SenderInfo{
-			UserID:   c.UserID,
-			FullName: c.FullName,
-		},
+		Type:    EventPresenceJoin,
+		Payload: joinPayload,
+		Sender:  &SenderInfo{UserID: c.UserID, FullName: c.FullName},
 	}
 	data, _ := json.Marshal(joinMsg)
 	room.Broadcast(data, c)
@@ -316,14 +381,14 @@ func (h *Hub) addClient(c *Client) {
 		h.redisPubSub.Publish(h.redisPubSub.ctx, c.RoomID, data)
 	}
 
-	// Send online users list to the new client
-	onlineMsg := Message{
-		Type: "online_users",
-	}
+	// Send the current roster to the new joiner. presence.online is the
+	// initial snapshot; subsequent join/leave events keep it in sync.
 	users := room.OnlineUsers()
 	usersData, _ := json.Marshal(users)
-	onlineMsg.Payload = usersData
-	onlineData, _ := json.Marshal(onlineMsg)
+	onlineData, _ := json.Marshal(Message{
+		Type:    EventPresenceOnline,
+		Payload: usersData,
+	})
 	select {
 	case c.Send <- onlineData:
 	default:
@@ -349,12 +414,11 @@ func (h *Hub) removeClient(c *Client) {
 	}
 
 	// Notify room: user left
+	leavePayload, _ := json.Marshal(map[string]string{"user_id": c.UserID})
 	leaveMsg := Message{
-		Type: "user_left",
-		Sender: &SenderInfo{
-			UserID:   c.UserID,
-			FullName: c.FullName,
-		},
+		Type:    EventPresenceLeave,
+		Payload: leavePayload,
+		Sender:  &SenderInfo{UserID: c.UserID, FullName: c.FullName},
 	}
 	data, _ := json.Marshal(leaveMsg)
 	room.Broadcast(data, nil)
@@ -390,6 +454,13 @@ func (h *Hub) BroadcastToRoom(roomID string, data []byte, exclude *Client) {
 		return
 	}
 	room.Broadcast(data, exclude)
+}
+
+// BroadcastToUser fans an event out to every active tab a user has open.
+// Internally it reuses the room infrastructure with the "user:" prefix —
+// connecting to /ws/user joins room "user:<id>".
+func (h *Hub) BroadcastToUser(userID string, data []byte) {
+	h.BroadcastToRoom(UserRoomPrefix+userID, data, nil)
 }
 
 func (h *Hub) GetRoom(roomID string) *Room {
