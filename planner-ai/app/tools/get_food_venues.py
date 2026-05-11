@@ -45,10 +45,11 @@ async def get_food_venues(
         params.append(tags)
         idx += 1
 
-    # description intentionally excluded — see notes in get_places.py.
+    # Token-trimmed projection. See get_places.py for the rationale on which
+    # fields are excluded vs. kept.
     query = f"""
-        SELECT id, name, name_en, destination, area, address,
-               latitude, longitude, cover_image, rating, review_count,
+        SELECT id, name, destination, area, address,
+               latitude, longitude, rating,
                must_visit, priority_score, best_time_of_day, tags,
                open_time::text AS open_time, close_time::text AS close_time,
                hours, recommended_duration, base_price
@@ -76,15 +77,12 @@ async def get_food_venues(
         food.append({
             "id":              str(r["id"]),
             "name":            r["name"],
-            "name_en":         r["name_en"] or "",
             "destination":     r["destination"],
             "area":            r["area"] or "",
             "address":         r["address"] or "",
             "latitude":        float(r["latitude"]) if r["latitude"] else None,
             "longitude":       float(r["longitude"]) if r["longitude"] else None,
-            "image_url":       r["cover_image"] or "",
             "rating":          float(r["rating"]) if r["rating"] else 0.0,
-            "review_count":    int(r["review_count"] or 0),
             "must_visit":      bool(r["must_visit"]),
             "priority_score":  int(r["priority_score"]),
             "best_time_of_day": r["best_time_of_day"] or "",
