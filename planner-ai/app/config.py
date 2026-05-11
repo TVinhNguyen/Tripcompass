@@ -34,6 +34,22 @@ os.environ.setdefault("LANGCHAIN_PROJECT", os.environ.get("LANGCHAIN_PROJECT", "
 # ── LLM Provider config ───────────────────────────────────────────────────────
 LLM_PROVIDER    = os.environ.get("LLM_PROVIDER", "xiaomi").strip().lower()
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0"))
+# Free-tier providers (NVIDIA NIM, OpenRouter free models) frequently close
+# long streams mid-token. These knobs keep the OpenAI-compatible clients alive
+# under that flakiness:
+#   request_timeout — drop a hung request instead of blocking the agent forever
+#   max_retries     — retry transient HTTP / RemoteProtocolError before giving up
+LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "180"))
+LLM_MAX_RETRIES     = int(os.environ.get("LLM_MAX_RETRIES", "3"))
+
+
+def _openai_compat_kwargs() -> dict:
+    """Shared kwargs for every ChatOpenAI-compatible client."""
+    return {
+        "temperature":     LLM_TEMPERATURE,
+        "request_timeout": LLM_REQUEST_TIMEOUT,
+        "max_retries":     LLM_MAX_RETRIES,
+    }
 
 
 def _get_env_first(*keys: str, default: str = "") -> str:
@@ -93,8 +109,8 @@ def _build_llm(provider: str, model: str) -> Any:
         base_url = os.environ.get("XIAOMI_BASE_URL", "https://api.xiaomimimo.com/v1").strip()
         if not api_key:
             raise RuntimeError("XIAOMI_API_KEY required when LLM_PROVIDER=xiaomi")
-        return ChatOpenAI(model=model, temperature=LLM_TEMPERATURE,
-                          api_key=api_key, base_url=base_url)
+        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
+                          **_openai_compat_kwargs())
 
     if p == "nvidia":
         from langchain_openai import ChatOpenAI
@@ -102,8 +118,8 @@ def _build_llm(provider: str, model: str) -> Any:
         base_url = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1").strip()
         if not api_key:
             raise RuntimeError("NVIDIA_API_KEY required when LLM_PROVIDER=nvidia")
-        return ChatOpenAI(model=model, temperature=LLM_TEMPERATURE,
-                          api_key=api_key, base_url=base_url)
+        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
+                          **_openai_compat_kwargs())
 
     if p == "openrouter":
         from langchain_openai import ChatOpenAI
@@ -116,9 +132,9 @@ def _build_llm(provider: str, model: str) -> Any:
             headers["X-Title"] = app_name
         if not api_key:
             raise RuntimeError("OPENROUTER_API_KEY required when LLM_PROVIDER=openrouter")
-        return ChatOpenAI(model=model, temperature=LLM_TEMPERATURE,
-                          api_key=api_key, base_url=base_url,
-                          default_headers=headers or None)
+        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
+                          default_headers=headers or None,
+                          **_openai_compat_kwargs())
 
     if p == "nebius":
         from langchain_nebius import ChatNebius
@@ -137,8 +153,8 @@ def _build_llm(provider: str, model: str) -> Any:
         base_url = os.environ.get("AGENTROUTER_BASE_URL", "https://agentrouter.org/v1").strip()
         if not api_key:
             raise RuntimeError("AGENTROUTER_API_KEY required when LLM_PROVIDER=agentrouter")
-        return ChatOpenAI(model=model, temperature=LLM_TEMPERATURE,
-                          api_key=api_key, base_url=base_url)
+        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
+                          **_openai_compat_kwargs())
 
     if p == "modal":
         from langchain_openai import ChatOpenAI
@@ -146,8 +162,8 @@ def _build_llm(provider: str, model: str) -> Any:
         base_url = os.environ.get("MODAL_BASE_URL", "https://api.us-west-2.modal.direct/v1").strip()
         if not api_key:
             raise RuntimeError("MODAL_API_KEY required when LLM_PROVIDER=modal")
-        return ChatOpenAI(model=model, temperature=LLM_TEMPERATURE,
-                          api_key=api_key, base_url=base_url)
+        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
+                          **_openai_compat_kwargs())
 
     raise ValueError(f"Unsupported LLM_PROVIDER: '{provider}'. "
                      f"Use xiaomi/nvidia/openrouter/nebius/anthropic/agentrouter/modal.")
