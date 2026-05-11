@@ -177,13 +177,42 @@ def _hms(t: str) -> int:
     return int(h) * 60 + int(m)
 
 
+def _slot_bucket(slot_start: str) -> str:
+    """Map slot start time → best_time_of_day bucket the DB uses.
+
+    Buckets follow what the scraper writes into the places.best_time_of_day
+    column ('morning', 'afternoon', 'evening', 'night', 'any').
+    """
+    minutes = _hms(slot_start)
+    if minutes < 11 * 60:
+        return "morning"
+    if minutes < 17 * 60:
+        return "afternoon"
+    if minutes < 21 * 60:
+        return "evening"
+    return "night"
+
+
 def _fits(item: dict, slot_start: str, slot_end: str) -> bool:
-    """True if the venue's opening hours cover the slot window."""
+    """True if the venue's opening hours cover the slot window.
+
+    Handles venues that span midnight (e.g. '18:00-02:00' for a night bar):
+    if close < open we treat the window as two segments — [open, 24:00) and
+    [00:00, close] — and the slot must lie inside one of them.
+
+    Returns True for unknown hours so the LLM-style fallback doesn't reject
+    sparse data (scraper sometimes leaves hours blank for low-quality rows).
+    """
     hrs = _parse_hours(item.get("hours"))
     if hrs is None:
-        return True  # Unknown hours → don't reject (LLM-grade fallback)
+        return True
     open_m, close_m = hrs
-    return open_m <= _hms(slot_start) and _hms(slot_end) <= close_m
+    ss, se = _hms(slot_start), _hms(slot_end)
+    if open_m <= close_m:
+        # Same-day window.
+        return open_m <= ss and se <= close_m
+    # Overnight window — slot fits if it's entirely in either segment.
+    return (ss >= open_m and se <= 1440) or (ss >= 0 and se <= close_m)
 
 
 def _fallback_schedule(state: dict, retrieved: dict) -> dict:
@@ -227,17 +256,34 @@ def _fallback_schedule(state: dict, retrieved: dict) -> dict:
     used_ids: set[str] = set()
 
     def _pick(pool: list[dict], slot_start: str, slot_end: str) -> dict | None:
-        """Return the first venue that (a) hasn't been used and (b) is open
-        during the slot window. Falls back to any unused venue, then to any
-        venue, so we always return *something* if the pool is non-empty."""
+        """Pick the best venue for a slot, in three tiers.
+
+        Tier 1: hours fit AND best_time_of_day matches the slot bucket
+                (e.g. morning_activity prefers best_time_of_day='morning').
+        Tier 2: hours fit only.
+        Tier 3: any unused venue (graceful fallback when hours-strict empty).
+
+        Pool is already ordered by priority_score/rating from SQL, so within
+        a tier we keep that ranking. used_ids prevents duplicates across
+        slots and days.
+        """
+        slot_bucket = _slot_bucket(slot_start)
+
+        # Tier 1: best_time_of_day match
+        for item in pool:
+            if item.get("id") in used_ids:
+                continue
+            if (item.get("best_time_of_day") or "").lower() == slot_bucket and _fits(item, slot_start, slot_end):
+                used_ids.add(item.get("id", ""))
+                return item
+        # Tier 2: hours fit only
         for item in pool:
             if item.get("id") in used_ids:
                 continue
             if _fits(item, slot_start, slot_end):
                 used_ids.add(item.get("id", ""))
                 return item
-        # Hours-strict pass found nothing — relax the hours check but still
-        # avoid duplicates.
+        # Tier 3: relaxed — any unused, so a non-empty pool always produces.
         for item in pool:
             if item.get("id") in used_ids:
                 continue
