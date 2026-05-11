@@ -108,7 +108,7 @@ async def node_schedule(state: dict) -> dict:
     ]
 
     warnings = list(state.get("warnings", []))
-    llm_timeout_s = max(30, int(config.TOOL_TIMEOUT) * 8)
+    llm_timeout_s = int(getattr(config, "SCHEDULE_LLM_TIMEOUT", 90))
     try:
         response = await asyncio.wait_for(config.llm.ainvoke(messages), timeout=llm_timeout_s)
     except asyncio.TimeoutError:
@@ -121,6 +121,9 @@ async def node_schedule(state: dict) -> dict:
             "violations":        [],
             "validation_passed": False,
             "warnings":          warnings,
+            # Same LLM with the same prompt will almost certainly time out
+            # again — signal the outer planning loop to skip the retry.
+            "skip_retry":        True,
         }
 
     raw = response.content.strip()
@@ -152,8 +155,45 @@ async def node_schedule(state: dict) -> dict:
     }
 
 
+def _parse_hours(hours: str | None) -> tuple[int, int] | None:
+    """Parse 'HH:MM-HH:MM' → (open_minutes, close_minutes). Returns None on bad input.
+
+    24/7 venues encoded as '00:00-23:59' return (0, 1439); slots fall inside.
+    """
+    if not hours or "-" not in hours:
+        return None
+    try:
+        a, b = hours.split("-", 1)
+        ah, am = a.strip().split(":")
+        bh, bm = b.strip().split(":")
+        return int(ah) * 60 + int(am), int(bh) * 60 + int(bm)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _hms(t: str) -> int:
+    """Slot time 'HH:MM' → minutes since midnight."""
+    h, m = t.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _fits(item: dict, slot_start: str, slot_end: str) -> bool:
+    """True if the venue's opening hours cover the slot window."""
+    hrs = _parse_hours(item.get("hours"))
+    if hrs is None:
+        return True  # Unknown hours → don't reject (LLM-grade fallback)
+    open_m, close_m = hrs
+    return open_m <= _hms(slot_start) and _hms(slot_end) <= close_m
+
+
 def _fallback_schedule(state: dict, retrieved: dict) -> dict:
-    """Quick deterministic draft to avoid empty output when LLM is slow."""
+    """Quick deterministic draft to avoid empty output when LLM is slow.
+
+    The fallback used to assign places round-robin without checking opening
+    hours, which produced CLOSED_HOURS violations (e.g. a breakfast-only spot
+    landing in a lunch slot). Now it filters by `hours` per slot and keeps a
+    used-set so a place is never repeated.
+    """
     places = list(retrieved.get("places", []))
     food = list(retrieved.get("food", []))
     hotels = list(retrieved.get("hotels", []))
@@ -184,24 +224,26 @@ def _fallback_schedule(state: dict, retrieved: dict) -> dict:
         "price_per_night_vnd": int(hotels[0].get("price_per_night_vnd", 0)) if hotels else 0,
     }
 
-    place_i = 0
-    food_i = 0
+    used_ids: set[str] = set()
 
-    def _next_place():
-        nonlocal place_i
-        if place_i >= len(places):
-            return None
-        item = places[place_i]
-        place_i += 1
-        return item
-
-    def _next_food():
-        nonlocal food_i
-        if food_i >= len(food):
-            return None
-        item = food[food_i]
-        food_i += 1
-        return item
+    def _pick(pool: list[dict], slot_start: str, slot_end: str) -> dict | None:
+        """Return the first venue that (a) hasn't been used and (b) is open
+        during the slot window. Falls back to any unused venue, then to any
+        venue, so we always return *something* if the pool is non-empty."""
+        for item in pool:
+            if item.get("id") in used_ids:
+                continue
+            if _fits(item, slot_start, slot_end):
+                used_ids.add(item.get("id", ""))
+                return item
+        # Hours-strict pass found nothing — relax the hours check but still
+        # avoid duplicates.
+        for item in pool:
+            if item.get("id") in used_ids:
+                continue
+            used_ids.add(item.get("id", ""))
+            return item
+        return None
 
     def _date_str(day_num: int) -> str:
         if start_dt:
@@ -226,22 +268,22 @@ def _fallback_schedule(state: dict, retrieved: dict) -> dict:
         day_type = _day_type(day_num)
         if day_type == "arrival":
             slots = [
-                _slot("15:00", "16:30", "afternoon_activity", _next_place()),
-                _slot("18:00", "19:30", "dinner", _next_food()),
+                _slot("15:00", "16:30", "afternoon_activity", _pick(places, "15:00", "16:30")),
+                _slot("18:00", "19:30", "dinner",             _pick(food,   "18:00", "19:30")),
                 _slot("19:30", "21:00", "evening"),
             ]
         elif day_type == "departure":
             slots = [
-                _slot("07:00", "08:00", "breakfast", _next_food()),
-                _slot("08:30", "10:00", "morning_activity", _next_place()),
+                _slot("07:00", "08:00", "breakfast",        _pick(food,   "07:00", "08:00")),
+                _slot("08:30", "10:00", "morning_activity", _pick(places, "08:30", "10:00")),
             ]
         else:
             slots = [
-                _slot("07:30", "08:30", "breakfast", _next_food()),
-                _slot("09:00", "10:30", "morning_activity", _next_place()),
-                _slot("11:30", "13:00", "lunch", _next_food()),
-                _slot("13:30", "15:00", "afternoon_activity", _next_place()),
-                _slot("18:00", "19:30", "dinner", _next_food()),
+                _slot("07:30", "08:30", "breakfast",          _pick(food,   "07:30", "08:30")),
+                _slot("09:00", "10:30", "morning_activity",   _pick(places, "09:00", "10:30")),
+                _slot("11:30", "13:00", "lunch",              _pick(food,   "11:30", "13:00")),
+                _slot("13:30", "15:00", "afternoon_activity", _pick(places, "13:30", "15:00")),
+                _slot("18:00", "19:30", "dinner",             _pick(food,   "18:00", "19:30")),
             ]
         days.append({
             "day_num": day_num,

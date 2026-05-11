@@ -9,7 +9,7 @@ from loguru import logger
 from app import config
 from app.prompts.enrich import ENRICH_SYSTEM_PROMPT
 
-_ENRICH_TIMEOUT_S = 45  # generous, but prevents infinite hang
+_ENRICH_TIMEOUT_S = int(getattr(config, "ENRICH_LLM_TIMEOUT", 30))
 
 
 
