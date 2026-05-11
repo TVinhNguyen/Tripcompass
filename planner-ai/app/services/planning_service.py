@@ -123,14 +123,28 @@ async def generate_travel_plan(
     )
 
     # ── 5. Schedule → Validate (with retry) → Enrich ──────────────────────
+    used_fallback = False
     for attempt in range(config.MAX_SCHEDULE_RETRIES + 1):
         state.update(await node_schedule(state))
         state.update(node_validate(state))
         if state["validation_passed"] or state.get("retry_count", 0) >= config.MAX_SCHEDULE_RETRIES:
             break
+        # If the schedule node fell back because the LLM timed out, retrying
+        # with the same prompt + provider will just burn another timeout.
+        # Accept the deterministic fallback and move on.
+        if state.pop("skip_retry", False):
+            used_fallback = True
+            logger.info("[planning_service] Skipping retry — schedule used deterministic fallback")
+            break
         logger.info(f"[planning_service] Retry {attempt + 1}: {len(state['violations'])} violations")
 
-    state.update(await node_enrich(state))
+    # Enrichment is cosmetic; skip it entirely when the schedule LLM was the
+    # culprit — saves another timeout against the same flaky provider.
+    if used_fallback:
+        logger.info("[planning_service] Skipping enrichment — same LLM provider was timing out")
+        state["final_plan"] = state.get("draft_schedule", {})
+    else:
+        state.update(await node_enrich(state))
 
     # ── 6. Return ─────────────────────────────────────────────────────────
     return {

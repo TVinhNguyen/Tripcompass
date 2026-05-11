@@ -108,7 +108,7 @@ async def node_schedule(state: dict) -> dict:
     ]
 
     warnings = list(state.get("warnings", []))
-    llm_timeout_s = max(30, int(config.TOOL_TIMEOUT) * 8)
+    llm_timeout_s = int(getattr(config, "SCHEDULE_LLM_TIMEOUT", 90))
     try:
         response = await asyncio.wait_for(config.llm.ainvoke(messages), timeout=llm_timeout_s)
     except asyncio.TimeoutError:
@@ -121,6 +121,9 @@ async def node_schedule(state: dict) -> dict:
             "violations":        [],
             "validation_passed": False,
             "warnings":          warnings,
+            # Same LLM with the same prompt will almost certainly time out
+            # again — signal the outer planning loop to skip the retry.
+            "skip_retry":        True,
         }
 
     raw = response.content.strip()
@@ -152,8 +155,74 @@ async def node_schedule(state: dict) -> dict:
     }
 
 
+def _parse_hours(hours: str | None) -> tuple[int, int] | None:
+    """Parse 'HH:MM-HH:MM' → (open_minutes, close_minutes). Returns None on bad input.
+
+    24/7 venues encoded as '00:00-23:59' return (0, 1439); slots fall inside.
+    """
+    if not hours or "-" not in hours:
+        return None
+    try:
+        a, b = hours.split("-", 1)
+        ah, am = a.strip().split(":")
+        bh, bm = b.strip().split(":")
+        return int(ah) * 60 + int(am), int(bh) * 60 + int(bm)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _hms(t: str) -> int:
+    """Slot time 'HH:MM' → minutes since midnight."""
+    h, m = t.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _slot_bucket(slot_start: str) -> str:
+    """Map slot start time → best_time_of_day bucket the DB uses.
+
+    Buckets follow what the scraper writes into the places.best_time_of_day
+    column ('morning', 'afternoon', 'evening', 'night', 'any').
+    """
+    minutes = _hms(slot_start)
+    if minutes < 11 * 60:
+        return "morning"
+    if minutes < 17 * 60:
+        return "afternoon"
+    if minutes < 21 * 60:
+        return "evening"
+    return "night"
+
+
+def _fits(item: dict, slot_start: str, slot_end: str) -> bool:
+    """True if the venue's opening hours cover the slot window.
+
+    Handles venues that span midnight (e.g. '18:00-02:00' for a night bar):
+    if close < open we treat the window as two segments — [open, 24:00) and
+    [00:00, close] — and the slot must lie inside one of them.
+
+    Returns True for unknown hours so the LLM-style fallback doesn't reject
+    sparse data (scraper sometimes leaves hours blank for low-quality rows).
+    """
+    hrs = _parse_hours(item.get("hours"))
+    if hrs is None:
+        return True
+    open_m, close_m = hrs
+    ss, se = _hms(slot_start), _hms(slot_end)
+    if open_m <= close_m:
+        # Same-day window.
+        return open_m <= ss and se <= close_m
+    # Overnight window — slot fits if it's entirely in either segment.
+    return (ss >= open_m and se <= 1440) or (ss >= 0 and se <= close_m)
+
+
 def _fallback_schedule(state: dict, retrieved: dict) -> dict:
-    """Quick deterministic draft to avoid empty output when LLM is slow."""
+    """Quick deterministic draft to avoid empty output when LLM is slow.
+
+    The fallback used to assign places round-robin without checking opening
+    hours, which produced CLOSED_HOURS violations (e.g. a breakfast-only spot
+    landing in a lunch slot). Now it filters by `hours` per slot and keeps a
+    used-set so a place is never repeated.
+    """
     places = list(retrieved.get("places", []))
     food = list(retrieved.get("food", []))
     hotels = list(retrieved.get("hotels", []))
@@ -184,24 +253,43 @@ def _fallback_schedule(state: dict, retrieved: dict) -> dict:
         "price_per_night_vnd": int(hotels[0].get("price_per_night_vnd", 0)) if hotels else 0,
     }
 
-    place_i = 0
-    food_i = 0
+    used_ids: set[str] = set()
 
-    def _next_place():
-        nonlocal place_i
-        if place_i >= len(places):
-            return None
-        item = places[place_i]
-        place_i += 1
-        return item
+    def _pick(pool: list[dict], slot_start: str, slot_end: str) -> dict | None:
+        """Pick the best venue for a slot, in three tiers.
 
-    def _next_food():
-        nonlocal food_i
-        if food_i >= len(food):
-            return None
-        item = food[food_i]
-        food_i += 1
-        return item
+        Tier 1: hours fit AND best_time_of_day matches the slot bucket
+                (e.g. morning_activity prefers best_time_of_day='morning').
+        Tier 2: hours fit only.
+        Tier 3: any unused venue (graceful fallback when hours-strict empty).
+
+        Pool is already ordered by priority_score/rating from SQL, so within
+        a tier we keep that ranking. used_ids prevents duplicates across
+        slots and days.
+        """
+        slot_bucket = _slot_bucket(slot_start)
+
+        # Tier 1: best_time_of_day match
+        for item in pool:
+            if item.get("id") in used_ids:
+                continue
+            if (item.get("best_time_of_day") or "").lower() == slot_bucket and _fits(item, slot_start, slot_end):
+                used_ids.add(item.get("id", ""))
+                return item
+        # Tier 2: hours fit only
+        for item in pool:
+            if item.get("id") in used_ids:
+                continue
+            if _fits(item, slot_start, slot_end):
+                used_ids.add(item.get("id", ""))
+                return item
+        # Tier 3: relaxed — any unused, so a non-empty pool always produces.
+        for item in pool:
+            if item.get("id") in used_ids:
+                continue
+            used_ids.add(item.get("id", ""))
+            return item
+        return None
 
     def _date_str(day_num: int) -> str:
         if start_dt:
@@ -226,22 +314,22 @@ def _fallback_schedule(state: dict, retrieved: dict) -> dict:
         day_type = _day_type(day_num)
         if day_type == "arrival":
             slots = [
-                _slot("15:00", "16:30", "afternoon_activity", _next_place()),
-                _slot("18:00", "19:30", "dinner", _next_food()),
+                _slot("15:00", "16:30", "afternoon_activity", _pick(places, "15:00", "16:30")),
+                _slot("18:00", "19:30", "dinner",             _pick(food,   "18:00", "19:30")),
                 _slot("19:30", "21:00", "evening"),
             ]
         elif day_type == "departure":
             slots = [
-                _slot("07:00", "08:00", "breakfast", _next_food()),
-                _slot("08:30", "10:00", "morning_activity", _next_place()),
+                _slot("07:00", "08:00", "breakfast",        _pick(food,   "07:00", "08:00")),
+                _slot("08:30", "10:00", "morning_activity", _pick(places, "08:30", "10:00")),
             ]
         else:
             slots = [
-                _slot("07:30", "08:30", "breakfast", _next_food()),
-                _slot("09:00", "10:30", "morning_activity", _next_place()),
-                _slot("11:30", "13:00", "lunch", _next_food()),
-                _slot("13:30", "15:00", "afternoon_activity", _next_place()),
-                _slot("18:00", "19:30", "dinner", _next_food()),
+                _slot("07:30", "08:30", "breakfast",          _pick(food,   "07:30", "08:30")),
+                _slot("09:00", "10:30", "morning_activity",   _pick(places, "09:00", "10:30")),
+                _slot("11:30", "13:00", "lunch",              _pick(food,   "11:30", "13:00")),
+                _slot("13:30", "15:00", "afternoon_activity", _pick(places, "13:30", "15:00")),
+                _slot("18:00", "19:30", "dinner",             _pick(food,   "18:00", "19:30")),
             ]
         days.append({
             "day_num": day_num,
