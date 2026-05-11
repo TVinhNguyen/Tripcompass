@@ -14,6 +14,7 @@ import (
 )
 
 type WSHandler struct {
+	db             *gorm.DB // GetCollaboratorRole helper takes the db handle directly
 	itinerarySvc   *services.ItineraryService
 	userSvc        *services.UserService
 	hub            *ws.Hub
@@ -33,6 +34,7 @@ func NewWSHandler(db *gorm.DB, hub *ws.Hub, jwtSecret, allowedOrigins string) *W
 		}
 	}
 	return &WSHandler{
+		db:             db,
 		itinerarySvc:   services.NewItineraryService(db),
 		userSvc:        services.NewUserService(db),
 		hub:            hub,
@@ -45,6 +47,10 @@ func (h *WSHandler) newUpgrader() *websocket.Upgrader {
 	return &websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
+		// Advertise that we speak the "bearer" subprotocol. Clients pass the
+		// JWT as a second protocol entry ("bearer", "<jwt>") and the server
+		// echoes back the protocol name it picked.
+		Subprotocols: []string{"bearer"},
 		CheckOrigin: func(r *http.Request) bool {
 			origin := r.Header.Get("Origin")
 			for _, allowed := range h.allowedOrigins {
@@ -57,14 +63,35 @@ func (h *WSHandler) newUpgrader() *websocket.Upgrader {
 	}
 }
 
+// tokenFromRequest extracts the JWT from the request. Preferred path is the
+// Sec-WebSocket-Protocol header ("bearer, <jwt>") so the token never lands in
+// access logs. Falls back to ?token= for one release; a warn log surfaces
+// remaining callers so the fallback can be removed.
+func tokenFromRequest(r *http.Request, q string) string {
+	header := r.Header.Get("Sec-WebSocket-Protocol")
+	if header != "" {
+		for _, raw := range strings.Split(header, ",") {
+			part := strings.TrimSpace(raw)
+			if part == "" || strings.EqualFold(part, "bearer") {
+				continue
+			}
+			return part
+		}
+	}
+	return q
+}
+
 // HandleWebSocket upgrades HTTP → WebSocket.
-// Route: GET /api/v1/ws/itinerary/:id?token=<JWT>
+// Route: GET /api/v1/ws/itinerary/:id (token via Sec-WebSocket-Protocol).
 func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	itineraryID := c.Param("id")
-	tokenStr := c.Query("token")
+	tokenStr := tokenFromRequest(c.Request, c.Query("token"))
+	if c.Query("token") != "" && c.Request.Header.Get("Sec-WebSocket-Protocol") == "" {
+		slog.Warn("ws: legacy token query param used — migrate to Sec-WebSocket-Protocol")
+	}
 
 	if tokenStr == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token query parameter"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing bearer subprotocol"})
 		return
 	}
 
@@ -75,9 +102,10 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// Check access: user must be owner or ACCEPTED collaborator
-	// Uses service layer — respects any caching or future business logic added there.
-	if err := h.itinerarySvc.CheckWSAccess(itineraryID, userIDStr); err != nil {
+	// Resolve role: OWNER / EDITOR / VIEWER. Doubles as the access check
+	// (returns ErrForbidden if the user is none of those).
+	role, err := services.GetCollaboratorRole(h.db, itineraryID, userIDStr)
+	if err != nil {
 		handleServiceError(c, err)
 		return
 	}
@@ -96,7 +124,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	client := ws.NewClient(h.hub, conn, itineraryID, userIDStr, fullName)
+	client := ws.NewClient(h.hub, conn, itineraryID, userIDStr, fullName, role)
 	h.hub.Register <- client
 
 	go client.WritePump()

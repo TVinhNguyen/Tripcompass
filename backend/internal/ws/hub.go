@@ -53,22 +53,36 @@ type Client struct {
 	UserID    string
 	FullName  string
 	RoomID    string
+	// Role cached at upgrade time ("OWNER" | "EDITOR" | "VIEWER"). Empty for
+	// user-scope clients (notification channels) where role doesn't apply.
+	Role      string
 	Hub       *Hub
 	Conn      *websocket.Conn
 	Send      chan []byte
 	closeOnce sync.Once
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, roomID, userID, fullName string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, roomID, userID, fullName, role string) *Client {
 	return &Client{
 		ID:       uuid.New().String(),
 		UserID:   userID,
 		FullName: fullName,
 		RoomID:   roomID,
+		Role:     role,
 		Hub:      hub,
 		Conn:     conn,
 		Send:     make(chan []byte, 256),
 	}
+}
+
+// allowedClientEventTypes lists the only message types a connected client may
+// originate. After the server-authoritative refactor, every mutation
+// (activity.created / updated / deleted / reordered, itinerary.updated) is
+// emitted by the HTTP handlers themselves; clients only ever send presence /
+// hover / typing pings. Anything else is rejected with an error frame.
+var allowedClientEventTypes = map[string]bool{
+	"cursor": true,
+	"typing": true,
 }
 
 // ReadPump đọc messages từ WebSocket connection
@@ -97,6 +111,21 @@ func (c *Client) ReadPump() {
 		var msg Message
 		if err := json.Unmarshal(raw, &msg); err != nil {
 			c.sendError("invalid JSON format")
+			continue
+		}
+
+		// Whitelist client-originated events. Everything else (mutations,
+		// presence join/leave) is emitted by the server itself.
+		if !allowedClientEventTypes[msg.Type] {
+			c.sendError("event type not allowed for clients: " + msg.Type)
+			continue
+		}
+
+		// Even within the whitelist, VIEWERs can hover/cursor but typing
+		// (which implies editing) is editor-only. Loosen later if VIEWER
+		// commenting lands.
+		if msg.Type == "typing" && c.Role != "OWNER" && c.Role != "EDITOR" {
+			c.sendError("typing requires editor role")
 			continue
 		}
 

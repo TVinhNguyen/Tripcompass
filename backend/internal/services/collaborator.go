@@ -286,22 +286,39 @@ func (s *CollaboratorService) Remove(collabID, requesterID string) error {
 // CheckEditAccess returns nil if userID is the owner OR an ACCEPTED collaborator with role=EDITOR.
 // Used by activity write endpoints to allow editors to modify activities.
 func CheckEditAccess(db *gorm.DB, itineraryID, userID string) error {
-	itID, err := uuid.Parse(itineraryID)
+	role, err := GetCollaboratorRole(db, itineraryID, userID)
 	if err != nil {
-		return apperror.ErrNotFound
+		return err
 	}
-	var it models.Itinerary
-	if err := db.Select("id", "owner_id").First(&it, "id = ?", itID).Error; err != nil {
-		return apperror.ErrNotFound
-	}
-	if it.OwnerID.String() == userID {
-		return nil
-	}
-	var collab models.Collaborator
-	err = db.Where("itinerary_id = ? AND user_id = ? AND status = ? AND role = ?",
-		itID, userID, "ACCEPTED", "EDITOR").First(&collab).Error
-	if err == nil {
+	if role == "OWNER" || role == "EDITOR" {
 		return nil
 	}
 	return apperror.ErrForbidden
+}
+
+// GetCollaboratorRole returns the role a user holds on an itinerary, or
+// ErrForbidden if they have no ACCEPTED relationship. The string is one of
+// "OWNER" / "EDITOR" / "VIEWER".
+//
+// Used both by HTTP access checks (CheckEditAccess) and the WebSocket layer
+// to gate which message types a connected client may send.
+func GetCollaboratorRole(db *gorm.DB, itineraryID, userID string) (string, error) {
+	itID, err := uuid.Parse(itineraryID)
+	if err != nil {
+		return "", apperror.ErrNotFound
+	}
+	var it models.Itinerary
+	if err := db.Select("id", "owner_id").First(&it, "id = ?", itID).Error; err != nil {
+		return "", apperror.ErrNotFound
+	}
+	if it.OwnerID.String() == userID {
+		return "OWNER", nil
+	}
+	var collab models.Collaborator
+	err = db.Where("itinerary_id = ? AND user_id = ? AND status = ?",
+		itID, userID, "ACCEPTED").First(&collab).Error
+	if err != nil {
+		return "", apperror.ErrForbidden
+	}
+	return collab.Role, nil
 }
