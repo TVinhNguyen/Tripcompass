@@ -187,24 +187,32 @@ func (s *ActivityService) Update(id, userID string, input UpdateActivityInput) (
 	return act, nil
 }
 
-func (s *ActivityService) Delete(id, userID string) error {
-	_, err := s.checkActivityEditAccess(id, userID)
+// Delete removes the activity and returns the itinerary_id it belonged to,
+// so the caller can broadcast a WebSocket event to the right room.
+func (s *ActivityService) Delete(id, userID string) (uuid.UUID, error) {
+	act, err := s.checkActivityEditAccess(id, userID)
 	if err != nil {
-		return err
+		return uuid.Nil, err
 	}
-	return s.db.Delete(&models.Activity{}, "id = ?", id).Error
+	if err := s.db.Delete(&models.Activity{}, "id = ?", id).Error; err != nil {
+		return uuid.Nil, err
+	}
+	return act.ItineraryID, nil
 }
 
-func (s *ActivityService) Reorder(userID string, items []ReorderItem) error {
+// Reorder applies day_number/order_index updates and returns the itinerary_id
+// the items belong to, so the caller can broadcast a WebSocket event.
+func (s *ActivityService) Reorder(userID string, items []ReorderItem) (uuid.UUID, error) {
 	if len(items) == 0 {
-		return nil
+		return uuid.Nil, nil
 	}
 	ids := make([]string, len(items))
 	for i, it := range items {
 		ids[i] = it.ID
 	}
 
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	var itineraryID uuid.UUID
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// Verify all activities exist and belong to the same itinerary.
 		var rows []models.Activity
 		if err := tx.Select("id", "itinerary_id").
@@ -236,6 +244,8 @@ func (s *ActivityService) Reorder(userID string, items []ReorderItem) error {
 				return err
 			}
 		}
+		itineraryID = itID
 		return nil
 	})
+	return itineraryID, err
 }

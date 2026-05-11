@@ -361,6 +361,12 @@ async def stream_chat_response(
     if stream_dropped and clean_text:
         clean_text += "\n\n_⚠️ Phần trả lời bị cắt giữa chừng do nhà cung cấp LLM ngắt kết nối — lịch trình đã được giữ lại._"
 
+    # If the LLM returned nothing after create_travel_plan (free-tier
+    # providers occasionally drop the second call), synthesise a short
+    # Vietnamese summary from plan_data so the user still sees a reply.
+    if not clean_text.strip() and plan_data:
+        clean_text = _deterministic_summary(plan_data, stream_dropped)
+
     # ── Final event ────────────────────────────────────────────────────
     yield _sse({
         "type":       "done",
@@ -369,6 +375,58 @@ async def stream_chat_response(
         "plan":       plan_data,
         "full_text":  clean_text,
     })
+
+
+_DAY_LABEL = {"arrival": "Đến nơi", "departure": "Trở về", "standard": ""}
+
+
+def _deterministic_summary(plan: dict, stream_dropped: bool) -> str:
+    """Produce a short Vietnamese reply from a GenerateResponse-shaped plan.
+
+    Used as a fallback when the agent's post-tool LLM call returned no text
+    (e.g. the upstream provider dropped the connection). The reply is
+    intentionally terse: the FE renders the plan card right below it.
+    """
+    days = plan.get("days") or []
+    dest = (days[0].get("primary_area") if days else None) or "chuyến đi"
+    num_days = len(days) or "?"
+
+    lines: list[str] = [
+        f"Mình đã lên xong lịch trình **{num_days} ngày tại {dest}** cho bạn rồi! 🎉",
+        "",
+    ]
+    for d in days[:7]:
+        names = [
+            s["place"]["name"]
+            for s in (d.get("slots") or [])
+            if isinstance(s.get("place"), dict) and s["place"].get("name")
+        ]
+        if not names:
+            continue
+        label = _DAY_LABEL.get(d.get("day_type", ""), "")
+        prefix = f"**Ngày {d.get('day_num')}**" + (f" — {label}" if label else "")
+        lines.append(f"- {prefix}: {' · '.join(names)}")
+
+    recap = plan.get("budget_recap") or {}
+    total = recap.get("total_budget_vnd")
+    spent = (recap.get("attraction_spent_vnd") or 0) + (recap.get("food_spent_vnd") or 0)
+    if total:
+        lines += [
+            "",
+            f"💰 Ngân sách: **{int(spent):,}₫ / {int(total):,}₫**".replace(",", "."),
+        ]
+
+    if stream_dropped:
+        lines += [
+            "",
+            "_⚠️ Phần mô tả chi tiết bị cắt do nhà cung cấp LLM ngắt kết nối — bạn vẫn lưu và chỉnh sửa được lịch trình bên dưới._",
+        ]
+    else:
+        lines += [
+            "",
+            "Bạn muốn mình **điều chỉnh** chỗ nào hay **lưu thành lịch trình** luôn?",
+        ]
+    return "\n".join(lines)
 
 
 def _sse(data: dict) -> str:

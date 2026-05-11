@@ -351,6 +351,7 @@ export type WSEventType =
   | "itinerary.updated"
   | "presence.join"
   | "presence.leave"
+  | "presence.online"
   | "cursor"
   | "error";
 
@@ -362,5 +363,7 @@ export type WSEvent =
   | { type: "itinerary.updated";  payload: { itinerary: Itinerary };             sender?: { user_id: string; full_name: string } }
   | { type: "presence.join";      payload: { user_id: string; full_name?: string } }
   | { type: "presence.leave";     payload: { user_id: string } }
+  // Initial roster sent right after the connection is upgraded.
+  | { type: "presence.online";    payload: Array<{ user_id: string; full_name: string }> }
   | { type: "cursor";             payload: { user_id: string; activity_id: string; field?: string } }
   | { type: "error";              payload: { message: string } };

@@ -11,6 +11,9 @@ import (
 )
 
 // ─── Message protocol ─────────────────────────────────────────────────────────
+// Event types match docs/integration/04-ITINERARY-COLLAB-FLOW.md §5 — and the
+// WSEventType union in frontend/lib/types.ts. Anything emitted from the server
+// MUST match a case in that union or the FE will silently drop it.
 
 type Message struct {
 	Type    string          `json:"type"`
@@ -22,6 +25,19 @@ type SenderInfo struct {
 	UserID   string `json:"user_id"`
 	FullName string `json:"full_name"`
 }
+
+const (
+	EventPresenceJoin   = "presence.join"
+	EventPresenceLeave  = "presence.leave"
+	EventPresenceOnline = "presence.online" // initial roster sent to the joiner
+
+	EventActivityCreated   = "activity.created"
+	EventActivityUpdated   = "activity.updated"
+	EventActivityDeleted   = "activity.deleted"
+	EventActivityReordered = "activity.reordered"
+	EventItineraryUpdated  = "itinerary.updated"
+	EventError             = "error"
+)
 
 // ─── Client ───────────────────────────────────────────────────────────────────
 
@@ -300,13 +316,17 @@ func (h *Hub) addClient(c *Client) {
 		h.redisPubSub.TrackOnline(h.redisPubSub.ctx, c.RoomID, c.UserID)
 	}
 
-	// Notify room: user joined
+	// Notify room: user joined. Payload mirrors the FE's WSEvent shape so
+	// frontend/app/itinerary/[id]/edit/_hooks/use-editor-state.ts handles it
+	// directly (it switches on type === "presence.join").
+	joinPayload, _ := json.Marshal(map[string]string{
+		"user_id":   c.UserID,
+		"full_name": c.FullName,
+	})
 	joinMsg := Message{
-		Type: "user_joined",
-		Sender: &SenderInfo{
-			UserID:   c.UserID,
-			FullName: c.FullName,
-		},
+		Type:    EventPresenceJoin,
+		Payload: joinPayload,
+		Sender:  &SenderInfo{UserID: c.UserID, FullName: c.FullName},
 	}
 	data, _ := json.Marshal(joinMsg)
 	room.Broadcast(data, c)
@@ -316,14 +336,14 @@ func (h *Hub) addClient(c *Client) {
 		h.redisPubSub.Publish(h.redisPubSub.ctx, c.RoomID, data)
 	}
 
-	// Send online users list to the new client
-	onlineMsg := Message{
-		Type: "online_users",
-	}
+	// Send the current roster to the new joiner. presence.online is the
+	// initial snapshot; subsequent join/leave events keep it in sync.
 	users := room.OnlineUsers()
 	usersData, _ := json.Marshal(users)
-	onlineMsg.Payload = usersData
-	onlineData, _ := json.Marshal(onlineMsg)
+	onlineData, _ := json.Marshal(Message{
+		Type:    EventPresenceOnline,
+		Payload: usersData,
+	})
 	select {
 	case c.Send <- onlineData:
 	default:
@@ -349,12 +369,11 @@ func (h *Hub) removeClient(c *Client) {
 	}
 
 	// Notify room: user left
+	leavePayload, _ := json.Marshal(map[string]string{"user_id": c.UserID})
 	leaveMsg := Message{
-		Type: "user_left",
-		Sender: &SenderInfo{
-			UserID:   c.UserID,
-			FullName: c.FullName,
-		},
+		Type:    EventPresenceLeave,
+		Payload: leavePayload,
+		Sender:  &SenderInfo{UserID: c.UserID, FullName: c.FullName},
 	}
 	data, _ := json.Marshal(leaveMsg)
 	room.Broadcast(data, nil)
