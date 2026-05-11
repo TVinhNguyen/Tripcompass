@@ -179,19 +179,83 @@ class _ThinkStripper:
       explicit:    <think>plan a plan</think>actual reply
       implicit:    plan a plan</think>actual reply
 
-    feed() returns whatever portion of `token` is safe to surface; pending
-    bytes (≤ len("</think>")) are held back in case a tag straddles a chunk.
+    Initial buffer:
+      To prevent leaked-reasoning from flashing in the UI before we see the
+      first </think>, we hold the FIRST ``initial_buffer_chars`` of output
+      for up to ``initial_buffer_seconds``. If </think> arrives in that
+      window we drop the prefix; otherwise we treat the model as
+      non-reasoning and flush.
+
+    Beyond that window the stripper holds back only ``_HOLD`` bytes so a tag
+    straddling two tokens isn't mistakenly emitted.
     """
 
     _OPEN = "<think>"
     _CLOSE = "</think>"
     _HOLD = 8  # len("</think>")
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        initial_buffer_chars: int = 300,
+        initial_buffer_seconds: float = 2.0,
+    ) -> None:
         self._pending = ""
         self._in_think = False
+        self._initial_buffer_chars = initial_buffer_chars
+        self._initial_buffer_seconds = initial_buffer_seconds
+        self._initial_started: float | None = None
+        self._initial_done = False
+        self._buffered_initial = ""
+
+    def _initial_phase_active(self) -> bool:
+        if self._initial_done or self._initial_buffer_chars <= 0:
+            return False
+        import time
+        if self._initial_started is None:
+            self._initial_started = time.monotonic()
+        if len(self._buffered_initial) >= self._initial_buffer_chars:
+            return False
+        if (time.monotonic() - self._initial_started) >= self._initial_buffer_seconds:
+            return False
+        return True
+
+    def _close_initial(self) -> str:
+        """Finalize the initial buffering window.
+
+        If a lone </think> appeared inside the window (no preceding <think>),
+        drop everything up to it — that prefix was leaked reasoning. For an
+        explicit <think>...</think> pair we leave the text alone; the regular
+        state machine downstream will strip the block.
+        """
+        self._initial_done = True
+        text = self._buffered_initial
+        self._buffered_initial = ""
+        close_idx = text.find(self._CLOSE)
+        open_idx = text.find(self._OPEN)
+        if close_idx >= 0 and (open_idx < 0 or close_idx < open_idx):
+            text = text[close_idx + len(self._CLOSE):].lstrip()
+        return text
 
     def feed(self, token: str) -> str:
+        # Initial-buffer phase: accumulate, don't emit yet. Exit the phase
+        # the moment we see ANY think marker, then push what we held through
+        # the regular state machine so it handles both lone-close drops AND
+        # explicit <think>...</think> blocks correctly.
+        if self._initial_phase_active():
+            self._buffered_initial += token
+            saw_marker = (
+                self._CLOSE in self._buffered_initial
+                or self._OPEN in self._buffered_initial
+            )
+            if not saw_marker:
+                return ""
+            token = self._close_initial()
+            if not token:
+                return ""
+        elif self._buffered_initial:
+            # Budget exhausted before any marker — flush whatever we held.
+            token = self._close_initial() + token
+
         self._pending += token
         out: list[str] = []
         while True:
@@ -227,9 +291,15 @@ class _ThinkStripper:
             return "".join(out)
 
     def flush(self) -> str:
+        # If the stream ended while we were still in the initial buffer
+        # window, finalize it (drop any lone </think> prefix) before
+        # spilling the pending tail.
+        prefix = ""
+        if self._buffered_initial:
+            prefix = self._close_initial()
         if self._in_think:
-            return ""
-        out = self._pending
+            return prefix
+        out = prefix + self._pending
         self._pending = ""
         return out
 
