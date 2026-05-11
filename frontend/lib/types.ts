@@ -351,6 +351,9 @@ export type WSEventType =
   | "itinerary.updated"
   | "presence.join"
   | "presence.leave"
+  | "presence.online"
+  | "collaborator.invited"
+  | "collaborator.accepted"
   | "cursor"
   | "error";
 
@@ -362,5 +365,24 @@ export type WSEvent =
   | { type: "itinerary.updated";  payload: { itinerary: Itinerary };             sender?: { user_id: string; full_name: string } }
   | { type: "presence.join";      payload: { user_id: string; full_name?: string } }
   | { type: "presence.leave";     payload: { user_id: string } }
+  // Initial roster sent right after the connection is upgraded.
+  | { type: "presence.online";    payload: Array<{ user_id: string; full_name: string }> }
+  // Per-user notification — backend sends through the user channel when a new
+  // collaborator row is created (or when a pending-by-email row is linked).
+  // The invite shape mirrors backend models.Collaborator but loose-typed here
+  // so we don't have to track every backend field change in the FE.
+  | { type: "collaborator.invited";  payload: { invite: WSCollaborator; inviter_name?: string; itinerary_id: string; itinerary_name?: string } }
+  | { type: "collaborator.accepted"; payload: { invite: WSCollaborator; itinerary_id: string } }
   | { type: "cursor";             payload: { user_id: string; activity_id: string; field?: string } }
   | { type: "error";              payload: { message: string } };
+
+// Loose-typed mirror of backend models.Collaborator — only fields the FE
+// actually surfaces in toasts / badges.
+export type WSCollaborator = {
+  id: string;
+  itinerary_id: string;
+  user_id?: string;
+  email?: string;
+  role: "EDITOR" | "VIEWER";
+  status: "PENDING" | "ACCEPTED";
+};

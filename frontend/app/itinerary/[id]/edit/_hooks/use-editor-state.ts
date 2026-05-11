@@ -103,6 +103,21 @@ export function useEditorState(id: string) {
       case "presence.leave":
         setOnlineUsers((prev) => prev.filter((u) => u.id !== evt.payload.user_id));
         break;
+      case "presence.online":
+        // Initial roster sent right after the connection upgrades.
+        // Replace local state (handles reconnects cleanly).
+        if (Array.isArray(evt.payload)) {
+          setOnlineUsers(
+            evt.payload.map((u) => ({
+              id: u.user_id,
+              name: u.full_name || "User",
+              avatar: "",
+              role: "editor" as const,
+              isOnline: true,
+            })),
+          );
+        }
+        break;
       case "activity.created":
         if (evt.payload.activity)
           // Bug 12: dedupe in case server echoes back to sender
@@ -146,7 +161,10 @@ export function useEditorState(id: string) {
       .catch(() => {});
   }, [id]);
 
-  const { send: wsSend } = useItineraryWS(
+  // Backend now broadcasts activity events itself after every HTTP mutation,
+  // so we only consume incoming events here. The hook's `send` is unused for
+  // now but kept for future cursor / typing-indicator features.
+  useItineraryWS(
     id !== "new" ? id : "",
     handleWSEvent,
     handleWSReconnect,
@@ -167,19 +185,21 @@ export function useEditorState(id: string) {
   }, [id, itinerary, title, saving]);
 
   // ── Delete activity ──────────────────────────────────────────────────────────
+  // Backend broadcasts the WS event itself after the DB write, so we only
+  // need optimistic UI here.
   const removeActivity = useCallback(async (activityId: string) => {
     const snapshot = activities;
     setActivities((p) => p.filter((a) => a.id !== activityId));
     try {
       await apiFetch(`/activities/${activityId}`, { method: "DELETE" });
-      wsSend({ type: "activity.deleted", payload: { activity_id: activityId } });
     } catch {
       toast.error("Xoá thất bại");
       setActivities(snapshot);
     }
-  }, [activities, wsSend]);
+  }, [activities]);
 
   // ── Edit activity (modal save) ───────────────────────────────────────────────
+  // Backend broadcasts the updated activity to the room itself.
   const saveActivity = useCallback(async (updated: Activity) => {
     setActivities((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
     try {
@@ -194,11 +214,10 @@ export function useEditorState(id: string) {
           day_number:     updated.day,
         },
       });
-      wsSend({ type: "activity.updated", payload: { activity: { ...updated } } });
     } catch {
       toast.error("Cập nhật thất bại");
     }
-  }, [wsSend]);
+  }, []);
 
   // ── DnD: drag over (cross-day preview) ──────────────────────────────────────
   const handleDragOver = useCallback((event: DragOverEvent) => {
@@ -265,7 +284,7 @@ export function useEditorState(id: string) {
             },
           });
           setActivities((prev) => prev.map((a) => (a.id === tempId ? fromApiActivity(created) : a)));
-          wsSend({ type: "activity.created", payload: { activity: created } });
+          // Backend broadcasts activity.created on the room itself.
         } catch {
           toast.error("Thêm hoạt động thất bại");
           setActivities((prev) => prev.filter((a) => a.id !== tempId));
@@ -301,13 +320,13 @@ export function useEditorState(id: string) {
 
       try {
         await apiFetch("/activities/reorder", { method: "PATCH", body: { items: reorderItems } });
-        wsSend({ type: "activity.reordered", payload: { items: reorderItems } });
+        // Backend broadcasts activity.reordered after the transaction commits.
       } catch {
         toast.error("Sắp xếp thất bại");
         setActivities(activities); // rollback
       }
     }
-  }, [activities, id, itinerary, wsSend]);
+  }, [activities, id, itinerary]);
 
   // ── Add new day ───────────────────────────────────────────────────────────────
   // NOTE: doesn't create a placeholder activity — empty days are shown via

@@ -8,6 +8,7 @@ import (
 	"tripcompass-backend/internal/pagination"
 	"tripcompass-backend/internal/services"
 	"tripcompass-backend/internal/viewcounter"
+	"tripcompass-backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -15,14 +16,15 @@ import (
 
 type ItineraryHandler struct {
 	svc *services.ItineraryService
+	pub ws.Publisher
 }
 
-func NewItineraryHandler(db *gorm.DB, vc *viewcounter.Counter) *ItineraryHandler {
+func NewItineraryHandler(db *gorm.DB, vc *viewcounter.Counter, pub ws.Publisher) *ItineraryHandler {
 	svc := services.NewItineraryService(db)
 	if vc != nil {
 		svc = svc.WithViewCounter(vc)
 	}
-	return &ItineraryHandler{svc: svc}
+	return &ItineraryHandler{svc: svc, pub: pub}
 }
 
 // mustUserID extracts the authenticated user ID from gin context.
@@ -104,6 +106,9 @@ func (h *ItineraryHandler) Update(c *gin.Context) {
 		handleServiceError(c, err)
 		return
 	}
+	if h.pub != nil {
+		h.pub.PublishEvent(it.ID.String(), ws.EventItineraryUpdated, gin.H{"itinerary": it})
+	}
 	c.JSON(http.StatusOK, it)
 }
 
@@ -152,6 +157,9 @@ func (h *ItineraryHandler) Publish(c *gin.Context) {
 	if err != nil {
 		handleServiceError(c, err)
 		return
+	}
+	if h.pub != nil {
+		h.pub.PublishEvent(it.ID.String(), ws.EventItineraryUpdated, gin.H{"itinerary": it})
 	}
 	c.JSON(http.StatusOK, it)
 }

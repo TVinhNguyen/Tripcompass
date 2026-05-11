@@ -19,7 +19,7 @@ func TestNewRoom(t *testing.T) {
 func TestRoom_AddClient(t *testing.T) {
 	r := NewRoom("room-1")
 	hub := NewHub()
-	c := NewClient(hub, nil, "room-1", "user-1", "User One")
+	c := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
 
 	r.AddClient(c)
 	assert.Len(t, r.Clients, 1)
@@ -29,7 +29,7 @@ func TestRoom_AddClient(t *testing.T) {
 func TestRoom_RemoveClient(t *testing.T) {
 	r := NewRoom("room-1")
 	hub := NewHub()
-	c := NewClient(hub, nil, "room-1", "user-1", "User One")
+	c := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
 
 	r.AddClient(c)
 	r.RemoveClient(c)
@@ -39,7 +39,7 @@ func TestRoom_RemoveClient(t *testing.T) {
 func TestRoom_RemoveClient_NotInRoom(t *testing.T) {
 	r := NewRoom("room-1")
 	hub := NewHub()
-	c := NewClient(hub, nil, "room-1", "user-1", "User One")
+	c := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
 
 	// Should not panic
 	r.RemoveClient(c)
@@ -51,7 +51,7 @@ func TestRoom_IsEmpty(t *testing.T) {
 	assert.True(t, r.IsEmpty())
 
 	hub := NewHub()
-	c := NewClient(hub, nil, "room-1", "user-1", "User One")
+	c := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
 	r.AddClient(c)
 	assert.False(t, r.IsEmpty())
 
@@ -63,9 +63,9 @@ func TestRoom_Broadcast(t *testing.T) {
 	r := NewRoom("room-1")
 	hub := NewHub()
 
-	c1 := NewClient(hub, nil, "room-1", "user-1", "User One")
-	c2 := NewClient(hub, nil, "room-1", "user-2", "User Two")
-	c3 := NewClient(hub, nil, "room-1", "user-3", "User Three")
+	c1 := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
+	c2 := NewClient(hub, nil, "room-1", "user-2", "User Two", "EDITOR")
+	c3 := NewClient(hub, nil, "room-1", "user-3", "User Three", "EDITOR")
 
 	r.AddClient(c1)
 	r.AddClient(c2)
@@ -126,8 +126,8 @@ func TestRoom_OnlineUsers(t *testing.T) {
 	r := NewRoom("room-1")
 	hub := NewHub()
 
-	c1 := NewClient(hub, nil, "room-1", "user-1", "User One")
-	c2 := NewClient(hub, nil, "room-1", "user-2", "User Two")
+	c1 := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
+	c2 := NewClient(hub, nil, "room-1", "user-2", "User Two", "EDITOR")
 
 	r.AddClient(c1)
 	r.AddClient(c2)
@@ -148,8 +148,8 @@ func TestRoom_OnlineUsers_Dedup(t *testing.T) {
 	hub := NewHub()
 
 	// Same user with two connections (multiple tabs)
-	c1 := NewClient(hub, nil, "room-1", "user-1", "User One")
-	c2 := NewClient(hub, nil, "room-1", "user-1", "User One")
+	c1 := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
+	c2 := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
 
 	r.AddClient(c1)
 	r.AddClient(c2)
@@ -198,8 +198,8 @@ func TestHub_BroadcastToRoom(t *testing.T) {
 		room := NewRoom("room-1")
 		h.Rooms["room-1"] = room
 
-		c1 := NewClient(h, nil, "room-1", "user-1", "User One")
-		c2 := NewClient(h, nil, "room-1", "user-2", "User Two")
+		c1 := NewClient(h, nil, "room-1", "user-1", "User One", "EDITOR")
+		c2 := NewClient(h, nil, "room-1", "user-2", "User Two", "EDITOR")
 		room.AddClient(c1)
 		room.AddClient(c2)
 
@@ -221,7 +221,7 @@ func TestHub_BroadcastToRoom(t *testing.T) {
 
 func TestHub_AddClient_CreatesRoom(t *testing.T) {
 	h := NewHub()
-	c := NewClient(h, nil, "new-room", "user-1", "User One")
+	c := NewClient(h, nil, "new-room", "user-1", "User One", "EDITOR")
 
 	h.addClient(c)
 
@@ -232,7 +232,7 @@ func TestHub_AddClient_CreatesRoom(t *testing.T) {
 
 func TestHub_RemoveClient_CleansEmptyRoom(t *testing.T) {
 	h := NewHub()
-	c := NewClient(h, nil, "temp-room", "user-1", "User One")
+	c := NewClient(h, nil, "temp-room", "user-1", "User One", "EDITOR")
 
 	h.addClient(c)
 	assert.NotNil(t, h.GetRoom("temp-room"))
@@ -243,8 +243,8 @@ func TestHub_RemoveClient_CleansEmptyRoom(t *testing.T) {
 
 func TestHub_RemoveClient_NonEmptyRoom(t *testing.T) {
 	h := NewHub()
-	c1 := NewClient(h, nil, "shared-room", "user-1", "User One")
-	c2 := NewClient(h, nil, "shared-room", "user-2", "User Two")
+	c1 := NewClient(h, nil, "shared-room", "user-1", "User One", "EDITOR")
+	c2 := NewClient(h, nil, "shared-room", "user-2", "User Two", "EDITOR")
 
 	h.addClient(c1)
 	h.addClient(c2)
@@ -259,7 +259,7 @@ func TestHub_RemoveClient_NonEmptyRoom(t *testing.T) {
 
 func TestHub_RemoveClient_NonExistentRoom(t *testing.T) {
 	h := NewHub()
-	c := NewClient(h, nil, "ghost-room", "user-1", "User One")
+	c := NewClient(h, nil, "ghost-room", "user-1", "User One", "EDITOR")
 
 	// Should not panic
 	h.removeClient(c)
@@ -269,7 +269,7 @@ func TestHub_RemoveClient_NonExistentRoom(t *testing.T) {
 
 func TestNewClient(t *testing.T) {
 	hub := NewHub()
-	c := NewClient(hub, nil, "room-1", "user-1", "User One")
+	c := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
 
 	assert.NotEmpty(t, c.ID)
 	assert.Equal(t, "user-1", c.UserID)
@@ -284,13 +284,13 @@ func TestCloseSend(t *testing.T) {
 	hub := NewHub()
 
 	t.Run("normal close", func(t *testing.T) {
-		c := NewClient(hub, nil, "room-1", "user-1", "User One")
+		c := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
 		// Should not panic
 		c.closeSend()
 	})
 
 	t.Run("double close does not panic", func(t *testing.T) {
-		c := NewClient(hub, nil, "room-1", "user-1", "User One")
+		c := NewClient(hub, nil, "room-1", "user-1", "User One", "EDITOR")
 		c.closeSend()
 		// Second close is idempotent via sync.Once
 		c.closeSend()
