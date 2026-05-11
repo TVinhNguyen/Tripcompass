@@ -45,12 +45,13 @@ async def get_food_venues(
         params.append(tags)
         idx += 1
 
+    # description intentionally excluded — see notes in get_places.py.
     query = f"""
         SELECT id, name, name_en, destination, area, address,
                latitude, longitude, cover_image, rating, review_count,
                must_visit, priority_score, best_time_of_day, tags,
                open_time::text AS open_time, close_time::text AS close_time,
-               hours, recommended_duration, description, base_price
+               hours, recommended_duration, base_price
         FROM {config.DB_SCHEMA}.places
         WHERE {" AND ".join(conditions)}
         ORDER BY {preference_rank} must_visit DESC, priority_score DESC, rating DESC NULLS LAST
@@ -91,7 +92,6 @@ async def get_food_venues(
             "hours":           hours or "07:00-22:00",
             "duration_min":    int(r["recommended_duration"] or 60),
             "base_price":      int(r["base_price"] or 0),
-            "description":     r["description"] or "",
         })
 
     logger.info(f"[get_food_venues] dest={destination!r} → {len(food)} venues")

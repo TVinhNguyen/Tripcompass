@@ -47,12 +47,15 @@ async def get_places(
         params.append(tags)
         idx += 1
 
+    # description intentionally excluded — neither the schedule node nor the
+    # agent Q&A prompt uses it, and 30 rows × ~150 chars adds ~1.5k tokens
+    # of overhead per planning call. FE fetches description directly from /places/:id.
     query = f"""
         SELECT id, name, name_en, destination, area, address,
                latitude, longitude, cover_image, rating, review_count,
                must_visit, priority_score, best_time_of_day, tags,
                open_time::text AS open_time, close_time::text AS close_time,
-               hours, recommended_duration, description,
+               hours, recommended_duration,
                base_price, price_updated_at
         FROM {config.DB_SCHEMA}.places
         WHERE {" AND ".join(conditions)}
@@ -94,7 +97,6 @@ async def get_places(
             "hours":           hours or "08:00-17:00",
             "duration_min":    int(r["recommended_duration"] or 90),
             "base_price":      int(r["base_price"] or 0),
-            "description":     r["description"] or "",
             "is_stale":        r["price_updated_at"] is None or (r["base_price"] or 0) == 0,
         })
 
