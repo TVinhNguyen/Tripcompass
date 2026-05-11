@@ -199,13 +199,14 @@ func (r *Room) IsEmpty() bool {
 	return len(r.Clients) == 0
 }
 
-// Broadcast sends data to all clients except exclude client
+// Broadcast sends data to every client in the room except `exclude`.
+//
+// The hot path takes only a read lock while iterating clients — a write lock
+// is only taken after the loop, and only if buffer-full evictions are needed.
+// Without this split a 50-client room would serialise every broadcast.
 func (r *Room) Broadcast(data []byte, exclude *Client) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
+	r.mu.RLock()
 	var toClose []*Client
-
 	for client := range r.Clients {
 		if client == exclude {
 			continue
@@ -213,16 +214,21 @@ func (r *Room) Broadcast(data []byte, exclude *Client) {
 		select {
 		case client.Send <- data:
 		default:
-			// Buffer full — close send channel and evict
+			// Buffer full — close send channel and queue for eviction.
 			client.closeSend()
 			toClose = append(toClose, client)
 		}
 	}
+	r.mu.RUnlock()
 
-	// Remove closed clients after iteration
+	if len(toClose) == 0 {
+		return
+	}
+	r.mu.Lock()
 	for _, client := range toClose {
 		delete(r.Clients, client)
 	}
+	r.mu.Unlock()
 }
 
 func (r *Room) OnlineUsers() []SenderInfo {

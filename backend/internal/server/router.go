@@ -53,8 +53,8 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 	// ── Handlers ───────────────────────────────────────────────────────────────
 	authHandler := handlers.NewAuthHandler(db, cfg)
 	userHandler := handlers.NewUserHandler(db)
-	itineraryHandler := handlers.NewItineraryHandler(db, vc) // H10: buffered view counter
 	wsPublisher := ws.NewPublisher(hub)
+	itineraryHandler := handlers.NewItineraryHandler(db, vc, wsPublisher) // H10: buffered view counter
 	activityHandler := handlers.NewActivityHandler(db, wsPublisher)
 	placeHandler := handlers.NewPlaceHandler(db)
 	comboHandler := handlers.NewComboHandler(db)

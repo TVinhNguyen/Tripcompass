@@ -80,8 +80,10 @@ export function useItineraryWS(
       ws.onclose = () => {
         wsRef.current = null;
         if (cancelled) return;
-        // Reconnect with exponential backoff — max 30s
-        const delay = Math.min(30_000, 1_000 * 2 ** retryRef.current);
+        // Exponential backoff with ±20% jitter so a server restart doesn't
+        // produce a thundering herd of simultaneous reconnects. Max 30s.
+        const base = Math.min(30_000, 1_000 * 2 ** retryRef.current);
+        const delay = Math.round(base * (0.8 + Math.random() * 0.4));
         retryRef.current += 1;
         setTimeout(connect, delay);
       };

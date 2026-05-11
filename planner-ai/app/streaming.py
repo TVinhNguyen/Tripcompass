@@ -168,6 +168,87 @@ def _extract_plan(raw: str) -> dict | None:
     return None
 
 
+class _ThinkStripper:
+    """Stream-friendly filter that suppresses <think>...</think> reasoning.
+
+    Reasoning models (minimax, qwen-thinking, etc.) emit chain-of-thought
+    wrapped in <think>...</think>. The wrapping is sometimes asymmetric — a
+    lone </think> shows up because the API dropped the opening tag. We treat
+    both cases as thinking:
+
+      explicit:    <think>plan a plan</think>actual reply
+      implicit:    plan a plan</think>actual reply
+
+    feed() returns whatever portion of `token` is safe to surface; pending
+    bytes (≤ len("</think>")) are held back in case a tag straddles a chunk.
+    """
+
+    _OPEN = "<think>"
+    _CLOSE = "</think>"
+    _HOLD = 8  # len("</think>")
+
+    def __init__(self) -> None:
+        self._pending = ""
+        self._in_think = False
+
+    def feed(self, token: str) -> str:
+        self._pending += token
+        out: list[str] = []
+        while True:
+            if self._in_think:
+                idx = self._pending.find(self._CLOSE)
+                if idx >= 0:
+                    self._pending = self._pending[idx + len(self._CLOSE):].lstrip()
+                    self._in_think = False
+                    continue
+                if len(self._pending) > self._HOLD:
+                    self._pending = self._pending[-self._HOLD:]
+                return "".join(out)
+
+            open_idx = self._pending.find(self._OPEN)
+            close_idx = self._pending.find(self._CLOSE)
+
+            # Lone </think> before any <think> — treat what came before as
+            # leaked reasoning, drop it. Tokens already emitted to the FE will
+            # be replaced by clean_text in the final `done` event.
+            if close_idx >= 0 and (open_idx < 0 or close_idx < open_idx):
+                self._pending = self._pending[close_idx + len(self._CLOSE):].lstrip()
+                continue
+
+            if open_idx >= 0:
+                out.append(self._pending[:open_idx])
+                self._pending = self._pending[open_idx + len(self._OPEN):]
+                self._in_think = True
+                continue
+
+            if len(self._pending) > self._HOLD:
+                out.append(self._pending[:-self._HOLD])
+                self._pending = self._pending[-self._HOLD:]
+            return "".join(out)
+
+    def flush(self) -> str:
+        if self._in_think:
+            return ""
+        out = self._pending
+        self._pending = ""
+        return out
+
+
+def _strip_thinking(text: str) -> str:
+    """Regex pass for the final clean_text — removes any <think>...</think>
+    blocks plus a lone </think> + everything before it, so the FE's `done`
+    event always carries a clean reply.
+    """
+    import re
+    # 1. Explicit blocks anywhere.
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    # 2. Lone </think> — drop preceding leaked reasoning, keep the rest.
+    text = re.sub(r"^.*?</think>", "", text, count=1, flags=re.DOTALL)
+    # 3. Any stray closer that survived.
+    text = text.replace("</think>", "")
+    return text.lstrip()
+
+
 def _strip_json_objects(text: str) -> str:
     """Remove all JSON blocks from text, keeping only the markdown summary.
 
@@ -258,6 +339,7 @@ async def stream_chat_response(
     plan_data: dict | None = None
     full_text = ""
     stream_dropped = False  # True if upstream LLM closed the connection mid-stream
+    think_stripper = _ThinkStripper()
 
     # Per-request scratch space. create_travel_plan stashes the full plan dict
     # here so we can ship it to the FE without bloating the agent's context.
@@ -318,7 +400,9 @@ async def stream_chat_response(
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     token = chunk.content
                     full_text += token
-                    yield _sse({"type": "token", "content": token})
+                    clean_token = think_stripper.feed(token)
+                    if clean_token:
+                        yield _sse({"type": "token", "content": clean_token})
 
     except Exception as e:
         # Detect the "peer closed connection" family — free-tier LLM gateways
@@ -356,8 +440,13 @@ async def stream_chat_response(
         if plan_data:
             logger.info("[stream] Plan extracted from full_text fallback")
 
-    # ── Clean full_text: strip all JSON, keep only markdown summary ────
-    clean_text = _strip_json_objects(full_text)
+    # Emit anything still buffered by the think-stripper (post-</think> tail).
+    trailing = think_stripper.flush()
+    if trailing:
+        yield _sse({"type": "token", "content": trailing})
+
+    # ── Clean full_text: strip thinking blocks, then JSON, keep markdown ──
+    clean_text = _strip_json_objects(_strip_thinking(full_text))
     if stream_dropped and clean_text:
         clean_text += "\n\n_⚠️ Phần trả lời bị cắt giữa chừng do nhà cung cấp LLM ngắt kết nối — lịch trình đã được giữ lại._"
 
