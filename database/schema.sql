@@ -87,6 +87,23 @@ CREATE UNIQUE INDEX collaborators_pending_email_uniq
     ON "collaborators" (itinerary_id, lower(email))
     WHERE email IS NOT NULL;
 
+-- Transactional outbox for WebSocket broadcasts. Handlers INSERT inside the
+-- same Tx as the mutation; a background worker drains the table.
+CREATE TABLE "outbox" (
+    "id"            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    "event_type"    TEXT         NOT NULL,
+    "room_id"       TEXT         NOT NULL,
+    "payload"       JSONB        NOT NULL,
+    "created_at"    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    "dispatched_at" TIMESTAMPTZ,
+    "retry_count"   INT          NOT NULL DEFAULT 0,
+    "last_error"    TEXT
+);
+
+CREATE INDEX outbox_pending_idx
+    ON "outbox" (created_at)
+    WHERE dispatched_at IS NULL;
+
 CREATE TABLE "ai_chat_messages" (
     "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid (),
     "session_id" UUID,

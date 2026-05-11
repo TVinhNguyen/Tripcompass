@@ -124,19 +124,27 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 		VerifyTokenExpiresAt: &expiry,
 	}
 
-	if err := s.db.Create(&user).Error; err != nil {
-		return nil, err
-	}
-
-	// Claim any pending-by-email collaborator invites that were waiting for
-	// this address. Done in the same DB but a separate statement; failure
-	// here is logged, not fatal — the user is created regardless.
-	if s.collab != nil {
-		if linked, err := s.collab.LinkPendingInvites(s.db, user.ID, user.Email); err != nil {
-			slog.Warn("link pending invites failed", "user_id", user.ID, "err", err)
-		} else if linked > 0 {
-			slog.Info("linked pending invites", "user_id", user.ID, "count", linked)
+	// Create the user and claim any pending invites in a single Tx so the
+	// outbox enqueues from LinkPendingInvites commit atomically with the new
+	// row. Falling back to the direct-publish path would still ship the
+	// event but lose at-least-once safety on a crash.
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&user).Error; err != nil {
+			return err
 		}
+		if s.collab != nil {
+			linked, err := s.collab.LinkPendingInvites(tx, user.ID, user.Email)
+			if err != nil {
+				// Don't fail registration on notification plumbing — log
+				// loudly and continue. The invites are still in the DB.
+				slog.Warn("link pending invites failed", "user_id", user.ID, "err", err)
+			} else if linked > 0 {
+				slog.Info("linked pending invites", "user_id", user.ID, "count", linked)
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	// Send verification email asynchronously — don't block registration response

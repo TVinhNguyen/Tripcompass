@@ -243,6 +243,73 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// E: Pending collaborator invites by email. user_id is no longer
+			// mandatory; email holds the address until LinkPendingInvites runs.
+			ID: "202605110010_collaborator_pending_invites",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`ALTER TABLE schema_travel.collaborators
+						ALTER COLUMN user_id DROP NOT NULL;`,
+					`ALTER TABLE schema_travel.collaborators
+						ADD COLUMN IF NOT EXISTS email TEXT;`,
+					`DO $$
+BEGIN
+	IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'collaborators_invitee_present') THEN
+		ALTER TABLE schema_travel.collaborators
+		ADD CONSTRAINT collaborators_invitee_present
+			CHECK (user_id IS NOT NULL OR email IS NOT NULL);
+	END IF;
+END $$;`,
+					`CREATE UNIQUE INDEX IF NOT EXISTS collaborators_pending_email_uniq
+						ON schema_travel.collaborators (itinerary_id, lower(email))
+						WHERE email IS NOT NULL;`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				_ = tx.Exec(`DROP INDEX IF EXISTS schema_travel.collaborators_pending_email_uniq;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.collaborators DROP CONSTRAINT IF EXISTS collaborators_invitee_present;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.collaborators DROP COLUMN IF EXISTS email;`).Error
+				return nil
+			},
+		},
+		{
+			// K: Transactional outbox for WebSocket broadcasts.
+			ID: "202605110011_outbox",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`CREATE TABLE IF NOT EXISTS schema_travel.outbox (
+						id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+						event_type    TEXT         NOT NULL,
+						room_id       TEXT         NOT NULL,
+						payload       JSONB        NOT NULL,
+						created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+						dispatched_at TIMESTAMPTZ,
+						retry_count   INT          NOT NULL DEFAULT 0,
+						last_error    TEXT
+					);`,
+					`CREATE INDEX IF NOT EXISTS outbox_pending_idx
+						ON schema_travel.outbox (created_at)
+						WHERE dispatched_at IS NULL;`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				_ = tx.Exec(`DROP TABLE IF EXISTS schema_travel.outbox;`).Error
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()

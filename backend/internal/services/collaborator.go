@@ -19,6 +19,7 @@ import (
 // hubPublisher implements this directly.
 type WSPublisher interface {
 	PublishToUser(userID, eventType string, payload any)
+	PublishToUserInTx(tx *gorm.DB, userID, eventType string, payload any) error
 }
 
 type CollaboratorService struct {
@@ -126,8 +127,26 @@ func (s *CollaboratorService) Invite(itineraryID, ownerID string, input InviteIn
 		em := email
 		collab.Email = &em
 	}
-	if err := s.db.Create(&collab).Error; err != nil {
-		return nil, fmt.Errorf("create collaborator: %w", err)
+
+	// Wrap the INSERT + outbox enqueue in a single transaction so a crash
+	// between them can't leave us with an invite row that no notification
+	// will ever fire for. The email is fire-and-forget below (see comment).
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&collab).Error; err != nil {
+			return fmt.Errorf("create collaborator: %w", err)
+		}
+		if s.pub != nil && inviteeExists {
+			return s.pub.PublishToUserInTx(tx, invitee.ID.String(), "collaborator.invited", map[string]any{
+				"invite":         collab,
+				"inviter_name":   owner.FullName,
+				"itinerary_id":   it.ID.String(),
+				"itinerary_name": it.Title,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Email goes out to the supplied address regardless of registration.
@@ -150,19 +169,7 @@ func (s *CollaboratorService) Invite(itineraryID, ownerID string, input InviteIn
 		}(toEmail, toName, owner.FullName, it.Title, role)
 	}
 
-	// In-app notification: if the invitee already has an account, ping their
-	// user channel so an open browser tab shows a toast / badge update.
-	// Pending-by-email invites get the event later when LinkPendingInvites
-	// runs in Register.
-	if s.pub != nil && inviteeExists {
-		s.pub.PublishToUser(invitee.ID.String(), "collaborator.invited", map[string]any{
-			"invite":         collab,
-			"inviter_name":   owner.FullName,
-			"itinerary_id":   it.ID.String(),
-			"itinerary_name": it.Title,
-		})
-	}
-
+	// Notification was already enqueued inside the Tx above.
 	return &collab, nil
 }
 
@@ -205,10 +212,19 @@ func (s *CollaboratorService) LinkPendingInvites(tx *gorm.DB, userID uuid.UUID, 
 	for _, p := range pending {
 		p.UserID = &userID
 		p.Email = nil
-		s.pub.PublishToUser(uidStr, "collaborator.invited", map[string]any{
+		payload := map[string]any{
 			"invite":       p,
 			"itinerary_id": p.ItineraryID.String(),
-		})
+		}
+		// Route through the outbox if we have a transaction — atomic with the
+		// UPDATE above. Fall back to direct publish when called outside a Tx.
+		if tx != nil {
+			if err := s.pub.PublishToUserInTx(tx, uidStr, "collaborator.invited", payload); err != nil {
+				slog.Warn("outbox enqueue (invite link) failed", "user_id", uidStr, "err", err)
+			}
+		} else {
+			s.pub.PublishToUser(uidStr, "collaborator.invited", payload)
+		}
 	}
 	return res.RowsAffected, nil
 }
