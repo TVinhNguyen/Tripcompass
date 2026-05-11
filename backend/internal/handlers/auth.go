@@ -15,7 +15,9 @@ type AuthHandler struct {
 
 func NewAuthHandler(db *gorm.DB, cfg *config.Config) *AuthHandler {
 	emailSvc := services.NewEmailService(cfg)
-	authSvc := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpireHours, emailSvc, cfg.GoogleClientID, cfg.FacebookAppSecret)
+	collabSvc := services.NewCollaboratorService(db, emailSvc)
+	authSvc := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpireHours, emailSvc, cfg.GoogleClientID, cfg.FacebookAppSecret).
+		WithCollaboratorService(collabSvc)
 	return &AuthHandler{svc: authSvc}
 }
 

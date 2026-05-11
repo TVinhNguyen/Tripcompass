@@ -33,6 +33,10 @@ func validRole(role string) bool {
 
 // Invite creates a PENDING collaborator entry and sends an invite email.
 // Only the itinerary owner can invite. The invitee must be an existing user.
+// Invite either binds an existing User to the itinerary as PENDING or, if
+// no user with that email exists yet, records a pending invite carrying the
+// email. The pending row is converted to a real user link by
+// LinkPendingInvites the next time someone registers with that email.
 func (s *CollaboratorService) Invite(itineraryID, ownerID string, input InviteInput) (*models.Collaborator, error) {
 	role := strings.ToUpper(strings.TrimSpace(input.Role))
 	if role == "" {
@@ -40,6 +44,10 @@ func (s *CollaboratorService) Invite(itineraryID, ownerID string, input InviteIn
 	}
 	if !validRole(role) {
 		return nil, fmt.Errorf("%w: role must be EDITOR or VIEWER", apperror.ErrInvalidInput)
+	}
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	if email == "" {
+		return nil, fmt.Errorf("%w: email is required", apperror.ErrInvalidInput)
 	}
 
 	var it models.Itinerary
@@ -58,37 +66,62 @@ func (s *CollaboratorService) Invite(itineraryID, ownerID string, input InviteIn
 		return nil, err
 	}
 
-	var invitee models.User
-	if err := s.db.First(&invitee, "lower(email) = lower(?)", input.Email).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("%w: no user with that email", apperror.ErrNotFound)
-		}
-		return nil, err
-	}
-	if invitee.ID == it.OwnerID {
+	// Owner can't invite themselves regardless of whether they registered with
+	// the supplied email or not.
+	if strings.EqualFold(owner.Email, email) {
 		return nil, fmt.Errorf("%w: owner cannot be invited as collaborator", apperror.ErrInvalidInput)
 	}
 
+	// Look up the invitee. Absence is fine — we create a pending-by-email row.
+	var invitee models.User
+	var inviteeExists bool
+	if err := s.db.First(&invitee, "lower(email) = ?", email).Error; err == nil {
+		inviteeExists = true
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	// Conflict check covers both (itinerary_id, user_id) for registered users
+	// and (itinerary_id, lower(email)) for pending-by-email rows.
 	var existing models.Collaborator
-	err := s.db.Where("itinerary_id = ? AND user_id = ?", it.ID, invitee.ID).First(&existing).Error
-	if err == nil {
-		return nil, fmt.Errorf("%w: user already invited (status=%s)", apperror.ErrConflict, existing.Status)
+	q := s.db.Where("itinerary_id = ?", it.ID)
+	if inviteeExists {
+		q = q.Where("user_id = ? OR lower(email) = ?", invitee.ID, email)
+	} else {
+		q = q.Where("lower(email) = ?", email)
+	}
+	if err := q.First(&existing).Error; err == nil {
+		return nil, fmt.Errorf("%w: invitee already on this itinerary (status=%s)", apperror.ErrConflict, existing.Status)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
 	collab := models.Collaborator{
 		ItineraryID: it.ID,
-		UserID:      invitee.ID,
 		InvitedBy:   it.OwnerID,
 		Role:        role,
 		Status:      "PENDING",
+	}
+	if inviteeExists {
+		uid := invitee.ID
+		collab.UserID = &uid
+		collab.User = &invitee
+	} else {
+		em := email
+		collab.Email = &em
 	}
 	if err := s.db.Create(&collab).Error; err != nil {
 		return nil, fmt.Errorf("create collaborator: %w", err)
 	}
 
+	// Email goes out to the supplied address regardless of registration.
 	if s.email != nil {
+		var toName string
+		toEmail := email
+		if inviteeExists {
+			toEmail = invitee.Email
+			toName = invitee.FullName
+		}
 		go func(to, name, inviter, title, role string) {
 			defer func() {
 				if r := recover(); r != nil {
@@ -98,11 +131,34 @@ func (s *CollaboratorService) Invite(itineraryID, ownerID string, input InviteIn
 			if err := s.email.SendCollaboratorInvite(to, name, inviter, title, role); err != nil {
 				slog.Warn("send invite email failed", "to", to, "err", err)
 			}
-		}(invitee.Email, invitee.FullName, owner.FullName, it.Title, role)
+		}(toEmail, toName, owner.FullName, it.Title, role)
 	}
 
-	collab.User = &invitee
 	return &collab, nil
+}
+
+// LinkPendingInvites attaches any pending-by-email Collaborator rows to a
+// newly-registered user. Called from the auth Register flow inside the same
+// transaction that creates the user.
+//
+// Returns the number of rows linked so callers (or tests) can verify the
+// attachment without a follow-up SELECT.
+func (s *CollaboratorService) LinkPendingInvites(tx *gorm.DB, userID uuid.UUID, email string) (int64, error) {
+	em := strings.ToLower(strings.TrimSpace(email))
+	if em == "" {
+		return 0, nil
+	}
+	db := tx
+	if db == nil {
+		db = s.db
+	}
+	res := db.Model(&models.Collaborator{}).
+		Where("user_id IS NULL AND lower(email) = ?", em).
+		Updates(map[string]interface{}{
+			"user_id": userID,
+			"email":   nil,
+		})
+	return res.RowsAffected, res.Error
 }
 
 // List returns all collaborators of an itinerary.
@@ -131,12 +187,25 @@ func (s *CollaboratorService) List(itineraryID, requesterID string) ([]models.Co
 	return list, nil
 }
 
-// ListPending returns invitations where the requester is the invitee and status=PENDING.
+// ListPending returns PENDING invitations for the requester. Matches both
+// user_id-bound rows AND pending-by-email rows where the email equals the
+// requester's account email (covers the race window between Register's
+// LinkPendingInvites and a refresh).
 func (s *CollaboratorService) ListPending(userID string) ([]models.Collaborator, error) {
+	var user models.User
+	if err := s.db.Select("id", "email").First(&user, "id = ?", userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
+		return nil, err
+	}
+	email := strings.ToLower(user.Email)
+
 	var list []models.Collaborator
 	err := s.db.
 		Preload("User").
-		Where("user_id = ? AND status = ?", userID, "PENDING").
+		Where("status = ? AND (user_id = ? OR (user_id IS NULL AND lower(email) = ?))",
+			"PENDING", userID, email).
 		Order("id DESC").
 		Find(&list).Error
 	return list, err
@@ -151,7 +220,7 @@ func (s *CollaboratorService) Accept(collabID, userID string) (*models.Collabora
 		}
 		return nil, err
 	}
-	if collab.UserID.String() != userID {
+	if collab.UserID == nil || collab.UserID.String() != userID {
 		return nil, apperror.ErrForbidden
 	}
 	if collab.Status != "PENDING" {
@@ -177,7 +246,7 @@ func (s *CollaboratorService) Decline(collabID, userID string) error {
 		}
 		return err
 	}
-	if collab.UserID.String() != userID {
+	if collab.UserID == nil || collab.UserID.String() != userID {
 		return apperror.ErrForbidden
 	}
 	if collab.Status != "PENDING" {
@@ -203,7 +272,7 @@ func (s *CollaboratorService) Remove(collabID, requesterID string) error {
 	}
 
 	isOwner := it.OwnerID.String() == requesterID
-	isSelf := collab.UserID.String() == requesterID
+	isSelf := collab.UserID != nil && collab.UserID.String() == requesterID
 	if !isOwner && !isSelf {
 		return apperror.ErrForbidden
 	}

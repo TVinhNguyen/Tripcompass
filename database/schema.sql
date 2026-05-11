@@ -71,12 +71,21 @@ CREATE TABLE "activities" (
 CREATE TABLE "collaborators" (
     "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid (),
     "itinerary_id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
+    -- Either user_id (registered invitee) or email (pending invite for a
+    -- not-yet-registered address) must be set. The CHECK below enforces it.
+    "user_id" UUID,
+    "email" TEXT,
     "invited_by" UUID NOT NULL,
     "role" "role" NOT NULL DEFAULT 'VIEWER',
     "status" "status_collab" NOT NULL DEFAULT 'PENDING',
-    "joined_at" TIMESTAMP
+    "joined_at" TIMESTAMP,
+    CONSTRAINT collaborators_invitee_present CHECK (user_id IS NOT NULL OR email IS NOT NULL)
 );
+
+-- Block re-inviting the same email on the same itinerary (pending case only).
+CREATE UNIQUE INDEX collaborators_pending_email_uniq
+    ON "collaborators" (itinerary_id, lower(email))
+    WHERE email IS NOT NULL;
 
 CREATE TABLE "ai_chat_messages" (
     "id" UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid (),

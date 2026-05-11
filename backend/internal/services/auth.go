@@ -32,6 +32,7 @@ type AuthService struct {
 	jwtSecret string
 	jwtExpire int // hours
 	email     *EmailService
+	collab    *CollaboratorService // optional; used to link pending invites on register
 	// OAuth config
 	googleClientID    string
 	facebookAppSecret string
@@ -46,6 +47,14 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc 
 		googleClientID:    googleClientID,
 		facebookAppSecret: facebookAppSecret,
 	}
+}
+
+// WithCollaboratorService injects the collaborator service so Register can
+// claim any pending-by-email invites that match the new user's address.
+// Returned so the call can chain in router wiring.
+func (s *AuthService) WithCollaboratorService(c *CollaboratorService) *AuthService {
+	s.collab = c
+	return s
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,6 +126,17 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 
 	if err := s.db.Create(&user).Error; err != nil {
 		return nil, err
+	}
+
+	// Claim any pending-by-email collaborator invites that were waiting for
+	// this address. Done in the same DB but a separate statement; failure
+	// here is logged, not fatal — the user is created regardless.
+	if s.collab != nil {
+		if linked, err := s.collab.LinkPendingInvites(s.db, user.ID, user.Email); err != nil {
+			slog.Warn("link pending invites failed", "user_id", user.ID, "err", err)
+		} else if linked > 0 {
+			slog.Info("linked pending invites", "user_id", user.ID, "count", linked)
+		}
 	}
 
 	// Send verification email asynchronously — don't block registration response
