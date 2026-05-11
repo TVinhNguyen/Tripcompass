@@ -16,6 +16,8 @@ from typing import AsyncGenerator
 from loguru import logger
 from langchain_core.messages import AIMessage, ToolMessage
 
+from app.services.tool_state import new_holder
+
 
 _FOOD_SLOT_TYPES = {"breakfast", "lunch", "dinner", "snack", "brunch"}
 
@@ -255,6 +257,11 @@ async def stream_chat_response(
     tools_used: list[str] = []
     plan_data: dict | None = None
     full_text = ""
+    stream_dropped = False  # True if upstream LLM closed the connection mid-stream
+
+    # Per-request scratch space. create_travel_plan stashes the full plan dict
+    # here so we can ship it to the FE without bloating the agent's context.
+    holder = new_holder()
 
     try:
         async for event in agent.astream_events(
@@ -286,15 +293,24 @@ async def stream_chat_response(
             elif kind == "on_tool_end":
                 tool_name = event.get("name", "")
                 if tool_name == "create_travel_plan":
-                    # LangGraph v2: output can be str, dict, or ToolMessage
-                    output = data.get("output", "")
-                    if isinstance(output, ToolMessage):
-                        output = output.content
-                    if isinstance(output, dict):
-                        output = json.dumps(output, ensure_ascii=False)
-                    plan_data = _extract_plan(str(output))
-                    if plan_data:
-                        logger.info("[stream] Plan extracted from on_tool_end")
+                    # Primary path: the tool stashed the full wrapper into the
+                    # request holder; transform it into the FE shape.
+                    full = holder.get("full_plan") if isinstance(holder, dict) else None
+                    if isinstance(full, dict):
+                        plan_data = _to_generate_response(full)
+                        if plan_data:
+                            logger.info("[stream] Plan extracted from tool holder")
+                    # Fallback for the (rare) case the tool returned full JSON
+                    # in its string output instead of using the holder.
+                    if not plan_data:
+                        output = data.get("output", "")
+                        if isinstance(output, ToolMessage):
+                            output = output.content
+                        if isinstance(output, dict):
+                            output = json.dumps(output, ensure_ascii=False)
+                        plan_data = _extract_plan(str(output))
+                        if plan_data:
+                            logger.info("[stream] Plan extracted from on_tool_end fallback")
 
             # ── LLM token streaming ────────────────────────────────────
             elif kind == "on_chat_model_stream":
@@ -305,10 +321,36 @@ async def stream_chat_response(
                     yield _sse({"type": "token", "content": token})
 
     except Exception as e:
-        logger.error(f"[stream] Error: {e}")
-        yield _sse({"type": "error", "message": str(e)})
+        # Detect the "peer closed connection" family — free-tier LLM gateways
+        # (NVIDIA NIM, OpenRouter free) drop long streams without sending an
+        # SSE error. We surface a friendly message and still emit `done` so the
+        # FE can display whatever partial plan / partial markdown we have.
+        msg = str(e)
+        is_stream_drop = any(
+            tok in msg.lower()
+            for tok in ("peer closed", "incomplete chunked read", "remoteprotocolerror")
+        )
+        if is_stream_drop:
+            stream_dropped = True
+            logger.warning(f"[stream] Upstream LLM dropped the stream: {msg}")
+            yield _sse({
+                "type": "error",
+                "message": "Nhà cung cấp LLM ngắt kết nối giữa chừng. Lịch trình (nếu có) vẫn được giữ lại bên dưới.",
+            })
+        else:
+            logger.error(f"[stream] Error: {e}")
+            yield _sse({"type": "error", "message": msg})
 
-    # ── Fallback: extract plan from full_text if on_tool_end missed it ──
+    # ── Fallback: holder may have populated even if on_tool_end was missed
+    # (e.g. the stream was dropped right after the tool finished). ──────────
+    if not plan_data and isinstance(holder, dict):
+        full = holder.get("full_plan")
+        if isinstance(full, dict):
+            plan_data = _to_generate_response(full)
+            if plan_data:
+                logger.info("[stream] Plan recovered from holder after stream drop")
+
+    # ── Fallback: extract plan from full_text if everything else missed it ──
     if not plan_data and "create_travel_plan" in tools_used:
         plan_data = _extract_plan(full_text)
         if plan_data:
@@ -316,6 +358,8 @@ async def stream_chat_response(
 
     # ── Clean full_text: strip all JSON, keep only markdown summary ────
     clean_text = _strip_json_objects(full_text)
+    if stream_dropped and clean_text:
+        clean_text += "\n\n_⚠️ Phần trả lời bị cắt giữa chừng do nhà cung cấp LLM ngắt kết nối — lịch trình đã được giữ lại._"
 
     # ── Final event ────────────────────────────────────────────────────
     yield _sse({

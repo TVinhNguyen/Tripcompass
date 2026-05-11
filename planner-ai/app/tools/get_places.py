@@ -47,12 +47,21 @@ async def get_places(
         params.append(tags)
         idx += 1
 
+    # Token-trimmed projection. Fields excluded and why:
+    #   description     — schedule/enrich/Q&A all ignore it (~1.5k tokens / call)
+    #   name_en         — agent operates in Vietnamese, never reads name_en
+    #   review_count    — only `rating` is used; count adds noise
+    #   cover_image     — LLM can't render URLs; FE fetches images directly
+    # Fields kept and why:
+    #   priority_score  — agent prompt uses it to pick "hidden gem" suggestions
+    #   address         — agent prompt surfaces it on Q&A answers
+    #   price_updated_at — derives is_stale below, gates get_real_prices fallback
     query = f"""
-        SELECT id, name, name_en, destination, area, address,
-               latitude, longitude, cover_image, rating, review_count,
+        SELECT id, name, destination, area, address,
+               latitude, longitude, rating,
                must_visit, priority_score, best_time_of_day, tags,
                open_time::text AS open_time, close_time::text AS close_time,
-               hours, recommended_duration, description,
+               hours, recommended_duration,
                base_price, price_updated_at
         FROM {config.DB_SCHEMA}.places
         WHERE {" AND ".join(conditions)}
@@ -78,15 +87,12 @@ async def get_places(
         places.append({
             "id":              str(r["id"]),
             "name":            r["name"],
-            "name_en":         r["name_en"] or "",
             "destination":     r["destination"],
             "area":            r["area"] or "",
             "address":         r["address"] or "",
             "latitude":        float(r["latitude"]) if r["latitude"] else None,
             "longitude":       float(r["longitude"]) if r["longitude"] else None,
-            "image_url":       r["cover_image"] or "",
             "rating":          float(r["rating"]) if r["rating"] else 0.0,
-            "review_count":    int(r["review_count"] or 0),
             "must_visit":      bool(r["must_visit"]),
             "priority_score":  int(r["priority_score"]),
             "best_time_of_day": r["best_time_of_day"] or "",
@@ -94,7 +100,6 @@ async def get_places(
             "hours":           hours or "08:00-17:00",
             "duration_min":    int(r["recommended_duration"] or 90),
             "base_price":      int(r["base_price"] or 0),
-            "description":     r["description"] or "",
             "is_stale":        r["price_updated_at"] is None or (r["base_price"] or 0) == 0,
         })
 
