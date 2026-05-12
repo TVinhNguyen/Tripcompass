@@ -48,7 +48,10 @@ export function useUserNotifications(opts: Options = {}) {
     let cancelled = false;
 
     const connect = () => {
-      const ws = new WebSocket(`${WS_URL}/user`, ["bearer", token]);
+      // Bearer subprotocol + ?token= fallback — same transition strategy as
+      // useItineraryWS. See its comment for why both paths coexist.
+      const url = `${WS_URL}/user?token=${encodeURIComponent(token)}`;
+      const ws = new WebSocket(url, ["bearer", token]);
       wsRef.current = ws;
 
       ws.onopen = () => { retryRef.current = 0; };

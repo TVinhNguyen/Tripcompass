@@ -17,6 +17,13 @@ func NewActivityService(db *gorm.DB) *ActivityService {
 	return &ActivityService{db: db}
 }
 
+// WithTx returns a copy of the service bound to the given transaction.
+// Used by handlers that wrap a mutation + WS outbox enqueue atomically.
+// The copy is shallow — the underlying gorm.DB pointer is just swapped.
+func (s *ActivityService) WithTx(tx *gorm.DB) *ActivityService {
+	return &ActivityService{db: tx}
+}
+
 type CreateActivityInput struct {
 	ItineraryID   string   `json:"itinerary_id" binding:"required"`
 	PlaceID       *string  `json:"place_id"`

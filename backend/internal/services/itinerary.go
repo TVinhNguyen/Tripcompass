@@ -31,6 +31,12 @@ func (s *ItineraryService) WithViewCounter(vc *viewcounter.Counter) *ItinerarySe
 	return s
 }
 
+// WithTx returns a copy of the service bound to the given transaction.
+// Used by handlers that need to wrap a mutation + WS outbox enqueue.
+func (s *ItineraryService) WithTx(tx *gorm.DB) *ItineraryService {
+	return &ItineraryService{db: tx, vc: s.vc}
+}
+
 // ---------- DTOs ----------
 
 type CreateItineraryInput struct {
