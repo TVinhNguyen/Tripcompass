@@ -56,13 +56,9 @@ export function useItineraryWS(
     let cancelled = false;
 
     const connect = () => {
-      // Primary path: token rides on Sec-WebSocket-Protocol (clean URL, no
-      // proxy log leakage). The server advertises "bearer" so gorilla echoes
-      // it back; the JWT is the second protocol entry. We also keep ?token=
-      // as a one-release fallback so a deploy where the backend hasn't been
-      // restarted yet still authenticates. Remove the query param after
-      // every backend is on bearer-auth (commit 3ba49f7 or later).
-      const url = `${WS_URL}/itinerary/${itineraryId}?token=${encodeURIComponent(token)}`;
+      // Token rides on Sec-WebSocket-Protocol so it does not land in URLs or
+      // reverse-proxy access logs.
+      const url = `${WS_URL}/itinerary/${itineraryId}`;
       const ws  = new WebSocket(url, ["bearer", token]);
       wsRef.current = ws;
 

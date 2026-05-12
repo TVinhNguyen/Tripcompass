@@ -46,7 +46,8 @@ function AIPlannerContent() {
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [toolRunning, setToolRunning] = useState<string | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerDest, setPickerDest] = useState("Việt Nam")
 
@@ -59,6 +60,18 @@ function AIPlannerContent() {
     apiFetch<SessionInfo[]>("/ai-chat/sessions")
       .then((data) => setSessions(Array.isArray(data) ? data : []))
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)")
+    const syncSidebar = () => {
+      setIsDesktop(media.matches)
+      setSidebarOpen(media.matches)
+    }
+
+    syncSidebar()
+    media.addEventListener("change", syncSidebar)
+    return () => media.removeEventListener("change", syncSidebar)
   }, [])
 
   // ---- Scroll to bottom on new messages ----
@@ -92,6 +105,7 @@ function AIPlannerContent() {
           createdAt: new Date(m.created_at),
         }))
       )
+      if (!isDesktop) setSidebarOpen(false)
     } catch {
       toast.error("Không thể tải lịch sử trò chuyện")
     }
@@ -211,7 +225,16 @@ function AIPlannerContent() {
 
   // ---- Render ----
   return (
-    <div className="h-screen flex bg-[#f5f0e8] overflow-hidden">
+    <div className="h-dvh flex bg-[#f5f0e8] overflow-hidden">
+
+      {sidebarOpen && !isDesktop && (
+        <button
+          type="button"
+          className="fixed inset-0 z-20 bg-black/45 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Đóng lịch sử trò chuyện"
+        />
+      )}
 
       {/* ===== Sidebar ===== */}
       <AnimatePresence>
@@ -219,7 +242,7 @@ function AIPlannerContent() {
           <motion.aside
             initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }}
             transition={{ type: "tween", duration: 0.2 }}
-            className="fixed lg:relative z-30 w-72 h-full bg-[#1a1a1a] border-r border-white/10 flex flex-col"
+            className="fixed lg:relative z-30 w-[min(20rem,calc(100vw-2rem))] lg:w-72 h-full bg-[#1a1a1a] border-r border-white/10 flex flex-col shadow-2xl lg:shadow-none"
           >
             {/* Logo */}
             <div className="px-5 py-5 border-b border-white/10">
@@ -294,8 +317,8 @@ function AIPlannerContent() {
       <main className="flex-1 flex flex-col min-w-0">
 
         {/* Header */}
-        <header className="bg-white border-b border-[#e8e2d9] px-4 py-3 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
+        <header className="bg-white border-b border-[#e8e2d9] px-3 sm:px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="p-2 -m-2 text-[#6b6b6b] hover:text-[#1a1a1a]"
@@ -303,12 +326,12 @@ function AIPlannerContent() {
             >
               <MessageSquare className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#3d5a3d]/10 rounded-full">
+            <div className="flex min-w-0 items-center gap-2 px-2.5 sm:px-3 py-1.5 bg-[#3d5a3d]/10 rounded-full">
               <Sparkles className="w-4 h-4 text-[#3d5a3d]" />
-              <span className="text-sm font-medium text-[#3d5a3d]">Trợ lý AI TripCompass</span>
+              <span className="truncate text-sm font-medium text-[#3d5a3d]">Trợ lý AI TripCompass</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -319,8 +342,9 @@ function AIPlannerContent() {
               <span className="hidden sm:inline">Chọn địa điểm</span>
             </Button>
             <Link href="/ai-planner/quick">
-              <Button variant="outline" className="border-[#e8e2d9] text-[#1a1a1a] h-9 bg-transparent">
-                Tạo nhanh
+              <Button variant="outline" className="border-[#e8e2d9] text-[#1a1a1a] h-9 bg-transparent px-2.5 sm:px-4">
+                <span className="hidden sm:inline">Tạo nhanh</span>
+                <span className="sm:hidden">Nhanh</span>
               </Button>
             </Link>
           </div>
@@ -365,7 +389,7 @@ function AIPlannerContent() {
               </motion.div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+            <div className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6">
               {messages.map((msg) => (
                 <MessageBubble
                   key={msg.id}
@@ -383,7 +407,7 @@ function AIPlannerContent() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-[#e8e2d9] bg-white px-4 py-4 shrink-0">
+        <div className="border-t border-[#e8e2d9] bg-white px-3 sm:px-4 py-3 sm:py-4 shrink-0">
           <div className="max-w-3xl mx-auto">
             <div className="relative bg-[#f5f0e8] border border-[#e8e2d9] rounded-2xl focus-within:border-[#3d5a3d] focus-within:ring-2 focus-within:ring-[#3d5a3d]/10 transition-all">
               <textarea
@@ -394,7 +418,7 @@ function AIPlannerContent() {
                 onKeyDown={handleKeyDown}
                 placeholder="Mô tả chuyến đi của bạn..."
                 rows={1}
-                className="w-full px-4 py-3 pr-16 bg-transparent resize-none focus:outline-none text-[#1a1a1a] placeholder-[#8b8378]"
+                className="w-full max-h-40 px-4 py-3 pr-16 bg-transparent resize-none focus:outline-none text-[#1a1a1a] placeholder-[#8b8378]"
               />
               <div className="absolute right-2 bottom-2 flex items-center gap-1">
                 {streaming ? (
@@ -470,7 +494,7 @@ function MessageBubble({ message, onRetry }: MessageBubbleProps) {
         {/* Bubble */}
         {(message.content || message.streaming || message.error) && (
           <div className={cn(
-            "inline-block max-w-full px-4 py-3 rounded-2xl text-sm leading-relaxed",
+            "inline-block max-w-full overflow-hidden break-words px-4 py-3 rounded-2xl text-sm leading-relaxed [overflow-wrap:anywhere]",
             isUser ? "bg-[#3d5a3d] text-white rounded-tr-sm whitespace-pre-wrap" : "bg-white border border-[#e8e2d9] text-[#1a1a1a] rounded-tl-sm",
             message.error && "border-red-200 bg-red-50 text-red-700",
           )}>

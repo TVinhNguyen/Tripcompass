@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, Suspense } from "react"
+import { useEffect, useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Eye, EyeOff, Loader2, Mail, Lock } from "lucide-react"
@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { ApiError } from "@/lib/api"
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google"
 
-function LoginContent() {
+function LoginContent({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { login, loginGoogle } = useAuth()
@@ -152,19 +152,31 @@ function LoginContent() {
       {/* OAuth buttons */}
       <div className="space-y-3">
         {/* Google — uses GoogleLogin component which passes id_token (credential) */}
-        <div className="w-full flex justify-center">
-          <GoogleLogin
-            onSuccess={handleGoogleSuccess}
-            onError={() => setError("Google đăng nhập bị huỷ.")}
-            text="signin_with"
-            shape="rectangular"
-            logo_alignment="left"
-          />
-        </div>
+        {googleEnabled ? (
+          <div className="w-full [&>div]:!w-full [&_iframe]:!w-full">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError("Google đăng nhập bị huỷ.")}
+              text="signin_with"
+              shape="rectangular"
+              logo_alignment="left"
+              size="large"
+              width="100%"
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setError("Google đăng nhập chưa được cấu hình. Thiết lập NEXT_PUBLIC_GOOGLE_CLIENT_ID trên frontend container.")}
+            className="w-full h-10 flex items-center justify-center gap-2 px-4 bg-white border border-[#e8e2d9] rounded-lg text-sm font-medium text-[#8b8378]"
+          >
+            Google
+          </button>
+        )}
         {/* Facebook — UI only, SDK deferred */}
         <button
           type="button"
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-[#e8e2d9] rounded-lg hover:bg-[#f5f0e8] transition-colors"
+          className="w-full h-10 flex items-center justify-center gap-2 px-4 bg-white border border-[#e8e2d9] rounded-lg hover:bg-[#f5f0e8] transition-colors"
         >
           <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
             <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -185,11 +197,26 @@ function LoginContent() {
 }
 
 export default function LoginPage() {
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch("/runtime-config", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setGoogleClientId(data.googleClientId || ""))
+      .catch(() => setGoogleClientId(""))
+  }, [])
+
+  const content = (
+    <Suspense>
+      <LoginContent googleEnabled={Boolean(googleClientId)} />
+    </Suspense>
+  )
+
+  if (!googleClientId) return content
+
   return (
-    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ""}>
-      <Suspense>
-        <LoginContent />
-      </Suspense>
+    <GoogleOAuthProvider clientId={googleClientId}>
+      {content}
     </GoogleOAuthProvider>
   )
 }
