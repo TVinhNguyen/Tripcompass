@@ -80,9 +80,9 @@ services:
       HOSTNAME: "0.0.0.0"
       NODE_ENV: production
       BASE_URL: http://9router:20128
-      CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://router.tripcompass.studio}
+      CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://9router.com}
       NEXT_PUBLIC_BASE_URL: ${NINEROUTER_PUBLIC_BASE_URL:-https://router.tripcompass.studio}
-      NEXT_PUBLIC_CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://router.tripcompass.studio}
+      NEXT_PUBLIC_CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://9router.com}
       AUTH_COOKIE_SECURE: ${NINEROUTER_AUTH_COOKIE_SECURE:-true}
       REQUIRE_API_KEY: ${NINEROUTER_REQUIRE_API_KEY:-true}
       OBSERVABILITY_ENABLED: ${NINEROUTER_OBSERVABILITY_ENABLED:-false}
