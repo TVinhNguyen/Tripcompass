@@ -2,7 +2,6 @@
 # ║  TripCompass — Caddy reverse proxy                                         ║
 # ║  Auto Let's Encrypt (HTTP-01) + HSTS + gzip/zstd                           ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
-
 {
 	email {$ACME_EMAIL}
 	# Set ACME_STAGING=true in .env.prod when testing to avoid LE rate limits.
@@ -52,5 +51,22 @@
 	# Everything else → Next.js frontend.
 	handle {
 		reverse_proxy frontend:3000
+	}
+}
+
+{$NINEROUTER_DOMAIN} {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy 9router:20128 {
+		transport http {
+			read_timeout 5m
+		}
 	}
 }
