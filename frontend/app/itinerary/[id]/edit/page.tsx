@@ -5,7 +5,8 @@
 // All sub-components live in _components/.
 // =============================================================================
 
-import { useState } from "react";
+import type { CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { use } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
@@ -17,7 +18,7 @@ import {
 import { sortableKeyboardCoordinates, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import {
   ChevronLeft, Layers, LayoutGrid, Loader2,
-  Map as MapIcon, MessageSquare, Plus, Save, Sparkles, Eye, X, Search,
+  Map as MapIcon, MessageSquare, Plus, Save, Sparkles, Eye, X, Search, GripVertical,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,9 @@ function DragOverlayCard({ activity }: { activity: Activity }) {
 
 type MobileTab = "plan" | "map";
 
+const MAP_MIN_WIDTH = 360;
+const MAP_MAX_WIDTH = 760;
+
 export default function ItineraryEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
@@ -82,6 +86,8 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [hoveredId,       setHoveredId]       = useState<string | null>(null);
   const [mobileTab,       setMobileTab]       = useState<MobileTab>("plan");
+  const [mapWidth,        setMapWidth]        = useState(500);
+  const [isMapResizing,   setIsMapResizing]   = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -90,6 +96,33 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
 
   const activeActivity = activeId ? activities.find((a) => a.id === activeId) ?? null : null;
   const filteredTemplates = getTemplates(templateSearch);
+
+  useEffect(() => {
+    if (!isMapResizing) return;
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const maxWidth = Math.min(MAP_MAX_WIDTH, Math.max(MAP_MIN_WIDTH, window.innerWidth - 420));
+      const nextWidth = window.innerWidth - event.clientX;
+      setMapWidth(Math.min(Math.max(nextWidth, MAP_MIN_WIDTH), maxWidth));
+    };
+
+    const stopResize = () => setIsMapResizing(false);
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize, { once: true });
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+    };
+  }, [isMapResizing]);
 
   if (pageLoading) {
     return (
@@ -100,7 +133,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f0e8] flex flex-col">
+    <div className="h-dvh bg-[#f5f0e8] flex flex-col overflow-hidden">
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <header className="h-14 shrink-0 bg-[#1a1a1a] text-[#f5f0e8] flex items-center px-3 sm:px-4 gap-2 sm:gap-3 border-b border-[#2a2a2a] z-40">
         <Link
@@ -187,9 +220,9 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
         onDragOver={handleDragOver}
         onDragEnd={(e) => { setActiveId(null); handleDragEnd(e); }}
       >
-        <div className="flex-1 flex overflow-hidden relative">
+        <div className="min-h-0 flex-1 flex overflow-hidden relative">
           {/* Left: plan column */}
-          <section className={cn("flex-1 flex flex-col overflow-hidden bg-[#f5f0e8]", mobileTab === "map" && "hidden lg:flex")}>
+          <section className={cn("min-w-0 flex-1 flex flex-col overflow-hidden bg-[#f5f0e8]", mobileTab === "map" && "hidden lg:flex")}>
             {/* Summary strip */}
             <div className="shrink-0 h-12 px-4 flex items-center gap-4 border-b border-[#e0d9cc] bg-[#fbf8f2]">
               <button
@@ -242,9 +275,27 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
 
           {/* Right: Map */}
           <aside className={cn(
-            "w-full lg:w-[420px] xl:w-[500px] shrink-0 relative border-l border-[#e0d9cc] bg-[#eeeae1]",
+            "h-full w-full lg:w-[var(--map-width)] shrink-0 relative border-l border-[#e0d9cc] bg-[#eeeae1]",
             mobileTab === "plan" && "hidden lg:block"
-          )}>
+          )}
+            style={{ "--map-width": `${mapWidth}px` } as CSSProperties}
+          >
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                setIsMapResizing(true);
+              }}
+              className={cn(
+                "absolute left-0 top-0 z-[500] hidden h-full w-4 -translate-x-1/2 cursor-col-resize items-center justify-center text-[#6b6b6b] transition lg:flex",
+                "hover:text-[#1a1a1a] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a853]",
+              )}
+              aria-label="Kéo để đổi chiều rộng bản đồ"
+            >
+              <span className="flex h-14 w-6 items-center justify-center rounded-full border border-[#d4cfc5] bg-white/90 shadow-sm">
+                <GripVertical className="h-4 w-4" />
+              </span>
+            </button>
             <div className="h-full w-full">
               <ItineraryMapDynamic
                 activities={activities}
@@ -270,7 +321,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                 <motion.div
                   initial={{ x: -360 }} animate={{ x: 0 }} exit={{ x: -360 }}
                   transition={{ type: "spring", damping: 28, stiffness: 260 }}
-                  className="absolute left-0 top-0 bottom-0 w-[340px] bg-[#fbf8f2] border-r border-[#e0d9cc] z-50 flex flex-col shadow-2xl"
+                  className="absolute left-0 top-0 bottom-0 w-[min(340px,calc(100vw-24px))] bg-[#fbf8f2] border-r border-[#e0d9cc] z-50 flex flex-col shadow-2xl"
                 >
                   <div className="h-14 px-4 border-b border-[#e0d9cc] flex items-center justify-between bg-[#1a1a1a]">
                     <div>
