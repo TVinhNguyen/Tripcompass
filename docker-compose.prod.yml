@@ -75,15 +75,20 @@ services:
       INITIAL_PASSWORD: ${NINEROUTER_INITIAL_PASSWORD}
       API_KEY_SECRET: ${NINEROUTER_API_KEY_SECRET}
       MACHINE_ID_SALT: ${NINEROUTER_MACHINE_ID_SALT}
+      DATA_DIR: /app/data
       PORT: "20128"
       HOSTNAME: "0.0.0.0"
       NODE_ENV: production
       BASE_URL: http://9router:20128
+      CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://router.tripcompass.studio}
       NEXT_PUBLIC_BASE_URL: ${NINEROUTER_PUBLIC_BASE_URL:-https://router.tripcompass.studio}
+      NEXT_PUBLIC_CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://router.tripcompass.studio}
       AUTH_COOKIE_SECURE: ${NINEROUTER_AUTH_COOKIE_SECURE:-true}
       REQUIRE_API_KEY: ${NINEROUTER_REQUIRE_API_KEY:-true}
+      OBSERVABILITY_ENABLED: ${NINEROUTER_OBSERVABILITY_ENABLED:-false}
     volumes:
-      - 9router_data:/root/.9router
+      - 9router_data:/app/data
+      - 9router_usage:/root/.9router
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:20128').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
@@ -321,6 +326,7 @@ volumes:
   postgres_data:
   redis_data:
   9router_data:
+  9router_usage:
   caddy_data:
   caddy_config:
 
