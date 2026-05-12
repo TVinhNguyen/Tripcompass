@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -44,6 +45,7 @@ func Enqueue(tx *gorm.DB, eventType, roomID string, payload any) error {
 		return fmt.Errorf("outbox: marshal payload: %w", err)
 	}
 	row := OutboxRow{
+		ID:        uuid.NewString(),
 		EventType: eventType,
 		RoomID:    roomID,
 		Payload:   body,

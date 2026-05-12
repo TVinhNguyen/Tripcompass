@@ -182,10 +182,12 @@ func TestCollaboratorService_LinkPendingInvites_AttachesAndNotifies(t *testing.T
 	}
 	assert.Nil(t, bound.Email)
 
-	// Without a transaction the service falls back to direct PublishToUser.
-	assert.Len(t, pub.direct, 1)
-	assert.Equal(t, newUser.ID.String(), pub.direct[0].UserID)
-	assert.Equal(t, "collaborator.invited", pub.direct[0].EventType)
+	// A transaction was provided, so notifications are enqueued transactionally.
+	if assert.Len(t, pub.enqueued, 1) {
+		assert.Equal(t, newUser.ID.String(), pub.enqueued[0].UserID)
+		assert.Equal(t, "collaborator.invited", pub.enqueued[0].EventType)
+	}
+	assert.Empty(t, pub.direct)
 }
 
 func TestCollaboratorService_LinkPendingInvites_EmptyEmailIsNoOp(t *testing.T) {
