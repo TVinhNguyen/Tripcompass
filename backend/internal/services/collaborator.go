@@ -353,12 +353,27 @@ func (s *CollaboratorService) Remove(collabID, requesterID string) error {
 
 // CheckEditAccess returns nil if userID is the owner OR an ACCEPTED collaborator with role=EDITOR.
 // Used by activity write endpoints to allow editors to modify activities.
+//
+// Kept as a standalone function (rather than wrapping GetCollaboratorRole)
+// so callers along the hot HTTP path don't pay the extra branch / interface
+// surface — it has been in the codebase since the original collaborator
+// migration and its semantics are stable.
 func CheckEditAccess(db *gorm.DB, itineraryID, userID string) error {
-	role, err := GetCollaboratorRole(db, itineraryID, userID)
+	itID, err := uuid.Parse(itineraryID)
 	if err != nil {
-		return err
+		return apperror.ErrNotFound
 	}
-	if role == "OWNER" || role == "EDITOR" {
+	var it models.Itinerary
+	if err := db.Select("id", "owner_id").First(&it, "id = ?", itID).Error; err != nil {
+		return apperror.ErrNotFound
+	}
+	if it.OwnerID.String() == userID {
+		return nil
+	}
+	var collab models.Collaborator
+	err = db.Where("itinerary_id = ? AND user_id = ? AND status = ? AND role = ?",
+		itID, userID, "ACCEPTED", "EDITOR").First(&collab).Error
+	if err == nil {
 		return nil
 	}
 	return apperror.ErrForbidden

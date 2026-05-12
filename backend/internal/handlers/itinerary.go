@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"tripcompass-backend/internal/middleware"
+	"tripcompass-backend/internal/models"
 	"tripcompass-backend/internal/pagination"
 	"tripcompass-backend/internal/services"
 	"tripcompass-backend/internal/viewcounter"
@@ -15,6 +16,7 @@ import (
 )
 
 type ItineraryHandler struct {
+	db  *gorm.DB
 	svc *services.ItineraryService
 	pub ws.Publisher
 }
@@ -24,7 +26,7 @@ func NewItineraryHandler(db *gorm.DB, vc *viewcounter.Counter, pub ws.Publisher)
 	if vc != nil {
 		svc = svc.WithViewCounter(vc)
 	}
-	return &ItineraryHandler{svc: svc, pub: pub}
+	return &ItineraryHandler{db: db, svc: svc, pub: pub}
 }
 
 // mustUserID extracts the authenticated user ID from gin context.
@@ -101,13 +103,21 @@ func (h *ItineraryHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	it, err := h.svc.Update(c.Param("id"), uid, input)
+	var it *models.Itinerary
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		updated, err := h.svc.WithTx(tx).Update(c.Param("id"), uid, input)
+		if err != nil {
+			return err
+		}
+		it = updated
+		if h.pub != nil {
+			return h.pub.PublishInTx(tx, it.ID.String(), ws.EventItineraryUpdated, gin.H{"itinerary": it})
+		}
+		return nil
+	})
 	if err != nil {
 		handleServiceError(c, err)
 		return
-	}
-	if h.pub != nil {
-		h.pub.PublishEvent(it.ID.String(), ws.EventItineraryUpdated, gin.H{"itinerary": it})
 	}
 	c.JSON(http.StatusOK, it)
 }
@@ -153,13 +163,21 @@ func (h *ItineraryHandler) Publish(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "status field required (PUBLISHED or DRAFT)"})
 		return
 	}
-	it, err := h.svc.Publish(c.Param("id"), uid, body.Status)
+	var it *models.Itinerary
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		updated, err := h.svc.WithTx(tx).Publish(c.Param("id"), uid, body.Status)
+		if err != nil {
+			return err
+		}
+		it = updated
+		if h.pub != nil {
+			return h.pub.PublishInTx(tx, it.ID.String(), ws.EventItineraryUpdated, gin.H{"itinerary": it})
+		}
+		return nil
+	})
 	if err != nil {
 		handleServiceError(c, err)
 		return
-	}
-	if h.pub != nil {
-		h.pub.PublishEvent(it.ID.String(), ws.EventItineraryUpdated, gin.H{"itinerary": it})
 	}
 	c.JSON(http.StatusOK, it)
 }

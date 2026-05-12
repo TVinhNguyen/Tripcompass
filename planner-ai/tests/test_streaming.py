@@ -1,5 +1,72 @@
 import pytest
-from app.streaming import _to_generate_response
+from app.streaming import _to_generate_response, _ThinkStripper, _strip_thinking
+
+
+# ─── _ThinkStripper ──────────────────────────────────────────────────────────
+
+
+class TestThinkStripper:
+    """Verify the streaming-friendly <think> filter.
+
+    The stripper has two phases:
+      1. Initial buffer (default 300 chars / 2 s) — output held until we see
+         either <think> or </think>. A lone </think> drops the prefix.
+      2. State machine — suppresses tokens between explicit <think>...</think>
+         and held-back tail bytes to catch a tag split across chunks.
+    """
+
+    def _run(self, stripper, parts):
+        out = "".join(stripper.feed(p) for p in parts) + stripper.flush()
+        return out
+
+    def test_normal_short_stream_unchanged(self):
+        s = _ThinkStripper()
+        out = self._run(s, ["Xin ", "chào ", "bạn!"])
+        assert out.strip() == "Xin chào bạn!"
+
+    def test_explicit_block_one_shot_stripped(self):
+        s = _ThinkStripper()
+        out = self._run(s, ["Hello <think>secret plan</think>answer"])
+        assert "secret" not in out and "plan" not in out
+        assert "Hello" in out and "answer" in out
+
+    def test_explicit_block_split_across_tokens(self):
+        s = _ThinkStripper()
+        out = self._run(s, ["Hel", "lo <th", "ink>my plan</thi", "nk>final"])
+        assert "plan" not in out
+        assert "Hello" in out and "final" in out
+
+    def test_lone_close_inside_initial_buffer_drops_prefix(self):
+        s = _ThinkStripper()
+        out = self._run(s, [
+            "Để tư v", "ấn... reasoning ", "stuff</thi", "nk> Đà Nẵng đẹp lắm",
+        ])
+        assert "reasoning" not in out
+        assert "Đà Nẵng" in out
+
+    def test_lone_close_past_initial_buffer_still_drops_prefix(self):
+        # Once the buffer flushes, leaked bytes already left; the state
+        # machine still drops what hasn't been flushed yet. With a single
+        # large token the whole prefix lands in pending and a later </think>
+        # cleans it out before anything is emitted.
+        s = _ThinkStripper()
+        out = self._run(s, ["A" * 400, " stuff </think> final"])
+        assert out.strip() == "final"
+
+    def test_budget_exhausted_without_markers_flushes_buffer(self):
+        s = _ThinkStripper(initial_buffer_chars=20, initial_buffer_seconds=10)
+        out = self._run(s, ["This is a longer message that exceeds 20 chars"])
+        assert "This is a longer message" in out
+
+    def test_strip_thinking_regex_handles_blocks_and_lone_close(self):
+        explicit = "Hello <think>plan</think>answer"
+        assert _strip_thinking(explicit) == "Hello answer"
+
+        lone = "reasoning bytes</think>real answer"
+        assert _strip_thinking(lone) == "real answer"
+
+
+# ─── _to_generate_response (existing tests preserved below) ──────────────────
 
 def test_to_generate_response_full_wrapper():
     wrapper = {
