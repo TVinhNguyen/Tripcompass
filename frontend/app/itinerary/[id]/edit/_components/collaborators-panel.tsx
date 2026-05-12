@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import { Crown, Eye, Loader2, Mail, Pencil, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Collaborator } from "../_lib/types";
 
@@ -45,8 +45,12 @@ export function CollaboratorsPanel({
       });
       setEmail("");
       setInviteStatus("sent");
-    } catch {
-      setInviteStatus("error");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setInviteStatus("sent");
+      } else {
+        setInviteStatus("error");
+      }
     } finally {
       setInviting(false);
     }
