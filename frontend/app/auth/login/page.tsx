@@ -152,14 +152,13 @@ function LoginContent() {
       {/* OAuth buttons */}
       <div className="space-y-3">
         {/* Google — uses GoogleLogin component which passes id_token (credential) */}
-        <div className="flex justify-center">
+        <div className="w-full flex justify-center">
           <GoogleLogin
             onSuccess={handleGoogleSuccess}
             onError={() => setError("Google đăng nhập bị huỷ.")}
             text="signin_with"
             shape="rectangular"
             logo_alignment="left"
-            width="360"
           />
         </div>
         {/* Facebook — UI only, SDK deferred */}
