@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, Suspense } from "react"
+import { useEffect, useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Eye, EyeOff, Loader2, Mail, Lock } from "lucide-react"
@@ -14,7 +14,7 @@ import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from "@reac
 
 const GOOGLE_BUTTON_WIDTH = 448
 
-function LoginContent() {
+function LoginContent({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { login, loginGoogle } = useAuth()
@@ -192,11 +192,26 @@ function LoginContent() {
 }
 
 export default function LoginPage() {
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch("/runtime-config", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setGoogleClientId(data.googleClientId || ""))
+      .catch(() => setGoogleClientId(""))
+  }, [])
+
+  const content = (
+    <Suspense>
+      <LoginContent googleEnabled={Boolean(googleClientId)} />
+    </Suspense>
+  )
+
+  if (!googleClientId) return content
+
   return (
-    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ""}>
-      <Suspense>
-        <LoginContent />
-      </Suspense>
+    <GoogleOAuthProvider clientId={googleClientId}>
+      {content}
     </GoogleOAuthProvider>
   )
 }

@@ -67,6 +67,46 @@ services:
 
   # ─────────────────────────── Application ─────────────────────────────────────
 
+  9router:
+    image: antiantiops/9router:${NINEROUTER_IMAGE_TAG:-0.3.69}
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${NINEROUTER_JWT_SECRET}
+      INITIAL_PASSWORD: ${NINEROUTER_INITIAL_PASSWORD}
+      API_KEY_SECRET: ${NINEROUTER_API_KEY_SECRET}
+      MACHINE_ID_SALT: ${NINEROUTER_MACHINE_ID_SALT}
+      DATA_DIR: /app/data
+      PORT: "20128"
+      HOSTNAME: "0.0.0.0"
+      NODE_ENV: production
+      BASE_URL: http://9router:20128
+      CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://9router.com}
+      NEXT_PUBLIC_BASE_URL: ${NINEROUTER_PUBLIC_BASE_URL:-https://router.tripcompass.studio}
+      NEXT_PUBLIC_CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://9router.com}
+      AUTH_COOKIE_SECURE: ${NINEROUTER_AUTH_COOKIE_SECURE:-true}
+      REQUIRE_API_KEY: ${NINEROUTER_REQUIRE_API_KEY:-true}
+      OBSERVABILITY_ENABLED: ${NINEROUTER_OBSERVABILITY_ENABLED:-false}
+    volumes:
+      - 9router_data:/app/data
+      - 9router_usage:/root/.9router
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:20128').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   planner-ai:
     image: ${DOCKERHUB_USERNAME}/tripcompass-planner:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -110,6 +150,10 @@ services:
       MAX_TOOL_ROUNDS: ${MAX_TOOL_ROUNDS:-8}
       TOOL_TIMEOUT_SECONDS: ${TOOL_TIMEOUT_SECONDS:-5}
       MAX_SCHEDULE_RETRIES: ${MAX_SCHEDULE_RETRIES:-2}
+      SCHEDULE_LLM_TIMEOUT_SECONDS: ${SCHEDULE_LLM_TIMEOUT_SECONDS:-90}
+      ENRICH_LLM_TIMEOUT_SECONDS: ${ENRICH_LLM_TIMEOUT_SECONDS:-30}
+      LLM_REQUEST_TIMEOUT: ${LLM_REQUEST_TIMEOUT:-180}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-3}
     depends_on:
       postgres:
         condition: service_healthy
@@ -188,6 +232,9 @@ services:
   frontend:
     image: ${DOCKERHUB_USERNAME}/tripcompass-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     expose:
       - "3000"
     depends_on:
@@ -222,6 +269,7 @@ services:
       - "443:443/udp"   # HTTP/3
     environment:
       DOMAIN: ${DOMAIN}
+      NINEROUTER_DOMAIN: ${NINEROUTER_DOMAIN:-router.tripcompass.studio}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -278,6 +326,8 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  9router_data:
+  9router_usage:
   caddy_data:
   caddy_config:
 

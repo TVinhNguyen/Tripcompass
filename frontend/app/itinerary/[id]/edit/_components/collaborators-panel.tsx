@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import type { ReactNode } from "react";
 import Image from "next/image";
-import { Crown, Pencil, Eye, Check, Copy, Link2 } from "lucide-react";
+import { Crown, Eye, Loader2, Mail, Pencil, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { apiFetch, ApiError } from "@/lib/api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Collaborator } from "../_lib/types";
 
-const ROLE_ICONS: Record<string, React.ReactNode> = {
+const ROLE_ICONS: Record<string, ReactNode> = {
   owner:  <Crown  className="w-3 h-3 text-[#d4a853]" />,
   editor: <Pencil className="w-3 h-3 text-[#3d5a3d]" />,
   viewer: <Eye    className="w-3 h-3 text-[#8b8378]" />,
@@ -19,16 +21,39 @@ const ROLE_LABELS: Record<string, string> = {
   viewer: "Chỉ xem",
 };
 
-export function CollaboratorsPanel({ collaborators }: { collaborators: Collaborator[] }) {
-  const [copied, setCopied] = useState(false);
-  const shareLink = typeof window !== "undefined"
-    ? `${window.location.origin}${window.location.pathname}?invite=share`
-    : "";
+export function CollaboratorsPanel({
+  collaborators,
+  itineraryId,
+}: {
+  collaborators: Collaborator[];
+  itineraryId: string;
+}) {
+  const [email, setEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<"idle" | "sent" | "error">("idle");
 
-  const copy = () => {
-    navigator.clipboard.writeText(shareLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const inviteEditor = async () => {
+    const trimmed = email.trim();
+    if (!trimmed || inviting) return;
+    setInviting(true);
+    setInviteStatus("idle");
+
+    try {
+      await apiFetch(`/itineraries/${itineraryId}/collaborators`, {
+        method: "POST",
+        body: { email: trimmed, role: "EDITOR" },
+      });
+      setEmail("");
+      setInviteStatus("sent");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setInviteStatus("sent");
+      } else {
+        setInviteStatus("error");
+      }
+    } finally {
+      setInviting(false);
+    }
   };
 
   const online = collaborators.filter((c) => c.isOnline);
@@ -61,7 +86,7 @@ export function CollaboratorsPanel({ collaborators }: { collaborators: Collabora
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-80 bg-white border-[#e0d9cc] p-0 shadow-xl">
+      <PopoverContent align="end" className="w-[calc(100vw-2rem)] max-w-80 bg-white border-[#e0d9cc] p-0 shadow-xl">
         <div className="p-4 border-b border-[#e8e2d9]">
           <div className="text-[10px] font-mono tracking-[0.24em] uppercase text-[#8b8378]">Collaborators</div>
           <h3 className="font-semibold text-[#1a1a1a] mt-1">{collaborators.length} thành viên</h3>
@@ -98,20 +123,44 @@ export function CollaboratorsPanel({ collaborators }: { collaborators: Collabora
           ))}
         </div>
 
-        {shareLink && (
-          <div className="p-3 border-t border-[#e8e2d9] bg-[#f5f0e8]">
-            <div className="text-[10px] font-mono tracking-[0.24em] uppercase text-[#8b8378]">Share link</div>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 bg-white rounded-md border border-[#e0d9cc]">
-                <Link2 className="w-3.5 h-3.5 text-[#8b8378] shrink-0" />
-                <span className="text-[11px] text-[#6b6b6b] truncate font-mono">{shareLink}</span>
-              </div>
-              <Button size="sm" onClick={copy} className="bg-[#1a1a1a] hover:bg-black text-[#f5f0e8] shrink-0 h-8">
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              </Button>
+        <div className="p-3 border-t border-[#e8e2d9] bg-[#f5f0e8]">
+          <div className="text-[10px] font-mono tracking-[0.24em] uppercase text-[#8b8378]">Invite editor</div>
+          <div className="flex items-center gap-2 mt-2 min-w-0">
+            <div className="min-w-0 flex-1 flex items-center gap-2 px-2.5 py-1.5 bg-white rounded-md border border-[#e0d9cc]">
+              <Mail className="w-3.5 h-3.5 text-[#8b8378] shrink-0" />
+              <input
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setInviteStatus("idle");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    inviteEditor();
+                  }
+                }}
+                type="email"
+                placeholder="email@example.com"
+                className="min-w-0 flex-1 bg-transparent text-xs text-[#1a1a1a] placeholder:text-[#8b8378] focus:outline-none"
+              />
             </div>
+            <Button
+              size="sm"
+              onClick={inviteEditor}
+              disabled={inviting || !email.trim()}
+              className="bg-[#1a1a1a] hover:bg-black text-[#f5f0e8] shrink-0 h-8"
+            >
+              {inviting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+            </Button>
           </div>
-        )}
+          {inviteStatus === "sent" && (
+            <p className="mt-2 text-[11px] text-[#3d5a3d]">Đã gửi lời mời chỉnh sửa.</p>
+          )}
+          {inviteStatus === "error" && (
+            <p className="mt-2 text-[11px] text-red-600">Không gửi được lời mời. Kiểm tra email hoặc quyền sở hữu.</p>
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   );

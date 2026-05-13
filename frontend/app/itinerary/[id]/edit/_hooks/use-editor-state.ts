@@ -165,7 +165,7 @@ export function useEditorState(id: string) {
   // so we only consume incoming events here. The hook's `send` is unused for
   // now but kept for future cursor / typing-indicator features.
   useItineraryWS(
-    id !== "new" ? id : "",
+    itinerary && id !== "new" ? id : "",
     handleWSEvent,
     handleWSReconnect,
   );
