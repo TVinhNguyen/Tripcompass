@@ -188,10 +188,13 @@ export type GenerateRequest = {
   budget_vnd: number;
   guest_count?: number;
   preference_tags?: string[];
-  travel_style?: "relaxed" | "standard" | "active";
+  travel_style?: "relaxed" | "balanced" | "standard" | "active";
   travel_month?: number;
   arrival_time?: string;
   departure_time?: string;
+  daily_start_time?: string;
+  daily_end_time?: string;
+  time_strictness?: "flexible" | "balanced" | "strict";
 };
 
 export type SlotPlace = {
@@ -312,6 +315,14 @@ export type PlanRequest = {
   end_date?: string;
   budget_vnd?: number;
   guest_count?: number;
+  preferences?: string[];
+  preference_tags?: string[];
+  travel_style?: "relaxed" | "balanced" | "standard" | "active";
+  arrival_time?: string;
+  departure_time?: string;
+  daily_start_time?: string;
+  daily_end_time?: string;
+  time_strictness?: "flexible" | "balanced" | "strict";
   raw_input?: string;
 };
 

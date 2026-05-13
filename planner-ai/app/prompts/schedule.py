@@ -10,13 +10,14 @@ QUY TẮC BẮT BUỘC (vi phạm → validator reject):
 1. CHỈ dùng places/food từ danh sách — TUYỆT ĐỐI không bịa place/food mới (rule này KHÔNG áp dụng cho hotel — xem mục KHÁCH SẠN bên dưới)
 2. Mỗi place CHỈ xuất hiện đúng 1 lần trong toàn bộ lịch trình
 3. Tuân thủ hours field — kiểm tra opening hours trước khi xếp
-4. Buffer ít nhất 30 phút giữa các activities
+4. Chừa đủ thời gian di chuyển thực tế giữa các activities; 30 phút là gợi ý mặc định, không phải giờ cố định
 5. Tổng giá attractions ≤ attr_budget (food không tính vào đây)
 6. Ưu tiên places có must_visit=true
 7. Places gần nhau (lat/lng tương tự) → xếp cùng ngày
-8. Ngày đầu (arrival): chỉ afternoon + evening (15:00 trở đi)
-9. Ngày cuối (departure): chỉ morning (kết thúc trước 11:00)
-10. Mỗi ngày standard: breakfast + 2-3 activities + lunch + dinner
+8. Tôn trọng arrival_time/departure_time nếu context có; nếu không có thì tự suy luận hợp lý
+9. Tôn trọng daily_start_time/daily_end_time nếu context có; nếu không có thì chọn giờ theo travel_style
+10. Mỗi ngày nên có nhịp ăn/chơi/nghỉ hợp lý, nhưng không ép một template giờ cố định
+11. Mỗi slot phải nằm trong cùng một ngày: end phải lớn hơn start. Không tạo slot kiểu 23:00-01:00; nếu cần nightlife qua nửa đêm thì kết thúc trước 23:59 hoặc chuyển phần sau nửa đêm sang ngày kế tiếp.
 
 BỮA ĂN — QUY TẮC BẮT BUỘC:
 - Mỗi slot breakfast/lunch/dinner PHẢI dùng quán ăn từ danh sách "food"
@@ -41,12 +42,25 @@ KIẾN THỨC ĐỊA ĐIỂM:
 - Ngũ Hành Sơn: sáng mát hơn chiều
 - Biển: tránh 11h-14h nắng gắt
 
+NHỊP THỜI GIAN — SOFT CONSTRAINTS:
+- KHÔNG dùng lịch giờ cố định. Hãy tự chọn giờ cụ thể dựa trên context.
+- travel_style="relaxed": ít điểm hơn, bắt đầu muộn hơn, buffer dài hơn, ưu tiên nghỉ/chill.
+- travel_style="balanced"/"standard": nhịp vừa phải, 2-3 điểm chính/ngày.
+- travel_style="active": có thể bắt đầu sớm hơn, 3-4 điểm/ngày nếu travel time hợp lý.
+- time_strictness="flexible": có thể lệch meal windows nếu có lý do du lịch hợp lý.
+- time_strictness="strict": bám sát arrival/departure/daily windows hơn.
+- Meal windows tham khảo: breakfast 07:00-09:30, lunch 11:00-13:30, dinner 18:00-20:30.
+- Có thể lệch meal windows cho tour full-day, nightlife, giờ mở cửa đặc biệt, thời tiết, hoặc lịch bay.
+- Được dùng kiến thức du lịch của bạn để chọn thời điểm tốt nhất, nhưng place_id vẫn phải từ danh sách retrieved.
+
 NẾU LÀ RETRY (violations != []):
 - OVER_BUDGET → thay activities đắt bằng options rẻ hơn từ danh sách
 - HALLUCINATED_PLACE → xóa place đó, dùng place_id từ danh sách đã cho
 - CLOSED_HOURS → điều chỉnh giờ hoặc đổi sang ngày khác
 - DUPLICATE_PLACE → xóa bản trùng lặp
 - TIME_OVERLAP → điều chỉnh start/end time
+- INVALID_TIME_RANGE → sửa end lớn hơn start trong cùng ngày
+- INSUFFICIENT_TRAVEL_TIME → tăng gap, đổi thứ tự, hoặc chuyển activity sang ngày khác
 
 OUTPUT: JSON thuần túy, không có text ngoài JSON.
 

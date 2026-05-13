@@ -241,6 +241,18 @@ func (s *ActivityService) Reorder(userID string, items []ReorderItem) (uuid.UUID
 			return err
 		}
 
+		for i, item := range items {
+			// Move all affected rows out of the visible ordering range first.
+			// Without this phase, swapping 0 <-> 1 can temporarily violate
+			// UNIQUE(itinerary_id, day_number, order_index) before the second
+			// row is updated.
+			if err := tx.Model(&models.Activity{}).
+				Where("id = ?", item.ID).
+				Update("order_index", -1000000-i).Error; err != nil {
+				return err
+			}
+		}
+
 		for _, item := range items {
 			if err := tx.Model(&models.Activity{}).
 				Where("id = ?", item.ID).

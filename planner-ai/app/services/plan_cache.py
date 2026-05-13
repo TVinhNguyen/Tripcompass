@@ -25,6 +25,10 @@ def _normalize_preferences(preferences: list[str] | None) -> list[str]:
     })
 
 
+def _get(request: Any, name: str, default: Any = None) -> Any:
+    return getattr(request, name, default)
+
+
 def _hash_payload(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -47,13 +51,19 @@ def build_plan_cache_key(request: Any) -> str:
         "budget_vnd": request.budget_vnd or 0,
         "start_date": request.start_date,
         "end_date": request.end_date,
+        "travel_style": _get(request, "travel_style"),
+        "arrival_time": _get(request, "arrival_time"),
+        "departure_time": _get(request, "departure_time"),
+        "daily_start_time": _get(request, "daily_start_time"),
+        "daily_end_time": _get(request, "daily_end_time"),
+        "time_strictness": _get(request, "time_strictness", "balanced"),
         "preferences": _normalize_preferences(getattr(request, "preferences", None)),
         "need_hotel": getattr(request, "need_hotel", True),
         "need_flight": getattr(request, "need_flight", False),
         "raw_input": getattr(request, "raw_input", None),
         "llm_provider": config.LLM_PROVIDER,
         "llm_model": config.LLM_MODEL,
-        "prompt_version": "schedule-v1/enrich-v1",
+        "prompt_version": "schedule-v2-flex-time/enrich-v1",
     }
     return f"{CACHE_KEY_VERSION}:{destination_cache_scope(destination)}:{_hash_payload(payload)}"
 
