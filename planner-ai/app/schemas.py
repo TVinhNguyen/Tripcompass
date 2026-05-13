@@ -10,6 +10,7 @@ from pydantic import AliasChoices, BaseModel, Field, field_validator
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None   # auto-generate if None
     message: str
+    itinerary_context: Optional[dict] = None
 
 
 # ── POST /chat/stream (SSE) ───────────────────────────────────────────────────
@@ -17,6 +18,7 @@ class ChatRequest(BaseModel):
 class StreamChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
+    itinerary_context: Optional[dict] = None
 
 
 class StreamEvent(BaseModel):

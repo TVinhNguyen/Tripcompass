@@ -66,6 +66,7 @@ type MobileTab = "plan" | "map";
 
 const MAP_MIN_WIDTH = 360;
 const MAP_MAX_WIDTH = 760;
+const CHAT_PANEL_WIDTH = 400;
 
 export default function ItineraryEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -106,8 +107,10 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
     document.body.style.userSelect = "none";
 
     const handlePointerMove = (event: PointerEvent) => {
-      const maxWidth = Math.min(MAP_MAX_WIDTH, Math.max(MAP_MIN_WIDTH, window.innerWidth - 420));
-      const nextWidth = window.innerWidth - event.clientX;
+      const reservedRight = isChatOpen ? CHAT_PANEL_WIDTH : 0;
+      const maxAvailable = window.innerWidth - reservedRight - 420;
+      const maxWidth = Math.min(MAP_MAX_WIDTH, Math.max(MAP_MIN_WIDTH, maxAvailable));
+      const nextWidth = window.innerWidth - reservedRight - event.clientX;
       setMapWidth(Math.min(Math.max(nextWidth, MAP_MIN_WIDTH), maxWidth));
     };
 
@@ -122,7 +125,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", stopResize);
     };
-  }, [isMapResizing]);
+  }, [isMapResizing, isChatOpen]);
 
   if (pageLoading) {
     return (
@@ -186,8 +189,12 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
           </div>
 
           <button
-            onClick={() => setIsChatOpen(true)}
-            className="h-9 px-2.5 sm:px-3 rounded-md hover:bg-white/10 text-[#f5f0e8]/80 hover:text-[#f5f0e8] text-sm flex items-center gap-1.5 transition"
+            onClick={() => setIsChatOpen((open) => !open)}
+            className={cn(
+              "h-9 px-2.5 sm:px-3 rounded-md hover:bg-white/10 text-sm flex items-center gap-1.5 transition",
+              isChatOpen ? "bg-white/10 text-[#f5f0e8]" : "text-[#f5f0e8]/80 hover:text-[#f5f0e8]",
+            )}
+            aria-pressed={isChatOpen}
           >
             <Sparkles className="w-4 h-4 text-[#d4a853]" />
             <span className="hidden sm:inline">AI</span>
@@ -309,6 +316,19 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
             </div>
           </aside>
 
+          <AnimatePresence initial={false}>
+            {isChatOpen && (
+              <AIChatPanel
+                mode="docked"
+                className="hidden lg:flex"
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                itineraryTitle={title}
+                itineraryId={id}
+              />
+            )}
+          </AnimatePresence>
+
           {/* Activity Pool drawer */}
           <AnimatePresence>
             {isPoolOpen && (
@@ -412,6 +432,8 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
       <AnimatePresence>
         {isChatOpen && (
           <AIChatPanel
+            mode="overlay"
+            className="lg:hidden"
             isOpen={isChatOpen}
             onClose={() => setIsChatOpen(false)}
             itineraryTitle={title}

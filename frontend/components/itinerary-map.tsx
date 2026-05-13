@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -150,16 +150,6 @@ export default function ItineraryMap({
     [allWithCoords, hiddenDays]
   );
 
-  // Group by day for polylines
-  const polylinesByDay = useMemo(() => {
-    const result: Record<number, [number, number][]> = {};
-    for (const a of withCoords) {
-      if (!result[a.day]) result[a.day] = [];
-      result[a.day].push([a.lat!, a.lng!]);
-    }
-    return result;
-  }, [withCoords]);
-
   const activeActivity = activeActivityId
     ? withCoords.find((a) => a.id === activeActivityId) || null
     : null;
@@ -265,20 +255,6 @@ export default function ItineraryMap({
 
         <FitBounds activities={withCoords} />
         <FlyToActive activity={activeActivity} />
-
-        {/* Polylines per day */}
-        {Object.entries(polylinesByDay).map(([day, coords]) => (
-          <Polyline
-            key={`line-${day}`}
-            positions={coords}
-            pathOptions={{
-              color: dayColor(Number(day)),
-              weight: 3,
-              opacity: 0.7,
-              dashArray: "6 8",
-            }}
-          />
-        ))}
 
         {/* Markers */}
         {withCoords.map((a) => {

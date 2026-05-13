@@ -17,11 +17,16 @@ export function AIChatPanel({
   isOpen,
   onClose,
   itineraryTitle,
+  itineraryId,
+  mode = "overlay",
+  className,
 }: {
   isOpen: boolean;
   onClose: () => void;
   itineraryTitle: string;
   itineraryId?: string;
+  mode?: "docked" | "overlay";
+  className?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -70,6 +75,7 @@ export function AIChatPanel({
     setToolRunning(null);
 
     await streamChat(sessionId, content, {
+      itineraryId,
       signal: abortRef.current.signal,
       onToolStart(tool, label) {
         const lbl = label ?? getToolLabel(tool).vi;
@@ -126,7 +132,13 @@ export function AIChatPanel({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 400, opacity: 0 }}
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
-      className="fixed right-0 top-0 bottom-0 w-full sm:w-96 bg-[#fbf8f2] border-l border-[#e0d9cc] z-50 flex flex-col shadow-2xl"
+      className={cn(
+        "bg-[#fbf8f2] border-l border-[#e0d9cc] flex flex-col shadow-2xl",
+        mode === "docked"
+          ? "relative h-full w-[400px] shrink-0"
+          : "fixed right-0 top-0 bottom-0 w-full sm:w-96 z-50",
+        className,
+      )}
     >
       {/* Header */}
       <div className="h-14 px-4 border-b border-[#e0d9cc] flex items-center justify-between bg-[#1a1a1a]">
