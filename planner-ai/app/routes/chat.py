@@ -20,6 +20,18 @@ from loguru import logger
 router = APIRouter(tags=["chat"])
 
 
+def _itinerary_context_message(context: dict | None) -> str | None:
+    if not context:
+        return None
+    return (
+        "DỮ LIỆU LỊCH TRÌNH HIỆN TẠI CỦA USER:\n"
+        f"{json.dumps(context, ensure_ascii=False, separators=(',', ':'))}\n\n"
+        "Hãy dùng dữ liệu này làm nguồn chính khi user hỏi về lịch trình đang chỉnh sửa. "
+        "Nếu user yêu cầu tối ưu, thêm, xoá hoặc sắp xếp lại, hãy đưa ra đề xuất cụ thể "
+        "theo ngày/giờ/hoạt động; đừng nói rằng bạn đã sửa DB vì chat này chỉ có quyền tư vấn."
+    )
+
+
 def _extract_result(result: dict) -> tuple[str, list[str], dict | None]:
     """Extract (ai_text, tools_used, plan_data) from agent result.
 
@@ -58,7 +70,11 @@ async def chat(req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
 
     history  = await load_history(session_id)
-    messages = history_to_lc_messages(history) + [HumanMessage(content=req.message)]
+    messages = history_to_lc_messages(history)
+    context_msg = _itinerary_context_message(req.itinerary_context)
+    if context_msg:
+        messages.append(HumanMessage(content=context_msg))
+    messages.append(HumanMessage(content=req.message))
 
     try:
         result = await get_chat_agent().ainvoke({"messages": messages})
@@ -94,7 +110,11 @@ async def chat_stream(req: StreamChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
 
     history  = await load_history(session_id)
-    messages = history_to_lc_messages(history) + [HumanMessage(content=req.message)]
+    messages = history_to_lc_messages(history)
+    context_msg = _itinerary_context_message(req.itinerary_context)
+    if context_msg:
+        messages.append(HumanMessage(content=context_msg))
+    messages.append(HumanMessage(content=req.message))
 
     async def _generate():
         full_text  = ""
