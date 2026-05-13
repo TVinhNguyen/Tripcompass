@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Playfair_Display, Inter } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
-import { AuthProvider } from '@/hooks/use-auth'
+import { AppProviders } from '@/components/app-providers'
 import './globals.css'
 
 const playfairDisplay = Playfair_Display({ 
@@ -57,10 +57,10 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${playfairDisplay.variable} ${inter.variable} font-sans antialiased bg-[#f5f0e8] text-[#1a1a1a]`}
       >
-        <AuthProvider>
+        <AppProviders>
           {children}
           <Toaster />
-        </AuthProvider>
+        </AppProviders>
       </body>
     </html>
   )
