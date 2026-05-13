@@ -2,22 +2,24 @@
 
 import type React from "react"
 
-import { useEffect, useState, Suspense } from "react"
+import { useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Eye, EyeOff, Loader2, Mail, Lock } from "lucide-react"
 import { AuthLayout } from "@/components/auth-layout"
 import { Button } from "@/components/ui/button"
+import { useGoogleOAuthReady } from "@/components/app-providers"
 import { useAuth } from "@/hooks/use-auth"
 import { ApiError } from "@/lib/api"
-import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from "@react-oauth/google"
+import { GoogleLogin, type CredentialResponse } from "@react-oauth/google"
 
 const GOOGLE_BUTTON_WIDTH = 448
 
-function LoginContent({ googleEnabled }: { googleEnabled: boolean }) {
+function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { login, loginGoogle } = useAuth()
+  const googleEnabled = useGoogleOAuthReady()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -155,17 +157,28 @@ function LoginContent({ googleEnabled }: { googleEnabled: boolean }) {
       <div className="space-y-3">
         {/* Google — uses GoogleLogin component which passes id_token (credential) */}
         <div className="w-full overflow-hidden rounded-lg [&>div]:!w-full [&_iframe]:!w-full">
-          <GoogleLogin
-            onSuccess={handleGoogleSuccess}
-            onError={() => setError("Google đăng nhập bị huỷ.")}
-            text="signin_with"
-            theme="outline"
-            size="large"
-            shape="rectangular"
-            logo_alignment="left"
-            width={GOOGLE_BUTTON_WIDTH}
-            containerProps={{ className: "w-full" }}
-          />
+          {googleEnabled ? (
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError("Google đăng nhập bị huỷ.")}
+              text="signin_with"
+              theme="outline"
+              size="large"
+              shape="rectangular"
+              logo_alignment="left"
+              width={GOOGLE_BUTTON_WIDTH}
+              containerProps={{ className: "w-full" }}
+            />
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              disabled
+              className="h-10 w-full justify-center rounded-lg border-[#e8e2d9] bg-white text-[#8b8378]"
+            >
+              Đăng nhập bằng Google
+            </Button>
+          )}
         </div>
         {/* Facebook — UI only, SDK deferred */}
         <Button
@@ -192,26 +205,9 @@ function LoginContent({ googleEnabled }: { googleEnabled: boolean }) {
 }
 
 export default function LoginPage() {
-  const [googleClientId, setGoogleClientId] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch("/runtime-config", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => setGoogleClientId(data.googleClientId || ""))
-      .catch(() => setGoogleClientId(""))
-  }, [])
-
-  const content = (
-    <Suspense>
-      <LoginContent googleEnabled={Boolean(googleClientId)} />
-    </Suspense>
-  )
-
-  if (!googleClientId) return content
-
   return (
-    <GoogleOAuthProvider clientId={googleClientId}>
-      {content}
-    </GoogleOAuthProvider>
+    <Suspense>
+      <LoginContent />
+    </Suspense>
   )
 }
