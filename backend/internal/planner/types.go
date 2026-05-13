@@ -5,15 +5,19 @@ import "time"
 // GenerateRequest is the input for the planner engine.
 type GenerateRequest struct {
 	Destination    string   `json:"destination" binding:"required"`
+	NumDays        int      `json:"num_days,omitempty"`            // Used by planner-ai proxy; Go engine derives days from dates.
 	StartDate      string   `json:"start_date" binding:"required"` // YYYY-MM-DD
 	EndDate        string   `json:"end_date" binding:"required"`   // YYYY-MM-DD
 	BudgetVND      int      `json:"budget_vnd" binding:"required"`
 	GuestCount     int      `json:"guest_count"`
 	PreferenceTags []string `json:"preference_tags,omitempty"`  // ["beach","culture","food","adventure","nature","nightlife"]
-	TravelStyle    string   `json:"travel_style,omitempty"`     // "relaxed" | "standard" | "active"
+	TravelStyle    string   `json:"travel_style,omitempty"`     // "relaxed" | "balanced" | "standard" | "active"
 	TravelMonth    int      `json:"travel_month,omitempty"`     // 1-12; inferred from StartDate if absent
 	ArrivalTime    string   `json:"arrival_time,omitempty"`     // "10:00" default "15:00"
 	DepartureTime  string   `json:"departure_time,omitempty"`   // "18:00" default "10:00"
+	DailyStartTime string   `json:"daily_start_time,omitempty"` // "08:30" optional soft day start
+	DailyEndTime   string   `json:"daily_end_time,omitempty"`   // "21:00" optional soft day end
+	TimeStrictness string   `json:"time_strictness,omitempty"`  // "flexible" | "balanced" | "strict"
 }
 
 // GenerateResponse is the full output returned to the caller.

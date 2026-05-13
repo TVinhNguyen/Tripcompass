@@ -6,14 +6,14 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { ArrowLeft, Sparkles, MapPin, Users, Calendar, Wallet, Loader2, Save, RefreshCw } from "lucide-react"
+import { ArrowLeft, Sparkles, MapPin, Users, Calendar, Wallet, Loader2, Save, RefreshCw, Clock } from "lucide-react"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { RequireAuth } from "@/components/require-auth"
 import { apiFetch } from "@/lib/api"
 import { savePlanAsItinerary } from "@/lib/plan-to-itinerary"
-import type { GenerateResponse } from "@/lib/types"
+import type { BudgetTier, GenerateResponse, SlotPlace, Violation } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -36,6 +36,171 @@ const preferenceTags = [
   { id: "luxury", label: "Cao cấp" },
 ]
 
+const travelStyles = [
+  { id: "relaxed", label: "Thư thả" },
+  { id: "balanced", label: "Cân bằng" },
+  { id: "active", label: "Dày lịch" },
+] as const
+
+type PlannerAISlot = {
+  start?: string
+  end?: string
+  slot_type?: string
+  place_id?: string | null
+  place_name?: string | null
+  price_vnd?: number | null
+  notes?: string
+}
+
+type PlannerAIDay = {
+  day_num?: number
+  date_str?: string
+  day_type?: string
+  slots?: PlannerAISlot[]
+}
+
+type PlannerAISchedule = {
+  days?: PlannerAIDay[]
+}
+
+type PlannerAIEnvelope = {
+  destination?: string
+  num_days?: number
+  budget_vnd?: number
+  budget_tier?: BudgetTier
+  budget_breakdown?: Record<string, number>
+  final_plan?: PlannerAISchedule | GenerateResponse
+  plan?: PlannerAISchedule | GenerateResponse
+  violations?: Array<Partial<Violation> & { type?: string; day?: string | number }>
+  warnings?: string[]
+}
+
+type PlannerGenerateEnvelope =
+  | GenerateResponse
+  | PlannerAIEnvelope
+  | { data?: GenerateResponse | PlannerAIEnvelope }
+
+const FOOD_SLOT_TYPES = new Set(["breakfast", "lunch", "dinner", "snack", "brunch"])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object"
+}
+
+function isGenerateResponse(value: unknown): value is GenerateResponse {
+  return isRecord(value) && Array.isArray(value.days) && isRecord(value.budget_recap)
+}
+
+function slotCategory(slotType: string): SlotPlace["category"] {
+  return FOOD_SLOT_TYPES.has(slotType.toLowerCase()) ? "FOOD" : "ATTRACTION"
+}
+
+function normalizeViolations(violations: PlannerAIEnvelope["violations"]): Violation[] {
+  return (violations ?? []).map((v) => {
+    const day = typeof v.day === "number" ? v.day : Number(v.day)
+    return {
+      rule: v.rule ?? v.type ?? "PLANNER_WARNING",
+      severity: v.severity ?? "warning",
+      message: v.message ?? "Planner warning",
+      day: Number.isFinite(day) ? day : undefined,
+    }
+  })
+}
+
+function toGenerateResponse(envelope: PlannerAIEnvelope, requestedBudget: number, fallbackDestination: string, style: string): GenerateResponse {
+  const raw = envelope.final_plan ?? envelope.plan
+  if (isGenerateResponse(raw)) return raw
+  if (!isRecord(raw) || !Array.isArray(raw.days)) {
+    throw new Error("invalid planner response")
+  }
+
+  const destinationName = envelope.destination?.trim() || fallbackDestination || "Việt Nam"
+  let attractionSpent = 0
+  let foodSpent = 0
+
+  const days = raw.days
+    .filter(isRecord)
+    .map((day, dayIndex) => ({
+      day_num: Number(day.day_num) || dayIndex + 1,
+      date_str: typeof day.date_str === "string" ? day.date_str : "",
+      day_type: typeof day.day_type === "string" ? day.day_type : "standard",
+      primary_area: destinationName,
+      travel_min: 0,
+      buffer_min: 0,
+      slots: (Array.isArray(day.slots) ? day.slots : []).filter(isRecord).map((slot) => {
+        const slotType = typeof slot.slot_type === "string" ? slot.slot_type : ""
+        const placeId = typeof slot.place_id === "string" ? slot.place_id : ""
+        const placeName = typeof slot.place_name === "string" ? slot.place_name : ""
+        const price = Number(slot.price_vnd) || 0
+        const category = slotCategory(slotType)
+
+        const normalized = {
+          start: typeof slot.start === "string" ? slot.start : "",
+          end: typeof slot.end === "string" ? slot.end : "",
+          slot_type: slotType,
+          is_buffer: !(placeId && placeName),
+          notes: typeof slot.notes === "string" ? slot.notes : undefined,
+          place: undefined as SlotPlace | undefined,
+        }
+
+        if (placeId && placeName) {
+          normalized.place = {
+            id: placeId,
+            name: placeName,
+            category,
+            base_price: price,
+            duration_min: 0,
+            is_must_visit: false,
+            is_full_day: false,
+            is_free: price === 0,
+          }
+          if (category === "FOOD") foodSpent += price
+          else attractionSpent += price
+        }
+
+        return normalized
+      }),
+    }))
+
+  const breakdown = envelope.budget_breakdown ?? {}
+  const hotelTotal = (Number(breakdown.hotel_budget_per_night) || 0) * Math.max(days.length - 1, 0)
+  const spent = attractionSpent + foodSpent
+  const fallbackBudget =
+    (Number(breakdown.attr_budget) || 0) + (Number(breakdown.food_budget) || 0) + hotelTotal
+  const totalBudget = Math.max(requestedBudget || Number(envelope.budget_vnd) || fallbackBudget, spent, 0)
+
+  return {
+    days,
+    budget_recap: {
+      total_budget_vnd: totalBudget,
+      attraction_spent_vnd: attractionSpent,
+      food_spent_vnd: foodSpent,
+      remaining_vnd: Math.max(totalBudget - spent, 0),
+      within_budget: spent <= totalBudget,
+    },
+    budget_tier: envelope.budget_tier ?? "standard",
+    violations: normalizeViolations(envelope.violations),
+    budget_warning: envelope.warnings?.join("\n"),
+    slot_template: style === "relaxed" || style === "active" ? style : "standard",
+  }
+}
+
+function unwrapPlan(payload: PlannerGenerateEnvelope, requestedBudget: number, destination: string, style: string): GenerateResponse {
+  if (isGenerateResponse(payload)) return payload
+  const data = "data" in payload && payload.data ? payload.data : payload
+  if (isGenerateResponse(data)) return data
+  return toGenerateResponse(data as PlannerAIEnvelope, requestedBudget, destination, style)
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date)
+  next.setDate(date.getDate() + days)
+  return next
+}
+
+function formatDate(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
 function QuickPlanContent() {
   const router = useRouter()
   const [destination, setDestination] = useState("")
@@ -43,6 +208,9 @@ function QuickPlanContent() {
   const [guestCount, setGuestCount] = useState(2)
   const [budget, setBudget] = useState(5000000)
   const [startDate, setStartDate] = useState("")
+  const [travelStyle, setTravelStyle] = useState<(typeof travelStyles)[number]["id"]>("balanced")
+  const [arrivalTime, setArrivalTime] = useState("")
+  const [departureTime, setDepartureTime] = useState("")
   const [prefs, setPrefs] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -59,19 +227,25 @@ function QuickPlanContent() {
     setResult(null)
     setError("")
     try {
-      const plan = await apiFetch<GenerateResponse>("/generate", {
+      const start = startDate ? new Date(startDate) : new Date()
+      const end = addDays(start, numDays - 1)
+      const payload = await apiFetch<PlannerGenerateEnvelope>("/planner/generate", {
         method: "POST",
-        base: "ai",
-        auth: false,
         body: {
           destination,
           num_days: numDays,
-          num_guests: guestCount,
+          guest_count: guestCount,
           budget_vnd: budget,
-          start_date: startDate || undefined,
-          preferences: prefs,
+          start_date: formatDate(start),
+          end_date: formatDate(end),
+          travel_style: travelStyle,
+          arrival_time: arrivalTime || undefined,
+          departure_time: departureTime || undefined,
+          time_strictness: "balanced",
+          preference_tags: prefs,
         },
       })
+      const plan = unwrapPlan(payload, budget, destination, travelStyle)
       setResult(plan)
     } catch {
       setError("AI không thể sinh lịch trình. Vui lòng thử lại sau.")
@@ -201,11 +375,47 @@ function QuickPlanContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#1a1a1a] mb-2">Số ngày</label>
+                  <label className="block text-sm font-medium text-[#1a1a1a] mb-2">
+                    <Clock className="inline w-4 h-4 mr-1.5 -mt-0.5" />
+                    Nhịp đi
+                  </label>
+                  <div className="grid grid-cols-3 gap-1 rounded-lg border border-[#e8e2d9] bg-[#f5f0e8] p-1">
+                    {travelStyles.map((style) => (
+                      <button
+                        key={style.id}
+                        type="button"
+                        onClick={() => setTravelStyle(style.id)}
+                        className={cn(
+                          "h-10 rounded-md px-2 text-xs font-medium transition-colors",
+                          travelStyle === style.id
+                            ? "bg-white text-[#1a1a1a] shadow-sm"
+                            : "text-[#6b6b6b] hover:text-[#1a1a1a]",
+                        )}
+                      >
+                        {style.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Travel times */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#1a1a1a] mb-2">Giờ đến nơi</label>
                   <input
-                    type="number" min={1} max={30}
-                    value={numDays}
-                    onChange={(e) => setNumDays(Math.max(1, Number(e.target.value)))}
+                    type="time"
+                    value={arrivalTime}
+                    onChange={(e) => setArrivalTime(e.target.value)}
+                    className="w-full px-4 py-3 bg-[#f5f0e8] border border-[#e8e2d9] rounded-lg text-[#1a1a1a] focus:outline-none focus:border-[#3d5a3d]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#1a1a1a] mb-2">Giờ rời đi</label>
+                  <input
+                    type="time"
+                    value={departureTime}
+                    onChange={(e) => setDepartureTime(e.target.value)}
                     className="w-full px-4 py-3 bg-[#f5f0e8] border border-[#e8e2d9] rounded-lg text-[#1a1a1a] focus:outline-none focus:border-[#3d5a3d]"
                   />
                 </div>

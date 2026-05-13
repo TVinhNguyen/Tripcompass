@@ -21,6 +21,12 @@ async def generate_travel_plan(
     guest_count: int = 2,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    travel_style: Optional[str] = None,
+    arrival_time: Optional[str] = None,
+    departure_time: Optional[str] = None,
+    daily_start_time: Optional[str] = None,
+    daily_end_time: Optional[str] = None,
+    time_strictness: Optional[str] = "balanced",
     preferences: Optional[list[str]] = None,
     need_hotel: bool = True,
     need_flight: bool = False,
@@ -88,6 +94,12 @@ async def generate_travel_plan(
         "start_date": str(sd),
         "end_date": str(ed),
         "travel_month": travel_month,
+        "travel_style": _normalize_travel_style(travel_style),
+        "arrival_time": _normalize_time(arrival_time),
+        "departure_time": _normalize_time(departure_time),
+        "daily_start_time": _normalize_time(daily_start_time),
+        "daily_end_time": _normalize_time(daily_end_time),
+        "time_strictness": _normalize_time_strictness(time_strictness),
         "preferences": prefs,
         "need_hotel": need_hotel,
         "need_flight": need_flight,
@@ -173,3 +185,34 @@ def _normalize_preferences(preferences: Optional[list[str]]) -> list[str]:
         for pref in (preferences or [])
         if str(pref).strip()
     })
+
+
+def _normalize_travel_style(value: Optional[str]) -> str:
+    style = str(value or "balanced").strip().lower()
+    if style == "standard":
+        return "balanced"
+    if style in {"relaxed", "balanced", "active"}:
+        return style
+    return "balanced"
+
+
+def _normalize_time_strictness(value: Optional[str]) -> str:
+    strictness = str(value or "balanced").strip().lower()
+    if strictness in {"flexible", "balanced", "strict"}:
+        return strictness
+    return "balanced"
+
+
+def _normalize_time(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    raw = str(value).strip()
+    try:
+        hour_s, minute_s = raw.split(":", 1)
+        hour = int(hour_s)
+        minute = int(minute_s)
+    except (TypeError, ValueError):
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return f"{hour:02d}:{minute:02d}"

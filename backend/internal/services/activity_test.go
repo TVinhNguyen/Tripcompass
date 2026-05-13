@@ -230,6 +230,26 @@ func TestActivityService_Reorder(t *testing.T) {
 	act1 := createTestActivity(t, db, it.ID)
 	act2 := createTestActivity(t, db, it.ID)
 
+	t.Run("swaps within same day without unique conflict", func(t *testing.T) {
+		items := []ReorderItem{
+			{ID: act1.ID.String(), DayNumber: 1, OrderIndex: 1},
+			{ID: act2.ID.String(), DayNumber: 1, OrderIndex: 0},
+		}
+		itID, err := svc.Reorder(user.ID.String(), items)
+		assert.NoError(t, err)
+		assert.Equal(t, it.ID, itID)
+
+		var a1 models.Activity
+		db.First(&a1, "id = ?", act1.ID)
+		assert.Equal(t, 1, a1.DayNumber)
+		assert.Equal(t, 1, a1.OrderIndex)
+
+		var a2 models.Activity
+		db.First(&a2, "id = ?", act2.ID)
+		assert.Equal(t, 1, a2.DayNumber)
+		assert.Equal(t, 0, a2.OrderIndex)
+	})
+
 	t.Run("success", func(t *testing.T) {
 		items := []ReorderItem{
 			{ID: act1.ID.String(), DayNumber: 2, OrderIndex: 1},

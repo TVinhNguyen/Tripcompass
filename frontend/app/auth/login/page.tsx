@@ -10,7 +10,9 @@ import { AuthLayout } from "@/components/auth-layout"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { ApiError } from "@/lib/api"
-import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google"
+import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from "@react-oauth/google"
+
+const GOOGLE_BUTTON_WIDTH = 448
 
 function LoginContent({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter()
@@ -45,7 +47,7 @@ function LoginContent({ googleEnabled }: { googleEnabled: boolean }) {
   }
 
   // Google OAuth — credential flow (id_token JWT, required by backend /auth/google)
-  const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) return
     try {
       await loginGoogle(credentialResponse.credential) // ✅ id_token, not access_token
@@ -152,37 +154,30 @@ function LoginContent({ googleEnabled }: { googleEnabled: boolean }) {
       {/* OAuth buttons */}
       <div className="space-y-3">
         {/* Google — uses GoogleLogin component which passes id_token (credential) */}
-        {googleEnabled ? (
-          <div className="w-full [&>div]:!w-full [&_iframe]:!w-full">
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={() => setError("Google đăng nhập bị huỷ.")}
-              text="signin_with"
-              shape="rectangular"
-              logo_alignment="left"
-              size="large"
-              width="100%"
-            />
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setError("Google đăng nhập chưa được cấu hình. Thiết lập NEXT_PUBLIC_GOOGLE_CLIENT_ID trên frontend container.")}
-            className="w-full h-10 flex items-center justify-center gap-2 px-4 bg-white border border-[#e8e2d9] rounded-lg text-sm font-medium text-[#8b8378]"
-          >
-            Google
-          </button>
-        )}
+        <div className="w-full overflow-hidden rounded-lg [&>div]:!w-full [&_iframe]:!w-full">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => setError("Google đăng nhập bị huỷ.")}
+            text="signin_with"
+            theme="outline"
+            size="large"
+            shape="rectangular"
+            logo_alignment="left"
+            width={GOOGLE_BUTTON_WIDTH}
+            containerProps={{ className: "w-full" }}
+          />
+        </div>
         {/* Facebook — UI only, SDK deferred */}
-        <button
+        <Button
           type="button"
-          className="w-full h-10 flex items-center justify-center gap-2 px-4 bg-white border border-[#e8e2d9] rounded-lg hover:bg-[#f5f0e8] transition-colors"
+          variant="outline"
+          className="h-10 w-full gap-2 rounded-lg border-[#e8e2d9] bg-white text-[#1a1a1a] hover:bg-[#f5f0e8] hover:text-[#1a1a1a]"
         >
           <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
             <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
           </svg>
           <span className="text-sm font-medium text-[#1a1a1a]">Facebook</span>
-        </button>
+        </Button>
       </div>
 
       {/* Sign up link */}

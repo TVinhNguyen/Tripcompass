@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 	"tripcompass-backend/internal/config"
@@ -50,12 +51,18 @@ func NewPlannerHandler(db *gorm.DB, rdb *redis.Client, cfg *config.Config) *Plan
 func cacheKey(req planner.GenerateRequest) string {
 	dest := strings.ToLower(strings.TrimSpace(req.Destination))
 	prefs := strings.Join(req.PreferenceTags, ",")
-	raw := fmt.Sprintf("%s|%s|%s|%d|%d|%s",
+	raw := fmt.Sprintf("%s|%s|%s|%d|%d|%s|%s|%s|%s|%s|%s|%s",
 		dest, req.StartDate, req.EndDate,
 		req.BudgetVND/100_000, // bucket to 100K VND increments — prevents cache fragmentation
 		// (e.g. 1_234_567 and 1_280_000 map to the same bucket 12, same plan)
 		req.GuestCount,
 		prefs,
+		strings.ToLower(strings.TrimSpace(req.TravelStyle)),
+		strings.TrimSpace(req.ArrivalTime),
+		strings.TrimSpace(req.DepartureTime),
+		strings.TrimSpace(req.DailyStartTime),
+		strings.TrimSpace(req.DailyEndTime),
+		strings.ToLower(strings.TrimSpace(req.TimeStrictness)),
 	)
 	h := sha256.Sum256([]byte(raw))
 	return plannerCachePrefix + fmt.Sprintf("%x", h[:]) // full 128-bit hash; h[:8] collides at ~5B keys
@@ -192,6 +199,9 @@ func (h *PlannerHandler) FlushCache(c *gin.Context) {
 	// Also flush Python service cache when in LLM mode
 	if h.useLLM && h.plannerAIURL != "" {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, h.plannerAIURL+"/cache", nil)
+		if token := strings.TrimSpace(os.Getenv("CACHE_ADMIN_TOKEN")); token != "" {
+			req.Header.Set("X-Admin-Token", token)
+		}
 		_, _ = h.httpClient.Do(req) // best-effort
 	}
 

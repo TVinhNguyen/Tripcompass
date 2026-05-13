@@ -2,20 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Bot, Loader2, Send, User, X } from "lucide-react";
+import { Bot, Loader2, RefreshCw, Send, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { PlanPreviewCard } from "@/components/plan-preview-card";
+import { streamChat } from "@/lib/stream-chat";
+import { getToolLabel } from "@/lib/tool-labels";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "../_lib/types";
 
-const PLANNER_AI = process.env.NEXT_PUBLIC_PLANNER_AI_URL ?? "";
 const QUICK_CHIPS = ["Gợi ý nhà hàng", "Thêm hoạt động", "Tối ưu lịch trình", "Chi phí dự kiến"];
 
 export function AIChatPanel({
   isOpen,
   onClose,
   itineraryTitle,
-  itineraryId,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -31,54 +32,90 @@ export function AIChatPanel({
     },
   ]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [streaming, setStreaming] = useState(false);
+  const [toolRunning, setToolRunning] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const send = async () => {
-    if (!input.trim() || loading) return;
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
+
+  const send = async (text?: string) => {
+    const content = (text ?? input).trim();
+    if (!content || streaming) return;
+
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: input,
+      content,
       timestamp: new Date(),
     };
-    setMessages((p) => [...p, userMsg]);
+    const aiMsgId = `ai-${Date.now()}`;
+    setMessages((p) => [
+      ...p,
+      userMsg,
+      { id: aiMsgId, role: "assistant", content: "", timestamp: new Date(), streaming: true },
+    ]);
     setInput("");
-    setLoading(true);
+    setStreaming(true);
+    setToolRunning(null);
 
-    try {
-      // SSE stream from Planner-AI
-      const res = await fetch(`${PLANNER_AI}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: input,
-          session_id: itineraryId ?? "default",
-          context: { itinerary_title: itineraryTitle },
-        }),
-      });
-
-      if (!res.ok) throw new Error();
-
-      const data = await res.json();
-      setMessages((p) => [
-        ...p,
-        { id: (Date.now() + 1).toString(), role: "assistant", content: data.reply ?? data.message ?? "Đã hiểu!", timestamp: new Date() },
-      ]);
-    } catch {
-      // Graceful fallback
-      setMessages((p) => [
-        ...p,
-        { id: (Date.now() + 1).toString(), role: "assistant", content: "Xin lỗi, tôi gặp sự cố kết nối. Vui lòng thử lại sau.", timestamp: new Date() },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+    await streamChat(sessionId, content, {
+      signal: abortRef.current.signal,
+      onToolStart(tool, label) {
+        const lbl = label ?? getToolLabel(tool).vi;
+        setToolRunning(`${getToolLabel(tool).icon} ${lbl}`);
+      },
+      onToken(token) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === aiMsgId ? { ...m, content: m.content + token } : m)),
+        );
+      },
+      onDone(newSessionId, fullText, plan, toolCalls) {
+        setSessionId(newSessionId);
+        const displayText = fullText.trim() || (
+          plan
+            ? "Mình đã tạo được lịch trình nháp. Bạn có thể xem nhanh bên dưới và lưu lại nếu phù hợp."
+            : "Mình đã xử lý xong yêu cầu của bạn."
+        );
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiMsgId
+              ? {
+                  ...m,
+                  content: displayText,
+                  plan: plan ?? null,
+                  toolCalls: toolCalls ?? [],
+                  streaming: false,
+                  error: m.error && !plan,
+                }
+              : m,
+          ),
+        );
+        setStreaming(false);
+        setToolRunning(null);
+      },
+      onError(message) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiMsgId
+              ? { ...m, content: message, error: true, streaming: false }
+              : m,
+          ),
+        );
+        setStreaming(false);
+        setToolRunning(null);
+      },
+    });
   };
 
   if (!isOpen) return null;
@@ -112,6 +149,15 @@ export function AIChatPanel({
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {toolRunning && (
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#d4a853]/10 border border-[#d4a853]/30 rounded-full text-xs text-[#8b6f47]">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {toolRunning}
+            </div>
+          </div>
+        )}
+
         {messages.map((m) => (
           <div key={m.id} className={cn("flex gap-3", m.role === "user" ? "flex-row-reverse" : "")}>
             <div className={cn(
@@ -122,27 +168,52 @@ export function AIChatPanel({
                 ? <User className="w-3.5 h-3.5 text-[#f5f0e8]" />
                 : <Bot  className="w-3.5 h-3.5 text-[#f5f0e8]" />}
             </div>
-            <div className={cn(
-              "flex-1 px-3 py-2.5 rounded-lg text-sm leading-relaxed",
-              m.role === "user"
-                ? "bg-[#1a1a1a] text-[#f5f0e8] rounded-tr-sm"
-                : "bg-white text-[#1a1a1a] rounded-tl-sm border border-[#e8e2d9]"
-            )}>
-              {m.role === "user" ? m.content : <ChatMarkdown content={m.content} />}
+            <div className="flex-1 min-w-0">
+              {!m.error && m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {m.toolCalls.map((tool, index) => {
+                    const label = getToolLabel(tool);
+                    return (
+                      <span key={`${tool}-${index}`} className="text-[11px] px-2 py-0.5 bg-[#d4a853]/10 text-[#8b6f47] rounded-full border border-[#d4a853]/30">
+                        {label.icon} {tool}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              <div className={cn(
+                "max-w-full overflow-hidden break-words px-3 py-2.5 rounded-lg text-sm leading-relaxed [overflow-wrap:anywhere]",
+                m.role === "user"
+                  ? "bg-[#1a1a1a] text-[#f5f0e8] rounded-tr-sm"
+                  : "bg-white text-[#1a1a1a] rounded-tl-sm border border-[#e8e2d9]",
+                m.error && "border-red-200 bg-red-50 text-red-700",
+              )}>
+                {m.role === "user" ? m.content : <ChatMarkdown content={m.content} />}
+                {m.streaming && !m.content && (
+                  <span className="inline-flex gap-1">
+                    <span className="w-1.5 h-1.5 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1.5 h-1.5 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </span>
+                )}
+              </div>
+              {m.error && (
+                <button
+                  onClick={() => {
+                    const lastUser = [...messages].reverse().find((msg) => msg.role === "user");
+                    if (lastUser) send(lastUser.content);
+                  }}
+                  className="mt-2 flex items-center gap-1 text-xs text-[#6b6b6b] hover:text-[#3d5a3d]"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Thử lại
+                </button>
+              )}
+              {m.role === "assistant" && m.plan && <PlanPreviewCard plan={m.plan} />}
             </div>
           </div>
         ))}
 
-        {loading && (
-          <div className="flex gap-3">
-            <div className="w-7 h-7 rounded-md bg-[#3d5a3d] flex items-center justify-center">
-              <Bot className="w-3.5 h-3.5 text-[#f5f0e8]" />
-            </div>
-            <div className="px-3 py-2.5 bg-white rounded-lg rounded-tl-sm border border-[#e8e2d9]">
-              <Loader2 className="w-4 h-4 animate-spin text-[#3d5a3d]" />
-            </div>
-          </div>
-        )}
         <div ref={endRef} />
       </div>
 
@@ -153,6 +224,7 @@ export function AIChatPanel({
             <button
               key={s}
               onClick={() => setInput(s)}
+              disabled={streaming}
               className="px-2.5 py-1 text-xs bg-white border border-[#e0d9cc] hover:border-[#1a1a1a] text-[#1a1a1a] rounded-full transition"
             >
               {s}
@@ -169,11 +241,11 @@ export function AIChatPanel({
             className="flex-1 px-3 py-2.5 bg-white border border-[#e0d9cc] rounded-md text-[#1a1a1a] text-sm placeholder:text-[#8b8378] focus:outline-none focus:border-[#1a1a1a]"
           />
           <Button
-            onClick={send}
-            disabled={!input.trim() || loading}
+            onClick={() => send()}
+            disabled={!input.trim() || streaming}
             className="h-10 w-10 p-0 rounded-md bg-[#1a1a1a] hover:bg-black text-[#f5f0e8] disabled:opacity-50"
           >
-            <Send className="w-4 h-4" />
+            {streaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </Button>
         </div>
       </div>
