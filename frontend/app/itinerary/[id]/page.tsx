@@ -83,7 +83,10 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
 
   const handlePublish = async () => {
     try {
-      const updated = await apiFetch<Itinerary>(`/itineraries/${id}/publish`, { method: "PATCH" })
+      const updated = await apiFetch<Itinerary>(`/itineraries/${id}/publish`, {
+        method: "PATCH",
+        body: { status: "PUBLISHED" },
+      })
       setItinerary(updated)
       toast.success("Đã xuất bản lịch trình!")
     } catch {

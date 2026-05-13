@@ -1,3 +1,5 @@
+import type { GenerateResponse } from "@/lib/types";
+
 // Local Activity shape used by the drag-and-drop editor
 // (Maps from API Activity on load, serialises back on save)
 export type Activity = {
@@ -22,6 +24,10 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  plan?: GenerateResponse | null;
+  toolCalls?: string[];
+  streaming?: boolean;
+  error?: boolean;
 }
 
 export interface Collaborator {

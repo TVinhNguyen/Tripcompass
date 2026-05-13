@@ -78,6 +78,12 @@ async def node_schedule(state: dict) -> dict:
         "start_date":             state.get("start_date", ""),
         "end_date":               state.get("end_date", ""),
         "travel_month":           state.get("travel_month"),
+        "travel_style":           state.get("travel_style", "balanced"),
+        "arrival_time":           state.get("arrival_time"),
+        "departure_time":         state.get("departure_time"),
+        "daily_start_time":       state.get("daily_start_time"),
+        "daily_end_time":         state.get("daily_end_time"),
+        "time_strictness":        state.get("time_strictness", "balanced"),
         "budget_tier":            state.get("budget_tier", "standard"),
         "attr_budget":            state.get("attr_budget", 0),
         "food_budget":            state.get("food_budget", 0),
@@ -177,6 +183,24 @@ def _hms(t: str) -> int:
     return int(h) * 60 + int(m)
 
 
+def _time_or(value: str | None, fallback: int) -> int:
+    """Parse optional 'HH:MM', returning fallback when absent or invalid."""
+    if not value:
+        return fallback
+    try:
+        minutes = _hms(str(value))
+    except (ValueError, AttributeError):
+        return fallback
+    if 0 <= minutes <= 23 * 60 + 59:
+        return minutes
+    return fallback
+
+
+def _fmt_minutes(minutes: int) -> str:
+    minutes = max(0, min(minutes, 23 * 60 + 59))
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
 def _slot_bucket(slot_start: str) -> str:
     """Map slot start time → best_time_of_day bucket the DB uses.
 
@@ -238,8 +262,53 @@ def _fallback_schedule(state: dict, retrieved: dict) -> dict:
     except ValueError:
         start_dt = None
 
-    def _slot(start, end, slot_type, place=None):
-        s = {"start": start, "end": end, "slot_type": slot_type, "notes": ""}
+    style = str(state.get("travel_style") or "balanced").strip().lower()
+    if style == "standard":
+        style = "balanced"
+    if style not in {"relaxed", "balanced", "active"}:
+        style = "balanced"
+
+    profiles = {
+        "relaxed": {
+            "day_start": 9 * 60,
+            "day_end": 20 * 60 + 30,
+            "buffer": 50,
+            "lunch_start": 12 * 60 + 15,
+            "lunch_dur": 105,
+            "dinner_start": 19 * 60,
+            "max_standard_activities": 2,
+            "arrival_activities": 1,
+        },
+        "balanced": {
+            "day_start": 8 * 60 + 30,
+            "day_end": 21 * 60,
+            "buffer": 35,
+            "lunch_start": 11 * 60 + 45,
+            "lunch_dur": 90,
+            "dinner_start": 18 * 60,
+            "max_standard_activities": 3,
+            "arrival_activities": 1,
+        },
+        "active": {
+            "day_start": 7 * 60 + 30,
+            "day_end": 22 * 60,
+            "buffer": 25,
+            "lunch_start": 11 * 60 + 15,
+            "lunch_dur": 60,
+            "dinner_start": 18 * 60 + 30,
+            "max_standard_activities": 4,
+            "arrival_activities": 2,
+        },
+    }
+    profile = profiles[style]
+    day_start = _time_or(state.get("daily_start_time"), profile["day_start"])
+    day_end = _time_or(state.get("daily_end_time"), profile["day_end"])
+    if day_end <= day_start + 4 * 60:
+        day_end = profile["day_end"]
+    buffer_min = profile["buffer"]
+
+    def _slot(start, end, slot_type, place=None, notes=""):
+        s = {"start": start, "end": end, "slot_type": slot_type, "notes": notes}
         if place:
             s.update({
                 "place_id": place.get("id", ""),
@@ -300,6 +369,32 @@ def _fallback_schedule(state: dict, retrieved: dict) -> dict:
             return end_date
         return ""
 
+    def _append_activity(slots: list[dict], slot_type: str, pool: list[dict], start_min: int, latest_end: int) -> int:
+        if start_min >= latest_end:
+            return start_min
+        place = _pick(pool, _fmt_minutes(start_min), _fmt_minutes(min(start_min + 90, latest_end)))
+        if not place:
+            return start_min
+        duration = int(place.get("duration_min") or 90)
+        duration = max(45, min(duration, 180))
+        end_min = min(start_min + duration, latest_end)
+        if end_min - start_min < 45:
+            return start_min
+        slots.append(_slot(_fmt_minutes(start_min), _fmt_minutes(end_min), slot_type, place))
+        return end_min + buffer_min
+
+    def _append_meal(slots: list[dict], meal: str, start_min: int, duration: int = 75) -> int:
+        if start_min >= day_end:
+            return start_min
+        end_min = min(start_min + duration, day_end)
+        place = _pick(food, _fmt_minutes(start_min), _fmt_minutes(end_min))
+        if place:
+            slots.append(_slot(_fmt_minutes(start_min), _fmt_minutes(end_min), meal, place))
+        else:
+            label = {"breakfast": "Ăn sáng tự do", "lunch": "Ăn trưa tự do", "dinner": "Ăn tối tự do"}.get(meal, "Ăn tự do")
+            slots.append(_slot(_fmt_minutes(start_min), _fmt_minutes(end_min), meal, {"id": "", "name": label, "base_price": 0}))
+        return end_min + buffer_min
+
     def _day_type(day_num: int) -> str:
         if num_days == 1:
             return "standard"
@@ -313,24 +408,56 @@ def _fallback_schedule(state: dict, retrieved: dict) -> dict:
     for day_num in range(1, num_days + 1):
         day_type = _day_type(day_num)
         if day_type == "arrival":
-            slots = [
-                _slot("15:00", "16:30", "afternoon_activity", _pick(places, "15:00", "16:30")),
-                _slot("18:00", "19:30", "dinner",             _pick(food,   "18:00", "19:30")),
-                _slot("19:30", "21:00", "evening"),
-            ]
+            slots = []
+            cur = _time_or(state.get("arrival_time"), max(15 * 60, day_start))
+            if cur <= profile["lunch_start"] and day_end - cur >= 3 * 60:
+                lunch_start = max(profile["lunch_start"], cur + 30)
+                cur = _append_meal(slots, "lunch", lunch_start, profile["lunch_dur"])
+            latest_activity_end = min(profile["dinner_start"] - buffer_min, day_end)
+            for _ in range(profile["arrival_activities"]):
+                next_cur = _append_activity(slots, "afternoon_activity", places, cur, latest_activity_end)
+                if next_cur == cur:
+                    break
+                cur = next_cur
+            if profile["dinner_start"] < day_end:
+                cur = _append_meal(slots, "dinner", max(profile["dinner_start"], cur), 90)
+            if cur < day_end:
+                slots.append(_slot(_fmt_minutes(cur), _fmt_minutes(day_end), "evening", notes="Thời gian tự do"))
         elif day_type == "departure":
-            slots = [
-                _slot("07:00", "08:00", "breakfast",        _pick(food,   "07:00", "08:00")),
-                _slot("08:30", "10:00", "morning_activity", _pick(places, "08:30", "10:00")),
-            ]
+            slots = []
+            departure_time = _time_or(state.get("departure_time"), 11 * 60)
+            latest_end = max(day_start + 90, departure_time - 60)
+            cur = day_start
+            if cur <= 9 * 60 + 30 and latest_end - cur >= 60:
+                cur = _append_meal(slots, "breakfast", cur, 60)
+            _append_activity(slots, "morning_activity", places, cur, latest_end)
+            if latest_end < departure_time:
+                slots.append(_slot(_fmt_minutes(latest_end), _fmt_minutes(departure_time), "buffer", notes="Di chuyển/checkout"))
         else:
-            slots = [
-                _slot("07:30", "08:30", "breakfast",          _pick(food,   "07:30", "08:30")),
-                _slot("09:00", "10:30", "morning_activity",   _pick(places, "09:00", "10:30")),
-                _slot("11:30", "13:00", "lunch",              _pick(food,   "11:30", "13:00")),
-                _slot("13:30", "15:00", "afternoon_activity", _pick(places, "13:30", "15:00")),
-                _slot("18:00", "19:30", "dinner",             _pick(food,   "18:00", "19:30")),
-            ]
+            slots = []
+            cur = day_start
+            if cur <= 9 * 60 + 30:
+                cur = _append_meal(slots, "breakfast", cur, 60)
+            activity_limit = profile["max_standard_activities"]
+            morning_cutoff = profile["lunch_start"] - buffer_min
+            if activity_limit > 0:
+                start_min = max(cur, day_start + 60)
+                next_cur = _append_activity(slots, "morning_activity", places, start_min, morning_cutoff)
+                if next_cur > start_min:
+                    cur = next_cur
+                    activity_limit -= 1
+            cur = _append_meal(slots, "lunch", max(profile["lunch_start"], cur), profile["lunch_dur"])
+            afternoon_cutoff = min(profile["dinner_start"] - buffer_min, day_end)
+            while activity_limit > 0 and cur < afternoon_cutoff:
+                next_cur = _append_activity(slots, "afternoon_activity", places, cur, afternoon_cutoff)
+                if next_cur == cur:
+                    break
+                cur = next_cur
+                activity_limit -= 1
+            if profile["dinner_start"] < day_end:
+                cur = _append_meal(slots, "dinner", max(profile["dinner_start"], cur), 90)
+            if cur < day_end and style != "active":
+                slots.append(_slot(_fmt_minutes(cur), _fmt_minutes(day_end), "evening", notes="Thời gian tự do"))
         days.append({
             "day_num": day_num,
             "day_type": day_type,

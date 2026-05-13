@@ -6,9 +6,6 @@ import { Brain, FileText, Upload, Search, Plus, MoreVertical, Trash2, Edit2, Eye
 import { AdminShell } from "@/components/admin/admin-shell"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { apiUpload } from "@/lib/api"
-
-const PLANNER_AI = process.env.NEXT_PUBLIC_PLANNER_AI_URL ?? ""
 
 type KBDoc = {
   id: string
@@ -51,53 +48,25 @@ export default function KnowledgeBasePage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    try {
-      const [docsRes, sourcesRes] = await Promise.allSettled([
-        fetch(`${PLANNER_AI}/knowledge/documents`).then((r) => r.json()),
-        fetch(`${PLANNER_AI}/knowledge/sources`).then((r) => r.json()),
-      ])
-      if (docsRes.status === "fulfilled") setDocs(docsRes.value?.data ?? docsRes.value ?? [])
-      if (sourcesRes.status === "fulfilled") setSources(sourcesRes.value?.data ?? sourcesRes.value ?? [])
-    } catch {
-      // Planner-AI may not be running locally
-    } finally {
-      setLoading(false)
-    }
+    setDocs([])
+    setSources([])
+    setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
 
   const handleDelete = async (id: string) => {
-    try {
-      setDocs((prev) => prev.filter((d) => d.id !== id))
-      await fetch(`${PLANNER_AI}/knowledge/documents/${id}`, { method: "DELETE" })
-      toast.success("Đã xoá tài liệu")
-    } catch {
-      toast.error("Xoá thất bại")
-      load()
-    } finally {
-      setMenuOpen(null)
-    }
+    toast.info(`Knowledge document #${id} chưa có API production`)
+    setMenuOpen(null)
   }
 
   const handleReindex = async (id: string) => {
-    try {
-      await fetch(`${PLANNER_AI}/knowledge/documents/${id}/reindex`, { method: "POST" })
-      toast.success("Đã gửi yêu cầu tái index")
-    } catch {
-      toast.error("Tái index thất bại")
-    } finally {
-      setMenuOpen(null)
-    }
+    toast.info(`Reindex document #${id} chưa có API production`)
+    setMenuOpen(null)
   }
 
   const handleCrawl = async (id: string, name: string) => {
-    try {
-      await fetch(`${PLANNER_AI}/knowledge/sources/${id}/crawl`, { method: "POST" })
-      toast.success(`Đang quét ${name}...`)
-    } catch {
-      toast.error("Quét thất bại")
-    }
+    toast.info(`Crawl source ${name} (${id}) chưa có API production`)
   }
 
   const filteredDocs = docs.filter((d) => !search || d.title.toLowerCase().includes(search.toLowerCase()))
@@ -124,16 +93,8 @@ export default function KnowledgeBasePage() {
             onChange={async (e) => {
               const file = e.target.files?.[0]
               if (!file) return
-              try {
-                // Bug 14: use apiUpload so Bearer token is attached, targeting AI service
-                await apiUpload("/knowledge/documents", file, "file", undefined, "ai")
-                toast.success(`Đã tải lên ${file.name}`)
-                load()
-              } catch {
-                toast.error("Tải lên thất bại")
-              } finally {
-                e.target.value = ""
-              }
+              toast.info(`Upload ${file.name} chưa có API production`)
+              e.target.value = ""
             }}
           />
           <button
@@ -159,6 +120,10 @@ export default function KnowledgeBasePage() {
         </div>
       ) : (
         <>
+          <div className="mb-6 rounded-2xl border border-[#d4a853]/30 bg-[#d4a853]/10 px-4 py-3 text-sm text-[#6b5a2a]">
+            Knowledge Base chưa có endpoint production trong backend/planner-ai. Trang này tạm thời không gọi planner-ai trực tiếp để tránh lỗi 404 và bypass auth.
+          </div>
+
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[

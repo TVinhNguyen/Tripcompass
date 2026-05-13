@@ -39,16 +39,6 @@
 		reverse_proxy backend:8080
 	}
 
-	# Planner-AI direct (admin pages + ai-chat-panel use NEXT_PUBLIC_PLANNER_AI_URL).
-	# Strip the /planner prefix so planner-ai sees its native paths (/health, /chat, etc).
-	handle_path /planner/* {
-		reverse_proxy planner-ai:8090 {
-			transport http {
-				read_timeout 5m
-			}
-		}
-	}
-
 	# Everything else → Next.js frontend.
 	handle {
 		reverse_proxy frontend:3000

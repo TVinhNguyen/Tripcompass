@@ -182,6 +182,12 @@ async def test_generate_travel_plan_returns_dict_and_passes_preferences(monkeypa
         budget_vnd=2_000_000,
         guest_count=2,
         start_date="2026-05-01",
+        travel_style="relaxed",
+        arrival_time="10:00",
+        departure_time="18:00",
+        daily_start_time="09:00",
+        daily_end_time="20:30",
+        time_strictness="flexible",
         preferences=[" Food ", "culture", "food"],
         need_hotel=False,
     )
@@ -198,6 +204,12 @@ async def test_generate_travel_plan_returns_dict_and_passes_preferences(monkeypa
     assert schedule_states[0]["retrieved_data"]["combos"] == [
         {"id": "c1", "name": "City combo", "price_per_person": 300_000},
     ]
+    assert schedule_states[0]["travel_style"] == "relaxed"
+    assert schedule_states[0]["arrival_time"] == "10:00"
+    assert schedule_states[0]["departure_time"] == "18:00"
+    assert schedule_states[0]["daily_start_time"] == "09:00"
+    assert schedule_states[0]["daily_end_time"] == "20:30"
+    assert schedule_states[0]["time_strictness"] == "flexible"
 
 
 @pytest.mark.asyncio
@@ -253,13 +265,23 @@ async def test_generate_plan_route_uses_service_and_caches_success(monkeypatch):
     )
 
     response = await plan_route.generate_plan(
-        PlanRequest(destination="Da Nang", num_days=2, preference_tags=[" Food ", "culture"])
+        PlanRequest(
+            destination="Da Nang",
+            num_days=2,
+            preference_tags=[" Food ", "culture"],
+            travel_style="active",
+            arrival_time="09:30",
+            departure_time="19:00",
+        )
     )
 
     assert response.destination == "Da Nang"
     assert response.final_plan == {"days": []}
     assert response.cache_hit is False
     assert service_calls[0]["preferences"] == ["culture", "food"]
+    assert service_calls[0]["travel_style"] == "active"
+    assert service_calls[0]["arrival_time"] == "09:30"
+    assert service_calls[0]["departure_time"] == "19:00"
     assert cached_payloads == [{
         "success": True,
         "destination": "Da Nang",

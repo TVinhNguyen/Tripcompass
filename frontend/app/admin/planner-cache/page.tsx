@@ -3,33 +3,10 @@ import { RequireAdmin } from "@/components/require-auth"
 
 import { useCallback, useEffect, useState } from "react"
 import { Database, Zap, Clock, TrendingUp, Search, Trash2, RefreshCw, Eye } from "lucide-react"
-import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts"
 import { AdminShell } from "@/components/admin/admin-shell"
+import { apiFetch } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-
-const PLANNER_AI = process.env.NEXT_PUBLIC_PLANNER_AI_URL ?? ""
-
-// Fallback chart data — used while API loads or in dev
-const makeHitRate = () => Array.from({ length: 24 }, (_, i) => ({
-  hour: `${i}h`,
-  hit: 70 + Math.random() * 25,
-}))
-
-const makeTokenSave = () => Array.from({ length: 7 }, (_, i) => ({
-  day: ["T2", "T3", "T4", "T5", "T6", "T7", "CN"][i],
-  tokens: 150000 + Math.random() * 200000,
-}))
 
 type CacheStats = {
   hit_rate: number
@@ -51,60 +28,43 @@ export default function PlannerCachePage() {
   const [search, setSearch] = useState("")
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null)
   const [queries, setQueries] = useState<CachedQuery[]>([])
-  const [hitRateData] = useState(makeHitRate)
-  const [tokenSaveData] = useState(makeTokenSave)
+  const [flushing, setFlushing] = useState(false)
 
   const load = useCallback(async () => {
-    try {
-      const [statsRes, queriesRes] = await Promise.allSettled([
-        fetch(`${PLANNER_AI}/cache/stats`).then((r) => r.json()),
-        fetch(`${PLANNER_AI}/cache/queries?sort=hits&limit=20`).then((r) => r.json()),
-      ])
-      if (statsRes.status === "fulfilled") setCacheStats(statsRes.value)
-      if (queriesRes.status === "fulfilled") setQueries(queriesRes.value?.data ?? queriesRes.value ?? [])
-    } catch {
-      // Planner-AI may not be running
-    }
+    setCacheStats(null)
+    setQueries([])
   }, [])
 
   useEffect(() => { load() }, [load])
 
   const handleDeleteQuery = async (id: string) => {
-    try {
-      setQueries((prev) => prev.filter((q) => q.id !== id))
-      await fetch(`${PLANNER_AI}/cache/queries/${id}`, { method: "DELETE" })
-      toast.success("Đã xoá query")
-    } catch {
-      toast.error("Xoá thất bại")
-      load()
-    }
+    toast.info(`Planner query #${id} chưa có API xoá riêng`)
   }
 
   const handleFlushAll = async () => {
     if (!confirm("Xoá toàn bộ cache? Không thể hoàn tác.")) return
+    setFlushing(true)
     try {
-      await fetch(`${PLANNER_AI}/cache`, { method: "DELETE" })
+      const res = await apiFetch<{ deleted?: number; message?: string }>("/admin/planner/cache", { method: "DELETE" })
       setQueries([])
-      toast.warning("Đã xoá toàn bộ cache")
+      toast.warning(res.message ?? `Đã xoá ${res.deleted ?? 0} cache key`)
     } catch {
       toast.error("Xoá thất bại")
+    } finally {
+      setFlushing(false)
     }
   }
 
   const handleRefresh = async () => {
-    try {
-      await fetch(`${PLANNER_AI}/cache/refresh`, { method: "POST" })
-      toast.success("Đã làm mới cache")
-      load()
-    } catch {
-      toast.error("Làm mới thất bại")
-    }
+    load()
+    toast.info("Thống kê cache chi tiết chưa có API production")
   }
 
-  const hr = cacheStats?.hit_rate ?? 87.3
+  const hasStats = cacheStats !== null
+  const hr = cacheStats?.hit_rate ?? 0
   const entries = cacheStats?.total_entries ?? 0
   const tokensSaved = cacheStats?.tokens_saved ?? 0
-  const avgMs = cacheStats?.avg_response_ms ?? 180
+  const avgMs = cacheStats?.avg_response_ms ?? 0
 
   const filtered = search
     ? queries.filter((q) => q.query.toLowerCase().includes(search.toLowerCase()))
@@ -126,21 +86,26 @@ export default function PlannerCachePage() {
           </button>
           <button
             onClick={handleFlushAll}
+            disabled={flushing}
             className="px-4 py-2 bg-[#c94a4a] text-white rounded-lg text-sm font-medium hover:bg-[#a33a3a] inline-flex items-center gap-2"
           >
-            <Trash2 className="w-4 h-4" />
+            {flushing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             Xoá toàn bộ
           </button>
         </div>
       }
     >
       {/* KPIs */}
+      <div className="mb-6 rounded-2xl border border-[#d4a853]/30 bg-[#d4a853]/10 px-4 py-3 text-sm text-[#6b5a2a]">
+        Trang này không gọi trực tiếp planner-ai nữa. Production hiện chỉ hỗ trợ xoá cache qua backend admin; thống kê/query chi tiết cần endpoint backend riêng trước khi bật lại.
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Hit rate trung bình", value: `${hr.toFixed(1)}%`,                                               icon: Zap,      trend: "", accent: "bg-[#3d5a3d]" },
+          { label: "Hit rate trung bình", value: hasStats ? `${hr.toFixed(1)}%` : "N/A",                                               icon: Zap,      trend: "", accent: "bg-[#3d5a3d]" },
           { label: "Tổng entries",        value: entries.toLocaleString("vi-VN"),                                                icon: Database, trend: "", accent: "bg-[#c4785a]" },
           { label: "Tokens tiết kiệm",   value: tokensSaved >= 1e6 ? `${(tokensSaved/1e6).toFixed(1)}M` : String(tokensSaved), icon: TrendingUp, trend: "", accent: "bg-[#d4a853]" },
-          { label: "Avg response",        value: `${avgMs}ms`,                                                       icon: Clock,    trend: "", accent: "bg-[#8b6f47]" },
+          { label: "Avg response",        value: hasStats ? `${avgMs}ms` : "N/A",                                                       icon: Clock,    trend: "", accent: "bg-[#8b6f47]" },
         ].map((s) => (
           <div key={s.label} className="bg-white border border-[#e8e2d9] rounded-2xl p-5">
             <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white mb-3", s.accent)}>
@@ -160,22 +125,10 @@ export default function PlannerCachePage() {
             <h3 className="text-base font-semibold text-[#1a1a1a] tracking-tight">Hit / Miss 24 giờ qua</h3>
             <p className="text-xs text-[#8b8378]">Tỉ lệ trúng cache theo giờ</p>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={hitRateData}>
-                <defs>
-                  <linearGradient id="hit" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3d5a3d" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#3d5a3d" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e8e2d9" vertical={false} />
-                <XAxis dataKey="hour" stroke="#8b8378" fontSize={11} />
-                <YAxis stroke="#8b8378" fontSize={11} />
-                <Tooltip contentStyle={{ backgroundColor: "#fff", border: "1px solid #e8e2d9", borderRadius: "8px", fontSize: "12px" }} />
-                <Area type="monotone" dataKey="hit" stroke="#3d5a3d" strokeWidth={2} fill="url(#hit)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-64 rounded-xl border border-dashed border-[#e8e2d9] bg-[#f5f0e8]/50 flex items-center justify-center px-6 text-center">
+            <p className="text-sm text-[#8b8378]">
+              Chưa có endpoint thống kê hit/miss theo giờ. Không hiển thị dữ liệu giả trong production.
+            </p>
           </div>
         </div>
 
@@ -184,16 +137,10 @@ export default function PlannerCachePage() {
             <h3 className="text-base font-semibold text-[#1a1a1a] tracking-tight">Tokens tiết kiệm / tuần</h3>
             <p className="text-xs text-[#8b8378]">Nhờ cache hit</p>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={tokenSaveData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e8e2d9" vertical={false} />
-                <XAxis dataKey="day" stroke="#8b8378" fontSize={11} />
-                <YAxis stroke="#8b8378" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
-                <Tooltip contentStyle={{ backgroundColor: "#fff", border: "1px solid #e8e2d9", borderRadius: "8px", fontSize: "12px" }} />
-                <Line type="monotone" dataKey="tokens" stroke="#d4a853" strokeWidth={2.5} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="h-64 rounded-xl border border-dashed border-[#e8e2d9] bg-[#f5f0e8]/50 flex items-center justify-center px-6 text-center">
+            <p className="text-sm text-[#8b8378]">
+              Cần backend trả time series trước khi bật biểu đồ token saving.
+            </p>
           </div>
         </div>
       </div>

@@ -53,6 +53,12 @@ class PlanRequest(BaseModel):
     end_date:    Optional[str] = None
     budget_vnd:  Optional[int] = Field(default=0)
     guest_count: int = 2
+    travel_style: Optional[Literal["relaxed", "balanced", "standard", "active"]] = None
+    arrival_time: Optional[str] = None
+    departure_time: Optional[str] = None
+    daily_start_time: Optional[str] = None
+    daily_end_time: Optional[str] = None
+    time_strictness: Optional[Literal["flexible", "balanced", "strict"]] = "balanced"
     preferences: list[str] = Field(
         default_factory=list,
         validation_alias=AliasChoices("preferences", "preference_tags"),

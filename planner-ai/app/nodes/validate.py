@@ -42,6 +42,21 @@ def _time_to_mins(t: str) -> int:
         return 0
 
 
+def _fits_hours(hours: str, start_str: str, end_str: str) -> bool:
+    open_min, close_min = _parse_hours(hours)
+    slot_start = _time_to_mins(start_str)
+    slot_end = _time_to_mins(end_str) if end_str else slot_start
+    if slot_end < slot_start:
+        return False
+    if open_min <= close_min:
+        return open_min <= slot_start and slot_end <= close_min
+    # Overnight venue, e.g. 18:00-02:00. The slot must sit fully inside
+    # either [open, 24:00) or [00:00, close].
+    return (slot_start >= open_min and slot_end <= 24 * 60) or (
+        slot_start >= 0 and slot_end <= close_min
+    )
+
+
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Great-circle distance between two lat/lng points in kilometers."""
     d_lat = math.radians(lat2 - lat1)
@@ -140,6 +155,22 @@ def node_validate(state: TravelPlanState) -> dict:
             start_str  = slot.get("start", "")
             end_str    = slot.get("end", "")
 
+            if start_str and end_str:
+                start_min = _time_to_mins(start_str)
+                end_min = _time_to_mins(end_str)
+                if end_min < start_min:
+                    violations.append({
+                        "type":    "INVALID_TIME_RANGE",
+                        "day":     day_num,
+                        "place":   place_name,
+                        "message": (
+                            f"'{place_name}' có khung giờ {start_str}–{end_str} qua nửa đêm. "
+                            "Mỗi slot phải nằm trong cùng một ngày; hãy kết thúc trước 23:59 "
+                            "hoặc chuyển phần sau nửa đêm sang ngày kế tiếp."
+                        ),
+                    })
+                    continue
+
             if slot_type in BUFFER_SLOT_TYPES or not place_id:
                 continue
 
@@ -159,10 +190,7 @@ def node_validate(state: TravelPlanState) -> dict:
             hours = place.get("hours", "") or place.get("opening_hours", "")
             breakfast_exempt = slot_type == "breakfast"
             if hours and not breakfast_exempt and "00:00-24:00" not in hours:
-                open_min, close_min = _parse_hours(hours)
-                slot_start = _time_to_mins(start_str)
-                slot_end   = _time_to_mins(end_str) if end_str else slot_start
-                if slot_start < open_min or slot_end > close_min:
+                if not _fits_hours(hours, start_str, end_str):
                     violations.append({
                         "type":    "CLOSED_HOURS",
                         "day":     day_num,
@@ -190,8 +218,6 @@ def node_validate(state: TravelPlanState) -> dict:
 
             # ── 5. Collect times for overlap check ─────────────────────────
             if start_str and end_str:
-                start_min = _time_to_mins(start_str)
-                end_min = _time_to_mins(end_str)
                 day_times.append((start_min, end_min, place_name))
                 if _coords(place):
                     route_slots.append((start_min, end_min, place_name, place))

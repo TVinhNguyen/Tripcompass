@@ -82,7 +82,10 @@ function PlannerContent() {
 
   const handlePublish = async (id: string) => {
     try {
-      const updated = await apiFetch<Itinerary>(`/itineraries/${id}/publish`, { method: "PATCH" });
+      const updated = await apiFetch<Itinerary>(`/itineraries/${id}/publish`, {
+        method: "PATCH",
+        body: { status: "PUBLISHED" },
+      });
       setItineraries((prev) => prev.map((i) => (i.id === id ? updated : i)));
       toast.success("Đã xuất bản lịch trình");
     } catch {

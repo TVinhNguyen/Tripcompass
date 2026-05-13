@@ -255,6 +255,66 @@ class TestNodeValidate:
         types = [v["type"] for v in result["violations"]]
         assert "CLOSED_HOURS" not in types
 
+    def test_overnight_hours_pass(self):
+        night_place = {
+            "id": "night-1",
+            "name": "Chợ đêm",
+            "hours": "18:00-02:00",
+            "latitude": 16.0,
+            "longitude": 108.0,
+            "base_price": 0,
+        }
+        schedule = make_schedule([
+            make_slot("night-1", "Chợ đêm", 0, start="21:00", end="23:00", slot_type="evening_activity"),
+        ])
+        state = self._state_with_schedule(
+            schedule,
+            extra={"retrieved_data": {"places": [night_place], "food": []}},
+        )
+        result = node_validate(state)
+        types = [v["type"] for v in result["violations"]]
+        assert "CLOSED_HOURS" not in types
+
+    def test_overnight_hours_daytime_gap_detected(self):
+        night_place = {
+            "id": "night-1",
+            "name": "Chợ đêm",
+            "hours": "18:00-02:00",
+            "latitude": 16.0,
+            "longitude": 108.0,
+            "base_price": 0,
+        }
+        schedule = make_schedule([
+            make_slot("night-1", "Chợ đêm", 0, start="10:00", end="11:00", slot_type="morning_activity"),
+        ])
+        state = self._state_with_schedule(
+            schedule,
+            extra={"retrieved_data": {"places": [night_place], "food": []}},
+        )
+        result = node_validate(state)
+        types = [v["type"] for v in result["violations"]]
+        assert "CLOSED_HOURS" in types
+
+    def test_cross_midnight_slot_rejected(self):
+        night_place = {
+            "id": "night-1",
+            "name": "Chợ đêm",
+            "hours": "18:00-02:00",
+            "latitude": 16.0,
+            "longitude": 108.0,
+            "base_price": 0,
+        }
+        schedule = make_schedule([
+            make_slot("night-1", "Chợ đêm", 0, start="23:00", end="01:00", slot_type="evening_activity"),
+        ])
+        state = self._state_with_schedule(
+            schedule,
+            extra={"retrieved_data": {"places": [night_place], "food": []}},
+        )
+        result = node_validate(state)
+        types = [v["type"] for v in result["violations"]]
+        assert "INVALID_TIME_RANGE" in types
+
 
     def test_time_overlap_detected(self):
         schedule = make_schedule([
@@ -378,6 +438,37 @@ class TestFallbackSchedule:
             if slot.get("place_id")
         ]
         assert len(place_ids) == len(set(place_ids))
+
+    def test_fallback_uses_user_arrival_and_departure_times(self, monkeypatch):
+        fallback_schedule = load_fallback_schedule(monkeypatch)
+        retrieved = {
+            "places": [
+                {"id": f"place-{i}", "name": f"Place {i}", "hours": "07:00-23:00", "base_price": 0}
+                for i in range(1, 8)
+            ],
+            "food": [
+                {"id": f"food-{i}", "name": f"Food {i}", "hours": "06:00-23:00", "base_price": 50_000}
+                for i in range(1, 8)
+            ],
+            "hotels": [],
+        }
+        draft = fallback_schedule(
+            make_state(
+                num_days=3,
+                start_date="2026-05-01",
+                end_date="2026-05-03",
+                travel_style="relaxed",
+                arrival_time="10:00",
+                departure_time="18:00",
+            ),
+            retrieved,
+        )
+
+        day1_slots = draft["days"][0]["slots"]
+        day3_slots = draft["days"][2]["slots"]
+        assert day1_slots[0]["start"] != "15:00"
+        assert day1_slots[0]["start"] >= "10:00"
+        assert day3_slots[-1]["end"] == "18:00"
 
     def test_fallback_respects_hours(self, monkeypatch):
         """Regression test for the CLOSED_HOURS bug fixed in e695c88.
