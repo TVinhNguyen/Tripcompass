@@ -12,6 +12,8 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL!;
 // ---------------------------------------------------------------------------
 
 export type StreamHandlers = {
+  /** Current itinerary context source. Backend verifies ownership before using it. */
+  itineraryId?: string;
   /** Called when AI starts calling a tool */
   onToolStart?: (tool: string, label?: string) => void;
   /** Called for each streaming text token */
@@ -81,7 +83,7 @@ export async function streamChat(
   message: string,
   handlers: StreamHandlers,
 ): Promise<void> {
-  const { onToolStart, onToken, onDone, onError, signal } = handlers;
+  const { itineraryId, onToolStart, onToken, onDone, onError, signal } = handlers;
 
   let res: Response;
   try {
@@ -94,6 +96,7 @@ export async function streamChat(
       headers,
       body: JSON.stringify({
         session_id: sessionId ?? undefined,
+        itinerary_id: itineraryId || undefined,
         message,
       }),
       signal,

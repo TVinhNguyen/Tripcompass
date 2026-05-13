@@ -49,8 +49,45 @@ type aiChatMessageResponse struct {
 }
 
 type aiChatStreamRequest struct {
-	SessionID *string `json:"session_id"`
-	Message   string  `json:"message" binding:"required"`
+	SessionID   *string `json:"session_id"`
+	ItineraryID *string `json:"itinerary_id"`
+	Message     string  `json:"message" binding:"required"`
+}
+
+type aiChatProxyRequest struct {
+	SessionID        string              `json:"session_id"`
+	Message          string              `json:"message"`
+	ItineraryContext *aiItineraryContext `json:"itinerary_context,omitempty"`
+}
+
+type aiItineraryContext struct {
+	ID          string                       `json:"id"`
+	Title       string                       `json:"title"`
+	Destination string                       `json:"destination"`
+	StartDate   string                       `json:"start_date"`
+	EndDate     string                       `json:"end_date"`
+	Budget      float64                      `json:"budget"`
+	GuestCount  int                          `json:"guest_count"`
+	Tags        []string                     `json:"tags,omitempty"`
+	Activities  []aiItineraryContextActivity `json:"activities"`
+}
+
+type aiItineraryContextActivity struct {
+	ID            string   `json:"id"`
+	DayNumber     int      `json:"day_number"`
+	OrderIndex    int      `json:"order_index"`
+	Title         string   `json:"title"`
+	Category      string   `json:"category"`
+	StartTime     *string  `json:"start_time,omitempty"`
+	EndTime       *string  `json:"end_time,omitempty"`
+	EstimatedCost float64  `json:"estimated_cost"`
+	Notes         *string  `json:"notes,omitempty"`
+	PlaceID       *string  `json:"place_id,omitempty"`
+	PlaceName     string   `json:"place_name,omitempty"`
+	Location      string   `json:"location,omitempty"`
+	Area          string   `json:"area,omitempty"`
+	Lat           *float64 `json:"lat,omitempty"`
+	Lng           *float64 `json:"lng,omitempty"`
 }
 
 func (h *AIChatHandler) ListSessions(c *gin.Context) {
@@ -159,9 +196,19 @@ func (h *AIChatHandler) Stream(c *gin.Context) {
 		sessionID = parsed
 	}
 
-	proxyBody, err := json.Marshal(gin.H{
-		"session_id": sessionID.String(),
-		"message":    req.Message,
+	var itineraryContext *aiItineraryContext
+	if req.ItineraryID != nil && strings.TrimSpace(*req.ItineraryID) != "" {
+		var ok bool
+		itineraryContext, ok = h.loadItineraryContext(c, userID, strings.TrimSpace(*req.ItineraryID))
+		if !ok {
+			return
+		}
+	}
+
+	proxyBody, err := json.Marshal(aiChatProxyRequest{
+		SessionID:        sessionID.String(),
+		Message:          req.Message,
+		ItineraryContext: itineraryContext,
 	})
 	if err != nil {
 		respondInternalError(c, err)
@@ -209,6 +256,82 @@ func (h *AIChatHandler) Stream(c *gin.Context) {
 			_ = c.Error(err)
 		}
 	}
+}
+
+func (h *AIChatHandler) loadItineraryContext(c *gin.Context, userID uuid.UUID, rawID string) (*aiItineraryContext, bool) {
+	itineraryID, err := uuid.Parse(rawID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid itinerary_id"})
+		return nil, false
+	}
+
+	var itinerary models.Itinerary
+	err = h.db.WithContext(c.Request.Context()).
+		Preload("Activities", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_number ASC, order_index ASC").Preload("Place")
+		}).
+		Where("id = ? AND owner_id = ?", itineraryID, userID).
+		First(&itinerary).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "itinerary not found"})
+		return nil, false
+	}
+	if err != nil {
+		respondInternalError(c, err)
+		return nil, false
+	}
+
+	activities := make([]aiItineraryContextActivity, 0, len(itinerary.Activities))
+	for _, activity := range itinerary.Activities {
+		item := aiItineraryContextActivity{
+			ID:            activity.ID.String(),
+			DayNumber:     activity.DayNumber,
+			OrderIndex:    activity.OrderIndex,
+			Title:         activity.Title,
+			Category:      activity.Category,
+			StartTime:     activity.StartTime,
+			EndTime:       activity.EndTime,
+			EstimatedCost: activity.EstimatedCost,
+			Notes:         activity.Notes,
+			Lat:           activity.Lat,
+			Lng:           activity.Lng,
+		}
+		if activity.PlaceID != nil {
+			placeID := activity.PlaceID.String()
+			item.PlaceID = &placeID
+		}
+		if activity.Place != nil {
+			item.PlaceName = activity.Place.Name
+			if item.Location == "" && activity.Place.Address != nil {
+				item.Location = *activity.Place.Address
+			}
+			if item.Area == "" && activity.Place.Area != nil {
+				item.Area = *activity.Place.Area
+			}
+			if item.Lat == nil {
+				item.Lat = activity.Place.Latitude
+			}
+			if item.Lng == nil {
+				item.Lng = activity.Place.Longitude
+			}
+			if item.Location == "" {
+				item.Location = activity.Place.Name
+			}
+		}
+		activities = append(activities, item)
+	}
+
+	return &aiItineraryContext{
+		ID:          itinerary.ID.String(),
+		Title:       itinerary.Title,
+		Destination: itinerary.Destination,
+		StartDate:   itinerary.StartDate.Format("2006-01-02"),
+		EndDate:     itinerary.EndDate.Format("2006-01-02"),
+		Budget:      itinerary.Budget,
+		GuestCount:  itinerary.GuestCount,
+		Tags:        []string(itinerary.Tags),
+		Activities:  activities,
+	}, true
 }
 
 type streamDonePayload struct {
