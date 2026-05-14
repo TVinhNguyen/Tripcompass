@@ -13,6 +13,10 @@ from __future__ import annotations
 import math
 
 from app.state import TravelPlanState
+from app.services.time_utils import (
+    to_minutes as _to_minutes_safe,
+    slot_fits_hours as _fits_hours_util,
+)
 
 # Slots that count toward food budget (not attraction budget)
 FOOD_SLOT_TYPES = {"breakfast", "lunch", "dinner"}
@@ -22,39 +26,17 @@ BUFFER_SLOT_TYPES = {"buffer", "evening", "transit"}
 EARTH_RADIUS_KM = 6371.0
 
 
-def _parse_hours(hours_str: str) -> tuple[int, int]:
-    """Parse "08:00-17:00" → (480, 1020) in minutes since midnight."""
-    try:
-        open_part, close_part = hours_str.split("-")
-        oh, om = map(int, open_part.strip().split(":"))
-        ch, cm = map(int, close_part.strip().split(":"))
-        return oh * 60 + om, ch * 60 + cm
-    except Exception:
-        return 0, 24 * 60  # treat as always open on parse error
-
-
 def _time_to_mins(t: str) -> int:
-    """Convert "14:30" → 870."""
-    try:
-        h, m = map(int, t.split(":"))
-        return h * 60 + m
-    except Exception:
-        return 0
+    """Convert 'HH:MM' → minutes since midnight. Returns 0 on bad input
+    (matches legacy behavior — validator treats bad times as 00:00)."""
+    parsed = _to_minutes_safe(t)
+    return parsed if parsed is not None else 0
 
 
 def _fits_hours(hours: str, start_str: str, end_str: str) -> bool:
-    open_min, close_min = _parse_hours(hours)
-    slot_start = _time_to_mins(start_str)
-    slot_end = _time_to_mins(end_str) if end_str else slot_start
-    if slot_end < slot_start:
-        return False
-    if open_min <= close_min:
-        return open_min <= slot_start and slot_end <= close_min
-    # Overnight venue, e.g. 18:00-02:00. The slot must sit fully inside
-    # either [open, 24:00) or [00:00, close].
-    return (slot_start >= open_min and slot_end <= 24 * 60) or (
-        slot_start >= 0 and slot_end <= close_min
-    )
+    """Wrapper over time_utils.slot_fits_hours that accepts an end_str
+    defaulting to start_str (preserves legacy validator behavior)."""
+    return _fits_hours_util(hours, start_str, end_str or start_str)
 
 
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -155,6 +137,7 @@ def node_validate(state: TravelPlanState) -> dict:
             start_str  = slot.get("start", "")
             end_str    = slot.get("end", "")
 
+            invalid_time = False
             if start_str and end_str:
                 start_min = _time_to_mins(start_str)
                 end_min = _time_to_mins(end_str)
@@ -169,7 +152,7 @@ def node_validate(state: TravelPlanState) -> dict:
                             "hoặc chuyển phần sau nửa đêm sang ngày kế tiếp."
                         ),
                     })
-                    continue
+                    invalid_time = True
 
             if slot_type in BUFFER_SLOT_TYPES or not place_id:
                 continue
@@ -216,8 +199,8 @@ def node_validate(state: TravelPlanState) -> dict:
             if slot_type not in FOOD_SLOT_TYPES:
                 total_attr_spend += price_vnd
 
-            # ── 5. Collect times for overlap check ─────────────────────────
-            if start_str and end_str:
+            # ── 5. Collect times for overlap check (skip if range was invalid) ─
+            if start_str and end_str and not invalid_time:
                 day_times.append((start_min, end_min, place_name))
                 if _coords(place):
                     route_slots.append((start_min, end_min, place_name, place))

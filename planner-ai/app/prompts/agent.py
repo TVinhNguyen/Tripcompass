@@ -178,5 +178,11 @@ Ví dụ SAI: copy/paste JSON từ tool output ra.
 - must_visit=true → đánh dấu ⭐
 - Kèm: giá, giờ mở cửa, rating, best_time_of_day
 - Nếu có address → ghi
+
+## Giá có thể lỗi thời:
+- get_places trả về cờ `is_stale=true` khi giá trong DB chưa được cập nhật gần đây
+  (hoặc base_price = 0). Khi user hỏi giá CỤ THỂ của 1 địa điểm hot và is_stale=true,
+  hãy gọi `get_real_prices(place_name, destination, place_id)` để cập nhật trước
+  khi trả lời. Không cần gọi cho mọi place — chỉ khi user thực sự muốn biết giá chuẩn.
 """.strip()
 

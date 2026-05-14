@@ -3,10 +3,11 @@ tools/search_hotels.py — SerpAPI Google Hotels.
 """
 import json
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from langchain_core.tools import tool
 from loguru import logger
 from app import config
+from app.services.http_retry import transient_retry
 
 PRICE_RANGES = {
     "survival": (0, 200_000),
@@ -34,7 +35,9 @@ async def search_hotels(
         return json.dumps({"success": False, "error": "Hotel search disabled", "hotels": []})
 
     lo, hi = PRICE_RANGES.get(budget_tier, PRICE_RANGES["standard"])
-    try:
+
+    @transient_retry
+    async def _fetch() -> dict:
         async with httpx.AsyncClient(timeout=config.TOOL_TIMEOUT) as client:
             resp = await client.get("https://serpapi.com/search", params={
                 "engine": "google_hotels", "q": f"hotel {destination}",
@@ -44,7 +47,10 @@ async def search_hotels(
                 "api_key": config.SERPAPI_KEY,
             })
             resp.raise_for_status()
-            data = resp.json()
+            return resp.json()
+
+    try:
+        data = await _fetch()
     except Exception as e:
         logger.error(f"[search_hotels] Error: {e}")
         return json.dumps({"success": False, "error": str(e), "hotels": []})
@@ -61,7 +67,7 @@ async def search_hotels(
             "name": p.get("name", ""), "price_per_night_vnd": price_vnd,
             "rating": p.get("overall_rating", 0), "review_count": p.get("reviews", 0),
             "address": p.get("description", ""), "amenities": p.get("amenities", [])[:5],
-            "fetched_at": datetime.utcnow().isoformat(),
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
         })
         if len(hotels) >= 5:
             break

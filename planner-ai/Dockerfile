@@ -30,4 +30,6 @@ EXPOSE 8090
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=3).read()" || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090", "--workers", "2"]
+# Single worker: the workload is I/O-bound (httpx + asyncpg + Redis) and a
+# second worker would double LLM client + DB pool memory without throughput gain.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090", "--workers", "1"]

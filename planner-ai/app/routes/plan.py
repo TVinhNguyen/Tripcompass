@@ -9,6 +9,7 @@ from loguru import logger
 from app.schemas import PlanRequest, PlanResponse
 from app.services.plan_cache import build_plan_cache_key, get_cached_plan, cache_plan
 from app.services.planning_service import generate_travel_plan
+from app.nodes.resolve import UnresolvedDestinationError
 
 router = APIRouter(tags=["plan"])
 
@@ -53,6 +54,9 @@ async def generate_plan(req: PlanRequest):
             need_hotel=req.need_hotel,
             need_flight=req.need_flight,
         )
+    except UnresolvedDestinationError as e:
+        logger.info(f"[/plan] unresolved destination: {req.destination!r}")
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error(f"[/plan] {e}")
         raise HTTPException(status_code=500, detail=str(e))

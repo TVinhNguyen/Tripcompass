@@ -11,6 +11,13 @@ from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app import config
 from app.prompts.schedule import SCHEDULE_SYSTEM_PROMPT
+from app.services.time_utils import (
+    to_minutes as _hms_safe,
+    to_minutes_or as _time_or_util,
+    format_minutes as _fmt_minutes_util,
+    parse_hours as _parse_hours_util,
+    slot_fits_hours as _fits_util,
+)
 # Fields the LLM needs for scheduling decisions — everything else is display-only
 _PLACE_FIELDS = ("id", "name", "hours", "base_price", "duration_min",
                  "must_visit", "best_time_of_day", "latitude", "longitude", "area")
@@ -115,14 +122,33 @@ async def node_schedule(state: dict) -> dict:
 
     warnings = list(state.get("warnings", []))
     llm_timeout_s = int(getattr(config, "SCHEDULE_LLM_TIMEOUT", 90))
+    use_structured = bool(getattr(config, "USE_STRUCTURED_SCHEDULE", False))
+
     try:
-        response = await asyncio.wait_for(config.llm.ainvoke(messages), timeout=llm_timeout_s)
+        if use_structured:
+            # Provider-supported function-calling path: response is already a
+            # validated ScheduleDraft instance, no text parsing needed.
+            llm = config.llm.with_structured_output(ScheduleDraft)
+            parsed: ScheduleDraft = await asyncio.wait_for(
+                llm.ainvoke(messages), timeout=llm_timeout_s,
+            )
+            draft = parsed.model_dump(mode="json", exclude_none=True)
+            logger.info(f"[Node 5 Schedule] Drafted {len(draft.get('days', []))} days (structured).")
+        else:
+            response = await asyncio.wait_for(
+                config.llm.ainvoke(messages), timeout=llm_timeout_s,
+            )
+            raw = response.content.strip()
+            if raw.startswith("```"):
+                lines = raw.split("\n")
+                raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+            draft = _validated_draft(json.loads(raw))
+            logger.info(f"[Node 5 Schedule] Drafted {len(draft.get('days', []))} days.")
     except asyncio.TimeoutError:
         logger.warning(f"[Node 5 Schedule] LLM timeout after {llm_timeout_s}s. Using fallback schedule.")
         warnings.append(f"Schedule LLM timeout after {llm_timeout_s}s — using fallback draft.")
-        draft = _fallback_schedule(state, retrieved)
         return {
-            "draft_schedule":    draft,
+            "draft_schedule":    _fallback_schedule(state, retrieved),
             "schedule_version":  version + 1,
             "violations":        [],
             "validation_passed": False,
@@ -131,18 +157,6 @@ async def node_schedule(state: dict) -> dict:
             # again — signal the outer planning loop to skip the retry.
             "skip_retry":        True,
         }
-
-    raw = response.content.strip()
-
-    # Strip markdown fences
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-
-    try:
-        draft = json.loads(raw)
-        draft = _validated_draft(draft)
-        logger.info(f"[Node 5 Schedule] Drafted {len(draft.get('days', []))} days.")
     except json.JSONDecodeError as e:
         logger.error(f"[Node 5 Schedule] JSON parse error: {e}")
         warnings.append("Schedule LLM returned invalid JSON — using fallback draft.")
@@ -162,51 +176,34 @@ async def node_schedule(state: dict) -> dict:
 
 
 def _parse_hours(hours: str | None) -> tuple[int, int] | None:
-    """Parse 'HH:MM-HH:MM' → (open_minutes, close_minutes). Returns None on bad input.
+    """Module-level alias for time_utils.parse_hours.
 
-    24/7 venues encoded as '00:00-23:59' return (0, 1439); slots fall inside.
+    Kept so external callers (tests via load_schedule_helpers) keep working
+    after the body moved into app.services.time_utils.
     """
-    if not hours or "-" not in hours:
-        return None
-    try:
-        a, b = hours.split("-", 1)
-        ah, am = a.strip().split(":")
-        bh, bm = b.strip().split(":")
-        return int(ah) * 60 + int(am), int(bh) * 60 + int(bm)
-    except (ValueError, AttributeError):
-        return None
+    return _parse_hours_util(hours)
 
 
 def _hms(t: str) -> int:
-    """Slot time 'HH:MM' → minutes since midnight."""
-    h, m = t.split(":")
-    return int(h) * 60 + int(m)
+    """Slot time 'HH:MM' → minutes since midnight. Raises on bad input
+    (callers in this module always pass valid HH:MM)."""
+    parsed = _hms_safe(t)
+    if parsed is None:
+        raise ValueError(f"invalid time: {t!r}")
+    return parsed
 
 
 def _time_or(value: str | None, fallback: int) -> int:
-    """Parse optional 'HH:MM', returning fallback when absent or invalid."""
-    if not value:
-        return fallback
-    try:
-        minutes = _hms(str(value))
-    except (ValueError, AttributeError):
-        return fallback
-    if 0 <= minutes <= 23 * 60 + 59:
-        return minutes
-    return fallback
+    return _time_or_util(value, fallback)
 
 
 def _fmt_minutes(minutes: int) -> str:
-    minutes = max(0, min(minutes, 23 * 60 + 59))
-    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+    return _fmt_minutes_util(minutes)
 
 
 def _slot_bucket(slot_start: str) -> str:
-    """Map slot start time → best_time_of_day bucket the DB uses.
-
-    Buckets follow what the scraper writes into the places.best_time_of_day
-    column ('morning', 'afternoon', 'evening', 'night', 'any').
-    """
+    """Map slot start time → best_time_of_day bucket the DB uses
+    ('morning', 'afternoon', 'evening', 'night')."""
     minutes = _hms(slot_start)
     if minutes < 11 * 60:
         return "morning"
@@ -218,25 +215,8 @@ def _slot_bucket(slot_start: str) -> str:
 
 
 def _fits(item: dict, slot_start: str, slot_end: str) -> bool:
-    """True if the venue's opening hours cover the slot window.
-
-    Handles venues that span midnight (e.g. '18:00-02:00' for a night bar):
-    if close < open we treat the window as two segments — [open, 24:00) and
-    [00:00, close] — and the slot must lie inside one of them.
-
-    Returns True for unknown hours so the LLM-style fallback doesn't reject
-    sparse data (scraper sometimes leaves hours blank for low-quality rows).
-    """
-    hrs = _parse_hours(item.get("hours"))
-    if hrs is None:
-        return True
-    open_m, close_m = hrs
-    ss, se = _hms(slot_start), _hms(slot_end)
-    if open_m <= close_m:
-        # Same-day window.
-        return open_m <= ss and se <= close_m
-    # Overnight window — slot fits if it's entirely in either segment.
-    return (ss >= open_m and se <= 1440) or (ss >= 0 and se <= close_m)
+    """True if the venue's opening hours cover the slot window."""
+    return _fits_util(item.get("hours"), slot_start, slot_end)
 
 
 def _fallback_schedule(state: dict, retrieved: dict) -> dict:

@@ -2,15 +2,11 @@
 tools/get_combos.py — Query combo packages from DB.
 """
 import json
-import unicodedata
 from langchain_core.tools import tool
 from loguru import logger
 from app import config
 from app.services.database import get_pool
-
-
-def _ascii_fold(s: str) -> str:
-    return unicodedata.normalize("NFD", s.lower()).encode("ascii", "ignore").decode()
+from app.services.text_utils import ascii_fold
 
 
 @tool
@@ -19,7 +15,7 @@ async def get_combos(destination: str) -> str:
     Trả về: tên, giá/người, bao gồm gì, số ngày.
     destination phải là tên lowercase tiếng Việt có dấu."""
     pool = await get_pool()
-    dest_ascii = _ascii_fold(destination)
+    dest_ascii = ascii_fold(destination)
 
     try:
         rows = await pool.fetch(

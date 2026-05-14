@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, AIMessage
 
-from app.graph import get_chat_agent
+from app.agent import get_chat_agent
 from app.schemas import ChatRequest, ChatResponse, StreamChatRequest
 from app.services.chat_history import (
     load_history, save_history, history_to_lc_messages,

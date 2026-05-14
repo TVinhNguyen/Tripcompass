@@ -1,11 +1,18 @@
 """
 Node 2 / Tool: Destination Resolve — Code only.
 Resolves user's destination hint to a canonical DB destination string.
-Fixed: uses flat config module.
 """
 from loguru import logger
-from app.db import get_pool
+from app.services.database import get_pool
 from app import config
+
+
+class UnresolvedDestinationError(ValueError):
+    """Raised when a destination hint can't be matched to any known destination.
+
+    Caller should surface this to the user with a list of supported destinations
+    rather than silently proceeding with an empty plan.
+    """
 
 # Alias map for common typos / English names
 ALIASES: dict[str, str] = {
@@ -100,19 +107,12 @@ async def resolve_destination(hint: str) -> dict:
             "warnings":           warnings,
         }
 
-    # ── 4. Fallback — unresolved ──────────────────────────────────────────
-    warnings.append(
-        f"Không tìm thấy destination '{hint}' trong hệ thống. "
-        "Vui lòng kiểm tra lại tên điểm đến."
-    )
+    # ── 4. Fail fast — generating a plan with no places is worse than a clear error.
     logger.warning(f"[resolve] '{hint}' → unresolved")
-    return {
-        "destination_id":     hint,
-        "destination_name":   hint.title(),
-        "resolve_confidence": 0.0,
-        "resolve_method":     "unresolved",
-        "warnings":           warnings,
-    }
+    raise UnresolvedDestinationError(
+        f"Không tìm thấy destination '{hint}' trong hệ thống. "
+        f"Các điểm đến đang hỗ trợ: {', '.join(sorted(set(ALIASES.values())))}."
+    )
 
 
 # Legacy node wrapper for backward compat (used by old graph.py /plan endpoint)
