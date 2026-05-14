@@ -26,9 +26,11 @@ def _load_env() -> None:
 
 _load_env()
 
-# ── LangSmith tracing (same as scraper-service) ───────────────────────────────
-os.environ.setdefault("LANGCHAIN_TRACING_V2", os.environ.get("LANGCHAIN_TRACING_V2", "true"))
-os.environ.setdefault("LANGCHAIN_PROJECT", os.environ.get("LANGCHAIN_PROJECT", "Planner AI"))
+# ── LangSmith tracing ─────────────────────────────────────────────────────────
+# Off by default so the service starts cleanly without LANGCHAIN_API_KEY.
+# Set LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY in .env.prod to enable.
+os.environ.setdefault("LANGCHAIN_TRACING_V2", "false")
+os.environ.setdefault("LANGCHAIN_PROJECT", "Planner AI")
 
 
 # ── LLM Provider config ───────────────────────────────────────────────────────
@@ -41,6 +43,11 @@ LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0"))
 #   max_retries     — retry transient HTTP / RemoteProtocolError before giving up
 LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "180"))
 LLM_MAX_RETRIES     = int(os.environ.get("LLM_MAX_RETRIES", "3"))
+# When true, the schedule node asks the LLM via function-calling so the response
+# is guaranteed-shaped JSON. Off by default because not every provider (minimax
+# on NVIDIA NIM in particular) advertises tool-use compatibility — leave off
+# unless you've verified your provider supports `with_structured_output`.
+USE_STRUCTURED_SCHEDULE = os.environ.get("USE_STRUCTURED_SCHEDULE", "false").lower() == "true"
 
 
 def _openai_compat_kwargs() -> dict:
@@ -169,9 +176,35 @@ def _build_llm(provider: str, model: str) -> Any:
                      f"Use xiaomi/nvidia/openrouter/nebius/anthropic/agentrouter/modal.")
 
 
-# ── Build LLM instance ────────────────────────────────────────────────────────
+# ── LLM instance (lazy) ───────────────────────────────────────────────────────
+# Built on first access so the module imports cleanly even when the provider's
+# API key is missing — useful for tests, lint, health-checks before secrets
+# are wired up. The first request that needs the LLM will fail loudly with the
+# original "required when LLM_PROVIDER=..." error.
 LLM_MODEL = _resolve_model(LLM_PROVIDER)
-llm       = _build_llm(LLM_PROVIDER, LLM_MODEL)
+_llm_instance: Any | None = None
+
+
+def get_llm() -> Any:
+    global _llm_instance
+    if _llm_instance is None:
+        _llm_instance = _build_llm(LLM_PROVIDER, LLM_MODEL)
+    return _llm_instance
+
+
+class _LazyLLM:
+    """Proxy that builds the real LLM on first attribute access.
+
+    Existing call sites use ``config.llm.ainvoke(...)`` — this preserves that
+    shape without forcing eager construction. New code should call get_llm()
+    directly.
+    """
+
+    def __getattr__(self, name: str):
+        return getattr(get_llm(), name)
+
+
+llm = _LazyLLM()
 
 # ── Database ──────────────────────────────────────────────────────────────────
 DATABASE_URL = os.environ.get(

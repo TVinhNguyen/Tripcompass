@@ -6,6 +6,7 @@ import httpx
 from langchain_core.tools import tool
 from loguru import logger
 from app import config
+from app.services.http_retry import transient_retry
 
 
 @tool
@@ -20,7 +21,8 @@ async def search_flights(
     if not config.ENABLE_FLIGHT_SEARCH or not config.SERPAPI_KEY:
         return json.dumps({"success": False, "error": "Flight search disabled or no API key", "flights": []})
 
-    try:
+    @transient_retry
+    async def _fetch() -> dict:
         async with httpx.AsyncClient(timeout=config.TOOL_TIMEOUT) as client:
             resp = await client.get("https://serpapi.com/search", params={
                 "engine": "google_flights", "departure_id": origin,
@@ -29,7 +31,10 @@ async def search_flights(
                 "api_key": config.SERPAPI_KEY,
             })
             resp.raise_for_status()
-            data = resp.json()
+            return resp.json()
+
+    try:
+        data = await _fetch()
     except Exception as e:
         logger.error(f"[search_flights] Error: {e}")
         return json.dumps({"success": False, "error": str(e), "flights": []})

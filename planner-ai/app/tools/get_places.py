@@ -1,16 +1,12 @@
 """
 tools/get_places.py — Query ATTRACTION places from DB.
 """
-import unicodedata
 from typing import Optional
 from langchain_core.tools import tool
 from loguru import logger
 from app import config
 from app.services.database import get_pool
-
-
-def _ascii_fold(s: str) -> str:
-    return unicodedata.normalize("NFD", s.lower()).encode("ascii", "ignore").decode()
+from app.services.text_utils import ascii_fold
 
 
 @tool
@@ -25,7 +21,7 @@ async def get_places(
     Trả về: tên, giá, giờ mở cửa, rating, tọa độ, tags, best_time_of_day.
     destination phải là tên lowercase tiếng Việt có dấu (ví dụ: 'đà nẵng')."""
     pool = await get_pool()
-    dest_ascii = _ascii_fold(destination)
+    dest_ascii = ascii_fold(destination)
 
     conditions = [
         """(LOWER(destination) = LOWER($1)

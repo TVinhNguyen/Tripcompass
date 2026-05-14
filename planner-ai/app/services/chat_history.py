@@ -78,11 +78,15 @@ def _smart_trim(history: list[dict], max_messages: int = MAX_HISTORY_MESSAGES) -
 
     Standard tail-trim loses 'I want Da Nang, 2 people, 3 days'.
     This keeps the first user+assistant pair + a separator + recent messages.
+    The recent window is clamped so it never overlaps with the first pair.
     """
     if len(history) <= max_messages:
         return history
     first_pair = history[:2]
-    recent     = history[-(max_messages - 3):]
+    # Recent must start AFTER first_pair to avoid duplication.
+    recent_size = max(1, max_messages - 3)
+    recent_start = max(2, len(history) - recent_size)
+    recent = history[recent_start:]
     separator  = {
         "role": "system",
         "content": "[...cuộc trò chuyện trước đó đã được lược bớt...]",

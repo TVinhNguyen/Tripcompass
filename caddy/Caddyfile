@@ -9,7 +9,10 @@
 }
 
 {$DOMAIN} {
-	encode gzip zstd
+	# Compress everything except SSE — gzip's chunk buffering delays
+	# token-by-token delivery on /api/v1/ai-chat/stream.
+	@compressible not path /api/v1/ai-chat/stream*
+	encode @compressible gzip zstd
 
 	# Security headers — applied to every response.
 	header {
@@ -23,13 +26,12 @@
 		-Server
 	}
 
-	# Backend API + WebSocket. SSE (text/event-stream) flows through here too;
-	# Caddy handles streaming responses without extra config.
+	# Backend API + WebSocket. SSE (text/event-stream) flows through here too.
 	handle /api/* {
 		reverse_proxy backend:8080 {
-			# Long timeout for SSE / planner streaming.
+			# Long read timeout for SSE / planner streaming (agent + tools may take minutes).
 			transport http {
-				read_timeout 5m
+				read_timeout 10m
 			}
 		}
 	}

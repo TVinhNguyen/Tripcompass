@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 
 from app.services.planning_service import generate_travel_plan
 from app.services.tool_state import current_holder
+from app.nodes.resolve import UnresolvedDestinationError
 
 
 def _slim_summary(full: dict) -> dict:
@@ -66,23 +67,31 @@ async def create_travel_plan(
     Gọi khi user muốn: lên lịch trình, xếp lịch du lịch, tạo kế hoạch.
     KHÔNG gọi khi user chỉ hỏi thông tin — dùng get_places/get_food_venues.
     """
-    full = await generate_travel_plan(
-        destination=destination,
-        num_days=num_days,
-        budget_vnd=budget_vnd,
-        guest_count=guest_count,
-        start_date=start_date,
-        end_date=end_date,
-        travel_style=travel_style,
-        arrival_time=arrival_time,
-        departure_time=departure_time,
-        daily_start_time=daily_start_time,
-        daily_end_time=daily_end_time,
-        time_strictness=time_strictness,
-        preferences=preferences,
-        need_hotel=need_hotel,
-        need_flight=need_flight,
-    )
+    try:
+        full = await generate_travel_plan(
+            destination=destination,
+            num_days=num_days,
+            budget_vnd=budget_vnd,
+            guest_count=guest_count,
+            start_date=start_date,
+            end_date=end_date,
+            travel_style=travel_style,
+            arrival_time=arrival_time,
+            departure_time=departure_time,
+            daily_start_time=daily_start_time,
+            daily_end_time=daily_end_time,
+            time_strictness=time_strictness,
+            preferences=preferences,
+            need_hotel=need_hotel,
+            need_flight=need_flight,
+        )
+    except UnresolvedDestinationError as e:
+        # Surface as a tool result so the agent can ask the user to clarify
+        # rather than crashing the chain.
+        return json.dumps(
+            {"success": False, "error_code": "unresolved_destination", "message": str(e)},
+            ensure_ascii=False,
+        )
 
     # Hand the full plan to the streaming layer via the request-scoped holder.
     # If no holder is bound (e.g. direct unit test invocation), we fall back to
