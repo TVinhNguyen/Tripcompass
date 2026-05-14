@@ -27,7 +27,15 @@ func NewAIChatHandler(db *gorm.DB, plannerAIURL string) *AIChatHandler {
 	return &AIChatHandler{
 		db:           db,
 		plannerAIURL: strings.TrimRight(plannerAIURL, "/"),
-		httpClient:   &http.Client{Timeout: 180 * time.Second},
+		// No hard Timeout — streaming requests run for minutes; we rely on
+		// the request context (cancels when the browser disconnects) and the
+		// transport's per-read deadline to bound idle stalls.
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				ResponseHeaderTimeout: 30 * time.Second,
+				IdleConnTimeout:       90 * time.Second,
+			},
+		},
 	}
 }
 
@@ -226,6 +234,12 @@ func (h *AIChatHandler) Stream(c *gin.Context) {
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	// Propagate request_id so planner-ai logs line up with backend logs.
+	if rid := c.GetHeader("X-Request-Id"); rid != "" {
+		httpReq.Header.Set("X-Request-Id", rid)
+	} else {
+		httpReq.Header.Set("X-Request-Id", uuid.NewString())
+	}
 
 	resp, err := h.httpClient.Do(httpReq)
 	if err != nil {
@@ -342,29 +356,70 @@ type streamDonePayload struct {
 	ToolCalls []string        `json:"tool_calls"`
 }
 
+// streamIdleTimeout caps the gap between two upstream chunks. Without this,
+// a planner-ai that ships headers and then stalls would hold the backend
+// goroutine open indefinitely (ResponseHeaderTimeout bounds the header wait,
+// IdleConnTimeout bounds idle pooled conns, but neither bounds a stalled body).
+// Two minutes is generous — minimax thinking time can hit 90s on a fresh plan.
+const streamIdleTimeout = 2 * time.Minute
+
+type readResult struct {
+	n   int
+	err error
+}
+
 func (h *AIChatHandler) proxySSE(c *gin.Context, body io.Reader, done *streamDonePayload) error {
 	flusher, _ := c.Writer.(http.Flusher)
 	buf := make([]byte, 4096)
 	var pending string
 
-	for {
-		n, err := body.Read(buf)
-		if n > 0 {
-			chunk := buf[:n]
-			if _, writeErr := c.Writer.Write(chunk); writeErr != nil {
-				return writeErr
+	ctx := c.Request.Context()
+	results := make(chan readResult, 1)
+	// Background reader so we can race Read against an idle timer / client cancel.
+	// Closing body (via the deferred Close in the caller) makes Read return.
+	go func() {
+		for {
+			n, err := body.Read(buf)
+			results <- readResult{n: n, err: err}
+			if err != nil {
+				return
 			}
-			if flusher != nil {
-				flusher.Flush()
-			}
-			pending += string(chunk)
-			pending = parseSSEBuffer(pending, done)
 		}
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil
+	}()
+
+	idle := time.NewTimer(streamIdleTimeout)
+	defer idle.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-idle.C:
+			return fmt.Errorf("upstream stream idle for %s", streamIdleTimeout)
+		case r := <-results:
+			if r.n > 0 {
+				chunk := buf[:r.n]
+				if _, writeErr := c.Writer.Write(chunk); writeErr != nil {
+					return writeErr
+				}
+				if flusher != nil {
+					flusher.Flush()
+				}
+				pending += string(chunk)
+				pending = parseSSEBuffer(pending, done)
 			}
-			return err
+			if r.err != nil {
+				if errors.Is(r.err, io.EOF) {
+					return nil
+				}
+				return r.err
+			}
+			if !idle.Stop() {
+				select {
+				case <-idle.C:
+				default:
+				}
+			}
+			idle.Reset(streamIdleTimeout)
 		}
 	}
 }

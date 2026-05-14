@@ -32,6 +32,9 @@ async def generate_travel_plan(
     need_flight: bool = False,
 ) -> dict:
     """Generate a complete travel plan as a Python dict."""
+    # Lazy imports break a circular: app.tools.create_plan imports this module,
+    # so importing app.tools.* at module level here re-enters a half-initialised
+    # tools package. Function-scope imports defer resolution until call time.
     from app.nodes.resolve import resolve_destination
     from app.tools.get_places import get_places
     from app.tools.get_food_venues import get_food_venues

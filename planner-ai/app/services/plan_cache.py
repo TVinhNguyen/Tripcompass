@@ -60,7 +60,9 @@ def build_plan_cache_key(request: Any) -> str:
         "preferences": _normalize_preferences(getattr(request, "preferences", None)),
         "need_hotel": getattr(request, "need_hotel", True),
         "need_flight": getattr(request, "need_flight", False),
-        "raw_input": getattr(request, "raw_input", None),
+        # raw_input intentionally excluded: it's free-text that varies by typo /
+        # whitespace and would otherwise destroy cache hit rate. The structured
+        # fields above fully determine the plan.
         "llm_provider": config.LLM_PROVIDER,
         "llm_model": config.LLM_MODEL,
         "prompt_version": "schedule-v2-flex-time/enrich-v1",

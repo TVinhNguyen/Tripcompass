@@ -55,17 +55,33 @@ async def get_session_meta(session_id: str) -> dict | None:
 # ── List & delete ─────────────────────────────────────────────────────────────
 
 async def list_sessions() -> list[dict]:
-    """Return all active sessions with their metadata."""
+    """Return all active sessions with their metadata.
+
+    Uses MGET to fetch all metadata in one round trip; stale index entries
+    (meta expired but ID still in the set) are pruned in a single SREM.
+    """
     client = await get_redis()
-    session_ids = await client.smembers(SESSION_INDEX_KEY)
-    result = []
-    for sid in sorted(session_ids):
-        meta = await get_session_meta(sid)
-        if meta:
-            result.append({"session_id": sid, **meta})
-        else:
-            # Expired — clean up index
-            await client.srem(SESSION_INDEX_KEY, sid)
+    session_ids = sorted(await client.smembers(SESSION_INDEX_KEY))
+    if not session_ids:
+        return []
+
+    raws = await client.mget(*(f"session:meta:{sid}" for sid in session_ids))
+
+    result: list[dict] = []
+    stale: list[str] = []
+    for sid, raw in zip(session_ids, raws):
+        if not raw:
+            stale.append(sid)
+            continue
+        try:
+            meta = json.loads(raw)
+        except json.JSONDecodeError:
+            stale.append(sid)
+            continue
+        result.append({"session_id": sid, **meta})
+
+    if stale:
+        await client.srem(SESSION_INDEX_KEY, *stale)
     return result
 
 

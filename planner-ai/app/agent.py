@@ -3,7 +3,7 @@ agent.py — ReAct agent: build + lazy singleton (merged from graph.py).
 """
 from loguru import logger
 from langgraph.prebuilt import create_react_agent
-from app import config
+from app.config import get_llm
 from app.tools import ALL_TOOLS
 from app.prompts.agent import SYSTEM_PROMPT
 
@@ -15,7 +15,7 @@ def get_chat_agent():
     global _agent
     if _agent is None:
         _agent = create_react_agent(
-            model=config.llm,
+            model=get_llm(),
             tools=ALL_TOOLS,
             prompt=SYSTEM_PROMPT,
         )
