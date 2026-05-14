@@ -9,3 +9,6 @@ node_modules/
 .pnpm-store/
 .env*.local
 .DS_Store
+
+# TypeScript incremental build cache — machine-local, regenerated each build
+*.tsbuildinfo

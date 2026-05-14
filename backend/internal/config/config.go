@@ -101,5 +101,19 @@ func Load() *Config {
 		log.Fatal("USE_LLM_PLANNER=true requires PLANNER_AI_URL to be set")
 	}
 
+	if cfg.GoogleClientID == "" {
+		log.Printf("Warning: GOOGLE_CLIENT_ID not set — Google login will return 401")
+	} else {
+		log.Printf("Google login enabled (client_id length=%d, suffix=...%s)",
+			len(cfg.GoogleClientID), tail(cfg.GoogleClientID, 12))
+	}
+
 	return cfg
+}
+
+func tail(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
 }
