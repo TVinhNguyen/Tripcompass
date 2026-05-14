@@ -107,34 +107,6 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  ds2api:
-    image: ghcr.io/cjackhwang/ds2api:latest
-    container_name: ds2api
-    restart: always
-    env_file:
-      - path: .env.prod
-        required: false
-    expose:
-      - "5001"
-    volumes:
-      - ./config.json:/data/config.json
-    environment:
-      TZ: Asia/Shanghai
-      LOG_LEVEL: INFO
-      DS2API_ADMIN_KEY: ${DS2API_ADMIN_KEY:-ds2api}
-      DS2API_CONFIG_PATH: /data/config.json
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
-
   planner-ai:
     image: ${DOCKERHUB_USERNAME}/tripcompass-planner:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -147,7 +119,6 @@ services:
       LLM_MODEL_XIAOMI: ${LLM_MODEL_XIAOMI:-mimo-v2-pro}
       LLM_MODEL_NVIDIA: ${LLM_MODEL_NVIDIA:-minimaxai/minimax-m2.7}
       LLM_MODEL_OPENROUTER: ${LLM_MODEL_OPENROUTER:-qwen/qwen3.6-plus:free}
-      LLM_MODEL_DS2API: ${LLM_MODEL_DS2API:-deepseek-v4-flash}
       LLM_MODEL_NEBIUS: ${LLM_MODEL_NEBIUS:-meta-llama/llama-3.3-70b-instruct}
       LLM_MODEL_ANTHROPIC: ${LLM_MODEL_ANTHROPIC:-claude-sonnet-4-20250514}
       LLM_MODEL_AGENTROUTER: ${LLM_MODEL_AGENTROUTER:-deepseek-v3.2}
@@ -160,8 +131,6 @@ services:
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       OPENROUTER_HTTP_REFERER: ${OPENROUTER_HTTP_REFERER:-}
       OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-Tripcompass Planner}
-      DS2API_API_KEY: ${DS2API_API_KEY:-}
-      DS2API_BASE_URL: ${DS2API_BASE_URL:-http://ds2api:5001/v1}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AGENTROUTER_API_KEY: ${AGENTROUTER_API_KEY:-}
       AGENTROUTER_BASE_URL: ${AGENTROUTER_BASE_URL:-https://agentrouter.org/v1}
@@ -190,8 +159,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      ds2api:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=3).read()\""]
       interval: 15s
@@ -304,7 +271,6 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       NINEROUTER_DOMAIN: ${NINEROUTER_DOMAIN:-router.tripcompass.studio}
-      DS2API_DOMAIN: ${DS2API_DOMAIN:-ds2api.tripcompass.studio}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -313,8 +279,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      ds2api:
-        condition: service_started
     networks:
       - public
       - internal     # so Caddy can reach planner-ai which is internal-only

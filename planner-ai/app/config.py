@@ -65,7 +65,6 @@ def _default_model_for(provider: str) -> str:
         "xiaomi":       "mimo-v2-pro",
         "nvidia":       "minimaxai/minimax-m2.7",
         "openrouter":   "qwen/qwen3.6-plus:free",
-        "ds2api":       "deepseek-v4-flash",
         "nebius":       "meta-llama/llama-3.3-70b-instruct",
         "anthropic":    "claude-sonnet-4-20250514",
         "agentrouter":  "deepseek-v3.2",
@@ -84,9 +83,6 @@ def _resolve_model(provider: str) -> str:
                               default=_default_model_for(p))
     if p == "openrouter":
         return _get_env_first("LLM_MODEL_Openrouter", "LLM_MODEL_OPENROUTER", "LLM_MODEL",
-                              default=_default_model_for(p))
-    if p == "ds2api":
-        return _get_env_first("LLM_MODEL_DS2API", "LLM_MODEL",
                               default=_default_model_for(p))
     if p == "nebius":
         return _get_env_first("LLM_MODEL_Nebius", "LLM_MODEL_NEBIUS", "LLM_MODEL",
@@ -140,15 +136,6 @@ def _build_llm(provider: str, model: str) -> Any:
                           default_headers=headers or None,
                           **_openai_compat_kwargs())
 
-    if p == "ds2api":
-        from langchain_openai import ChatOpenAI
-        api_key = os.environ.get("DS2API_API_KEY", "").strip()
-        base_url = os.environ.get("DS2API_BASE_URL", "http://ds2api:5001/v1").strip()
-        if not api_key:
-            raise RuntimeError("DS2API_API_KEY required when LLM_PROVIDER=ds2api")
-        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
-                          **_openai_compat_kwargs())
-
     if p == "nebius":
         from langchain_nebius import ChatNebius
         return ChatNebius(model=model, temperature=LLM_TEMPERATURE)
@@ -179,7 +166,7 @@ def _build_llm(provider: str, model: str) -> Any:
                           **_openai_compat_kwargs())
 
     raise ValueError(f"Unsupported LLM_PROVIDER: '{provider}'. "
-                     f"Use xiaomi/nvidia/openrouter/ds2api/nebius/anthropic/agentrouter/modal.")
+                     f"Use xiaomi/nvidia/openrouter/nebius/anthropic/agentrouter/modal.")
 
 
 # ── Build LLM instance ────────────────────────────────────────────────────────

@@ -46,6 +46,10 @@ echo "   Compose: $COMPOSE_FILE"
 echo "   Env:     $ENV_FILE"
 echo ""
 
+# ── Validate Compose config before pulling / swapping containers ─────────────
+echo "🔍 Validating Docker Compose config..."
+"${COMPOSE[@]}" config >/dev/null
+
 # ── Validate Caddyfile before swapping containers ────────────────────────────
 echo "🔍 Validating Caddyfile..."
 docker run --rm \
@@ -63,7 +67,41 @@ echo "🔄 Starting services..."
 
 # ── Wait for health checks ───────────────────────────────────────────────────
 echo "⏳ Waiting for services to become healthy..."
-sleep 10
+deadline=$((SECONDS + 180))
+health_services=(postgres redis 9router planner-ai backend frontend)
+
+while true; do
+  unhealthy=()
+
+  for service in "${health_services[@]}"; do
+    container_id="$("${COMPOSE[@]}" ps -q "$service" 2>/dev/null || true)"
+    if [ -z "$container_id" ]; then
+      unhealthy+=("$service:missing")
+      continue
+    fi
+
+    status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || echo unknown)"
+    if [ "$status" != "healthy" ] && [ "$status" != "running" ]; then
+      unhealthy+=("$service:$status")
+    fi
+  done
+
+  if [ "${#unhealthy[@]}" -eq 0 ]; then
+    break
+  fi
+
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "❌ Services failed to become healthy: ${unhealthy[*]}"
+    echo ""
+    "${COMPOSE[@]}" ps
+    echo ""
+    echo "Recent logs:"
+    "${COMPOSE[@]}" logs --tail=80 planner-ai backend frontend caddy || true
+    exit 1
+  fi
+
+  sleep 5
+done
 
 echo ""
 echo "📊 Service status:"
