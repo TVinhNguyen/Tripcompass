@@ -320,28 +320,40 @@ def _strip_thinking(text: str) -> str:
 
 
 def _strip_json_objects(text: str) -> str:
-    """Remove all JSON blocks from text, keeping only the markdown summary.
+    """Remove raw JSON dumps from text while preserving normal markdown content.
 
-    LLM output pattern: [```json {...}```] [{...}]* [markdown summary]
-    Strategy: walk the text, skip fenced blocks and balanced {…} objects,
-    keep everything else. If JSON is malformed (partial strip from earlier),
-    fall back to finding the markdown boundary heuristically.
+    Designed for the post-create_travel_plan path where the LLM sometimes leaks
+    the full plan JSON before its natural-language summary. The function:
+
+      - PRESERVES fenced code blocks (```...```) unless they are explicitly
+        tagged ```json — Python/Bash/ASCII diagrams etc. are user-facing.
+      - REMOVES top-level balanced { ... } JSON objects (the leaked plan dump).
+      - Falls back to a markdown-line heuristic only when stripping ate almost
+        everything (defensive — should rarely fire).
     """
-    result = []
+    result: list[str] = []
     i = 0
     n = len(text)
 
     while i < n:
-        # Skip ```...``` fenced blocks
+        # Fenced code block — keep verbatim unless it's a ```json block.
         if text[i:i+3] == '```':
             end_fence = text.find('```', i + 3)
-            if end_fence != -1:
+            if end_fence == -1:
+                # Unterminated fence — preserve the rest of the text as-is.
+                result.append(text[i:])
+                break
+            block = text[i:end_fence + 3]
+            lang_line = block[3:].split('\n', 1)[0].strip().lower()
+            if lang_line == 'json':
+                # Explicit JSON block — drop it.
                 i = end_fence + 3
                 continue
-            # No closing fence — skip to end
-            break
+            result.append(block)
+            i = end_fence + 3
+            continue
 
-        # Skip balanced top-level JSON objects
+        # Top-level balanced JSON object — drop it.
         if text[i] == '{':
             depth = 1
             j = i + 1
@@ -362,20 +374,20 @@ def _strip_json_objects(text: str) -> str:
                         depth -= 1
                 j += 1
             if depth == 0:
-                i = j  # skip entire object
+                i = j
                 continue
-            else:
-                # Unclosed brace — malformed JSON fragment.
-                # Heuristic: skip forward to first markdown-looking line.
-                break
+            # Unclosed brace — likely not JSON. Treat as literal text.
+            result.append(text[i])
+            i += 1
+            continue
 
         result.append(text[i])
         i += 1
 
     cleaned = ''.join(result).strip()
 
-    # If cleaned is mostly empty but text has content, use heuristic fallback:
-    # find the first line that starts with markdown formatting (**, #, -, 🎉, etc.)
+    # Defensive: if stripping ate almost everything but original had content,
+    # try to recover from the first markdown-ish line.
     if len(cleaned) < 50 and len(text) > 200:
         import re
         md_match = re.search(
@@ -515,8 +527,15 @@ async def stream_chat_response(
     if trailing:
         yield _sse({"type": "token", "content": trailing})
 
-    # ── Clean full_text: strip thinking blocks, then JSON, keep markdown ──
-    clean_text = _strip_json_objects(_strip_thinking(full_text))
+    # ── Clean full_text ─────────────────────────────────────────────────
+    # Always strip <think>...</think> reasoning leaks. Only strip JSON dumps
+    # when create_travel_plan ran — otherwise normal answers that legitimately
+    # contain code/dict examples would be mangled.
+    thought_clean = _strip_thinking(full_text)
+    if "create_travel_plan" in tools_used:
+        clean_text = _strip_json_objects(thought_clean)
+    else:
+        clean_text = thought_clean.strip()
     if stream_dropped and clean_text:
         clean_text += "\n\n_⚠️ Phần trả lời bị cắt giữa chừng do nhà cung cấp LLM ngắt kết nối — lịch trình đã được giữ lại._"
 
