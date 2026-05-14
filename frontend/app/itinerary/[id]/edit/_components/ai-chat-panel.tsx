@@ -96,14 +96,16 @@ export function AIChatPanel({
         setMessages((prev) =>
           prev.map((m) =>
             m.id === aiMsgId
-              ? {
-                  ...m,
-                  content: displayText,
-                  plan: plan ?? null,
-                  toolCalls: toolCalls ?? [],
-                  streaming: false,
-                  error: m.error && !plan,
-                }
+              ? m.error && !displayText && !plan
+                ? { ...m, streaming: false }
+                : {
+                    ...m,
+                    content: displayText || "AI đã kết thúc phản hồi nhưng không trả về nội dung. Vui lòng thử lại.",
+                    plan: plan ?? null,
+                    toolCalls: toolCalls ?? [],
+                    streaming: false,
+                    error: m.error && !plan,
+                  }
               : m,
           ),
         );

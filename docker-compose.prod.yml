@@ -147,6 +147,7 @@ services:
       LLM_MODEL_XIAOMI: ${LLM_MODEL_XIAOMI:-mimo-v2-pro}
       LLM_MODEL_NVIDIA: ${LLM_MODEL_NVIDIA:-minimaxai/minimax-m2.7}
       LLM_MODEL_OPENROUTER: ${LLM_MODEL_OPENROUTER:-qwen/qwen3.6-plus:free}
+      LLM_MODEL_DS2API: ${LLM_MODEL_DS2API:-deepseek-v4-flash}
       LLM_MODEL_NEBIUS: ${LLM_MODEL_NEBIUS:-meta-llama/llama-3.3-70b-instruct}
       LLM_MODEL_ANTHROPIC: ${LLM_MODEL_ANTHROPIC:-claude-sonnet-4-20250514}
       LLM_MODEL_AGENTROUTER: ${LLM_MODEL_AGENTROUTER:-deepseek-v3.2}
@@ -159,6 +160,8 @@ services:
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       OPENROUTER_HTTP_REFERER: ${OPENROUTER_HTTP_REFERER:-}
       OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-Tripcompass Planner}
+      DS2API_API_KEY: ${DS2API_API_KEY:-}
+      DS2API_BASE_URL: ${DS2API_BASE_URL:-http://ds2api:5001/v1}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AGENTROUTER_API_KEY: ${AGENTROUTER_API_KEY:-}
       AGENTROUTER_BASE_URL: ${AGENTROUTER_BASE_URL:-https://agentrouter.org/v1}

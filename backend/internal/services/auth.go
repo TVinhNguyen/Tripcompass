@@ -20,7 +20,6 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -378,41 +377,42 @@ func (s *AuthService) FacebookLogin(accessToken string) (*AuthResponse, error) {
 	return s.findOrCreateSocialUser(info.Email, info.Name, avatarURL, "facebook", info.ID)
 }
 
-// findOrCreateSocialUser atomically upserts a social-login user.
-// Uses INSERT ... ON CONFLICT (email) DO UPDATE — concurrent first-logins
-// with the same email result in exactly one row (the second request updates
-// avatar_url + is_verified rather than inserting a duplicate or returning an error).
+// findOrCreateSocialUser links a social login to an existing account by email,
+// or creates a new account if none exists. Existing local accounts keep their
+// password_hash and original provider — Google login becomes an additional
+// way in, not a replacement.
 func (s *AuthService) findOrCreateSocialUser(email, name, avatarURL, provider, providerID string) (*AuthResponse, error) {
 	av := avatarURL
-	user := models.User{
-		Email:      email,
-		FullName:   name,
-		AvatarURL:  &av,
-		Provider:   provider,
-		IsVerified: true,
-	}
 
-	// INSERT ... ON CONFLICT (email) DO UPDATE avatar_url + is_verified.
-	// Does NOT overwrite PasswordHash or Provider so existing local accounts keep their credentials.
-	result := s.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "email"}},
-		DoUpdates: clause.AssignmentColumns([]string{"avatar_url", "is_verified"}),
-	}).Create(&user)
-	if result.Error != nil {
-		return nil, fmt.Errorf("failed to upsert social user: %w", result.Error)
-	}
-
-	// Re-fetch after upsert so user.ID is populated (Create sets ID on insert;
-	// on conflict the original row's ID is returned via Returning or re-query).
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
-		return nil, fmt.Errorf("failed to fetch upserted user: %w", err)
+	var user models.User
+	err := s.db.Where("email = ?", email).First(&user).Error
+	switch {
+	case err == nil:
+		// Existing account — refresh avatar + verification, preserve password/provider.
+		user.AvatarURL = &av
+		user.IsVerified = true
+		if err := s.db.Save(&user).Error; err != nil {
+			return nil, fmt.Errorf("failed to update social user: %w", err)
+		}
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		user = models.User{
+			Email:      email,
+			FullName:   name,
+			AvatarURL:  &av,
+			Provider:   provider,
+			IsVerified: true,
+		}
+		if err := s.db.Create(&user).Error; err != nil {
+			return nil, fmt.Errorf("failed to create social user: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("failed to lookup user: %w", err)
 	}
 
 	token, err := s.generateToken(user.ID, user.Email)
 	if err != nil {
 		return nil, err
 	}
-
 	return &AuthResponse{Token: token, User: user}, nil
 }
 
