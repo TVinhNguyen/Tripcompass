@@ -20,13 +20,12 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# NEXT_PUBLIC_* must be baked in at build time
+# NEXT_PUBLIC_* must be baked in at build time.
+# GOOGLE_CLIENT_ID is served at runtime via /runtime-config (not baked in).
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
 ARG NEXT_PUBLIC_WS_URL=ws://localhost:8080/api/v1/ws
-ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
-ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 
 RUN pnpm build
 
