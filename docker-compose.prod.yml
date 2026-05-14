@@ -187,6 +187,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ds2api:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=3).read()\""]
       interval: 15s
@@ -261,7 +263,8 @@ services:
     image: ${DOCKERHUB_USERNAME}/tripcompass-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+      # Single source of truth: GOOGLE_CLIENT_ID from .env.prod.
+      # Served to the browser at runtime via /runtime-config — must match backend's audience.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     expose:
       - "3000"

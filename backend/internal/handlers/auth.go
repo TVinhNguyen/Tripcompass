@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"tripcompass-backend/internal/config"
 	"tripcompass-backend/internal/services"
@@ -109,6 +110,7 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 	}
 	resp, err := h.svc.GoogleLogin(body.IDToken)
 	if err != nil {
+		log.Printf("GoogleLogin failed: %v", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "google authentication failed"})
 		return
 	}

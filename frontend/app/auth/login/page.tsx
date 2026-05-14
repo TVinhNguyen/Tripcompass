@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Eye, EyeOff, Loader2, Mail, Lock } from "lucide-react"
+import { Eye, EyeOff, Facebook, Loader2, Mail, Lock } from "lucide-react"
 import { AuthLayout } from "@/components/auth-layout"
 import { Button } from "@/components/ui/button"
 import { useGoogleOAuthReady } from "@/components/app-providers"
@@ -13,7 +13,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { ApiError } from "@/lib/api"
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google"
 
-const GOOGLE_BUTTON_WIDTH = 448
+const OAUTH_BUTTON_WIDTH = 400
 
 function LoginContent() {
   const router = useRouter()
@@ -154,7 +154,7 @@ function LoginContent() {
       </div>
 
       {/* OAuth buttons */}
-      <div className="space-y-3">
+      <div className="mx-auto w-full max-w-[400px] space-y-3">
         {/* Google — uses GoogleLogin component which passes id_token (credential) */}
         <div className="w-full overflow-hidden rounded-lg [&>div]:!w-full [&_iframe]:!w-full">
           {googleEnabled ? (
@@ -166,7 +166,7 @@ function LoginContent() {
               size="large"
               shape="rectangular"
               logo_alignment="left"
-              width={GOOGLE_BUTTON_WIDTH}
+              width={OAUTH_BUTTON_WIDTH}
               containerProps={{ className: "w-full" }}
             />
           ) : (
@@ -174,22 +174,20 @@ function LoginContent() {
               type="button"
               variant="outline"
               disabled
-              className="h-10 w-full justify-center rounded-lg border-[#e8e2d9] bg-white text-[#8b8378]"
+              className='relative h-[40px] w-full justify-center rounded-[4px] border-[#dadce0] bg-white text-[#8b8378] shadow-none font-["Roboto","Helvetica_Neue",Arial,sans-serif] text-sm font-medium'
             >
               Đăng nhập bằng Google
             </Button>
           )}
         </div>
-        {/* Facebook — UI only, SDK deferred */}
+        {/* Facebook — UI only, SDK deferred. Sized to match the Google iframe (size="large"). */}
         <Button
           type="button"
           variant="outline"
-          className="h-10 w-full gap-2 rounded-lg border-[#e8e2d9] bg-white text-[#1a1a1a] hover:bg-[#f5f0e8] hover:text-[#1a1a1a]"
+          className='relative h-[40px] w-full justify-center rounded-[4px] border-[#dadce0] bg-white px-3 text-[#3c4043] shadow-none hover:bg-[#f8fafd] hover:text-[#3c4043] font-["Roboto","Helvetica_Neue",Arial,sans-serif] text-sm font-medium'
         >
-          <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
-            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-          </svg>
-          <span className="text-sm font-medium text-[#1a1a1a]">Facebook</span>
+          <Facebook className="absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 fill-[#1877F2] text-[#1877F2]" />
+          <span>Tiếp tục với Facebook</span>
         </Button>
       </div>
 
