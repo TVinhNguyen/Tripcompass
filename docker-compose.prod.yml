@@ -107,6 +107,34 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  ds2api:
+    image: ghcr.io/cjackhwang/ds2api:latest
+    container_name: ds2api
+    restart: always
+    env_file:
+      - path: .env.prod
+        required: false
+    expose:
+      - "5001"
+    volumes:
+      - ./config.json:/data/config.json
+    environment:
+      TZ: Asia/Shanghai
+      LOG_LEVEL: INFO
+      DS2API_ADMIN_KEY: ${DS2API_ADMIN_KEY:-ds2api}
+      DS2API_CONFIG_PATH: /data/config.json
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   planner-ai:
     image: ${DOCKERHUB_USERNAME}/tripcompass-planner:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -270,6 +298,7 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       NINEROUTER_DOMAIN: ${NINEROUTER_DOMAIN:-router.tripcompass.studio}
+      DS2API_DOMAIN: ${DS2API_DOMAIN:-ds2api.tripcompass.studio}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -278,6 +307,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ds2api:
+        condition: service_started
     networks:
       - public
       - internal     # so Caddy can reach planner-ai which is internal-only
