@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 
 const footerLinks = {
   product: [
     { label: "Khám phá", href: "/explore" },
-    { label: "Lập lịch trình", href: "/planner" },
+    { label: "AI Planner", href: "/ai-planner" },
+    { label: "Lịch trình của tôi", href: "/planner" },
     { label: "Địa điểm", href: "/places" },
     { label: "Cẩm nang", href: "/blog" },
   ],
@@ -50,19 +51,13 @@ export function Footer() {
               Khám phá Việt Nam theo cách của bạn. Tạo lịch trình hoàn hảo với công nghệ AI trong vài phút.
             </p>
 
-            <div>
-              <p className="text-sm text-white/70 mb-3">Nhận thông tin mới nhất</p>
-              <div className="flex">
-                <input
-                  type="email"
-                  placeholder="Email của bạn"
-                  className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-l-lg text-white placeholder-white/40 outline-none focus:border-[#d4a853]/50 transition-colors"
-                />
-                <button className="px-6 py-3 bg-[#d4a853] text-[#1a1a1a] font-medium rounded-r-lg hover:bg-[#c4985a] transition-colors">
-                  Đăng ký
-                </button>
-              </div>
-            </div>
+            <Link
+              href="/ai-planner"
+              className="inline-flex items-center gap-2 rounded-full bg-[#d4a853] px-5 py-3 text-sm font-semibold text-[#1a1a1a] transition-colors hover:bg-[#c4985a]"
+            >
+              Bắt đầu với AI Planner
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
 
           <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8">
@@ -127,7 +122,7 @@ export function Footer() {
 
         <div className="mt-16 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-white/40">
-            © 2024 TripCompass. Tất cả quyền được bảo lưu.
+            © 2026 TripCompass. Tất cả quyền được bảo lưu.
           </p>
           <p className="text-sm text-white/40">
             Được tạo với tình yêu tại Việt Nam

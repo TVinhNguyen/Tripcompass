@@ -23,6 +23,7 @@ _PLACE_FIELDS = ("id", "name", "hours", "base_price", "duration_min",
                  "must_visit", "best_time_of_day", "latitude", "longitude", "area")
 _FOOD_FIELDS  = ("id", "name", "hours", "base_price", "area", "tags")
 _HOTEL_FIELDS = ("name", "price_per_night_vnd", "rating")
+_COMBO_FIELDS = ("name", "price_per_person", "duration_days", "requires_overnight", "includes")
 
 
 class ScheduleHotel(BaseModel):
@@ -70,6 +71,11 @@ def _validated_draft(draft: dict) -> dict:
     return ScheduleDraft.model_validate(draft).model_dump(mode="json", exclude_none=True)
 
 
+def _compact_json(payload: object) -> str:
+    """Token-lean JSON for prompt context."""
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
 async def node_schedule(state: dict) -> dict:
     version    = state.get("schedule_version", 0)
     violations = state.get("violations", [])
@@ -77,10 +83,13 @@ async def node_schedule(state: dict) -> dict:
 
     logger.info(f"[Node 5 Schedule] version={version}, violations={len(violations)}, "
                 f"places={len(retrieved.get('places',[]))}")
+    num_days = int(state.get("num_days", 3) or 3)
+    place_limit = min(20, max(10, num_days * 5))
+    food_limit = min(12, max(6, num_days * 3))
 
     context = {
         "destination":            state.get("destination_name", ""),
-        "num_days":               state.get("num_days", 3),
+        "num_days":               num_days,
         "guest_count":            state.get("guest_count", 2),
         "start_date":             state.get("start_date", ""),
         "end_date":               state.get("end_date", ""),
@@ -97,22 +106,22 @@ async def node_schedule(state: dict) -> dict:
         "hotel_budget_per_night": state.get("hotel_budget_per_night", 0),
         "preferences":            state.get("preferences", []),
         # Trimmed: only fields the LLM needs for scheduling decisions
-        "places":                 _slim(retrieved.get("places", []), _PLACE_FIELDS),
-        "food":                   _slim(retrieved.get("food", []), _FOOD_FIELDS),
+        "places":                 _slim(retrieved.get("places", [])[:place_limit], _PLACE_FIELDS),
+        "food":                   _slim(retrieved.get("food", [])[:food_limit], _FOOD_FIELDS),
         "hotels":                 _slim(retrieved.get("hotels", []), _HOTEL_FIELDS),
         "weather":                retrieved.get("weather", {}),
-        "combos":                 retrieved.get("combos", []),
+        "combos":                 _slim(retrieved.get("combos", [])[:3], _COMBO_FIELDS),
     }
 
     user_msg = (
         f"Tạo lịch trình cho chuyến đi:\n"
-        f"{json.dumps(context, ensure_ascii=False, indent=2)}"
+        f"{_compact_json(context)}"
     )
 
     if violations:
         user_msg += (
             f"\n\n⚠️ RETRY #{version} — Validator phát hiện {len(violations)} lỗi cần sửa:\n"
-            + json.dumps(violations, ensure_ascii=False, indent=2)
+            + _compact_json(violations)
         )
 
     messages = [

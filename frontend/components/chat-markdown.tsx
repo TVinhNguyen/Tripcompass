@@ -8,38 +8,35 @@ import type { Components } from "react-markdown"
 const components: Components = {
   // Headings
   h1: ({ children }) => (
-    <h3 className="text-base font-bold text-[#1a1a1a] mt-3 mb-1.5 first:mt-0">{children}</h3>
+    <h3 className="mt-5 mb-2 text-[17px] font-semibold leading-7 text-[#1a1a1a] first:mt-0">{children}</h3>
   ),
   h2: ({ children }) => (
-    <h4 className="text-sm font-bold text-[#1a1a1a] mt-3 mb-1 first:mt-0">{children}</h4>
+    <h4 className="mt-4 mb-1.5 text-base font-semibold leading-7 text-[#1a1a1a] first:mt-0">{children}</h4>
   ),
   h3: ({ children }) => (
-    <h5 className="text-sm font-semibold text-[#1a1a1a] mt-2 mb-1 first:mt-0">{children}</h5>
+    <h5 className="mt-3 mb-1 text-[15px] font-semibold leading-6 text-[#1a1a1a] first:mt-0">{children}</h5>
   ),
 
   // Paragraphs
-  p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+  p: ({ children }) => <p className="mb-3 text-[15px] leading-7 text-[#2b2925] last:mb-0 sm:text-base">{children}</p>,
 
   // Bold / italic
   strong: ({ children }) => <strong className="font-semibold text-[#1a1a1a]">{children}</strong>,
   em: ({ children }) => <em className="italic text-[#6b6b6b]">{children}</em>,
 
   // Lists
-  ul: ({ children }) => <ul className="mb-2 last:mb-0 space-y-0.5 ml-0">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-2 last:mb-0 space-y-0.5 ml-4 list-decimal">{children}</ol>,
+  ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>,
   li: ({ children }) => (
-    <li className="text-sm leading-relaxed flex items-start gap-1.5">
-      <span className="mt-1.5 w-1 h-1 bg-[#3d5a3d] rounded-full shrink-0 only:hidden" />
-      <span className="flex-1">{children}</span>
-    </li>
+    <li className="pl-0.5 text-[15px] leading-7 text-[#2b2925] marker:text-[#8b8378] sm:text-base [&>p]:mb-0">{children}</li>
   ),
 
   // Horizontal rule
-  hr: () => <hr className="my-3 border-t border-[#e8e2d9]" />,
+  hr: () => <hr className="my-4 border-t border-[#e8e2d9]" />,
 
   // Links
   a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#3d5a3d] underline hover:text-[#2a4a2a]">
+    <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium text-[#315431] underline underline-offset-2 hover:text-[#263f26]">
       {children}
     </a>
   ),
@@ -49,13 +46,13 @@ const components: Components = {
     const isBlock = className?.includes("language-")
     if (isBlock) {
       return (
-        <code className="block bg-[#1a1a1a] text-[#e8e2d9] text-xs rounded-lg p-3 my-2 overflow-x-auto whitespace-pre">
+        <code className="my-3 block overflow-x-auto whitespace-pre rounded-lg bg-[#1f1e1b] p-3 text-xs leading-6 text-[#eee8dd]">
           {children}
         </code>
       )
     }
     return (
-      <code className="bg-[#f5f0e8] text-[#a8842a] text-[13px] px-1 py-0.5 rounded font-mono">
+      <code className="rounded bg-[#eee8dd] px-1 py-0.5 font-mono text-[13px] text-[#7b6120]">
         {children}
       </code>
     )
@@ -63,7 +60,7 @@ const components: Components = {
 
   // Tables (GFM)
   table: ({ children }) => (
-    <div className="my-2 overflow-x-auto">
+    <div className="my-3 overflow-x-auto rounded-lg border border-[#e8e2d9]">
       <table className="w-full text-sm border-collapse">{children}</table>
     </div>
   ),
@@ -79,7 +76,7 @@ const components: Components = {
 
   // Blockquote
   blockquote: ({ children }) => (
-    <blockquote className="border-l-2 border-[#d4a853] pl-3 my-2 text-[#6b6b6b] italic">
+    <blockquote className="my-3 border-l border-[#c9c0b3] pl-3 text-[#5f5a52]">
       {children}
     </blockquote>
   ),

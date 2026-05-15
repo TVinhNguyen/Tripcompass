@@ -71,7 +71,7 @@ export function HeroSection() {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-lg text-white/60 mb-8 max-w-md leading-relaxed"
+              className="text-lg text-white/75 mb-8 max-w-md leading-relaxed"
             >
               Tạo lịch trình du lịch Việt Nam hoàn hảo với công nghệ AI. Từ Hạ Long đến Phú Quốc, chúng tôi giúp bạn khám phá mọi vùng đất.
             </motion.p>

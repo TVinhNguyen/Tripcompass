@@ -2,14 +2,39 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, TrendingUp } from "lucide-react";
+import { ArrowRight, Calendar, MapPin, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { ItineraryCard } from "./itinerary-card";
 import { apiFetch } from "@/lib/api";
 import type { Itinerary, PaginatedList } from "@/lib/types";
 
+const fallbackTrips = [
+  {
+    title: "Hạ Long chậm rãi",
+    destination: "Quảng Ninh",
+    duration: "3 ngày",
+    image: "https://images.unsplash.com/photo-1528127269322-539801943592?w=800&q=80",
+    prompt: "Tạo lịch trình Hạ Long 3 ngày thư giãn, có du thuyền và hải sản địa phương",
+  },
+  {
+    title: "Hội An cuối tuần",
+    destination: "Quảng Nam",
+    duration: "2 ngày",
+    image: "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800&q=80",
+    prompt: "Tạo lịch trình Hội An 2 ngày cho cặp đôi, ưu tiên phố cổ và quán ăn địa phương",
+  },
+  {
+    title: "Sapa mùa núi",
+    destination: "Lào Cai",
+    duration: "4 ngày",
+    image: "https://images.unsplash.com/photo-1570366583862-f91883984fde?w=800&q=80",
+    prompt: "Tạo lịch trình Sapa 4 ngày, đi bản làng, săn mây và di chuyển hợp lý",
+  },
+];
+
 export function TrendingSection() {
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
+  const hasLiveItineraries = itineraries.length > 0;
 
   useEffect(() => {
     apiFetch<PaginatedList<Itinerary>>("/itineraries", {
@@ -17,10 +42,8 @@ export function TrendingSection() {
       auth: false,
     })
       .then(({ data }) => setItineraries(data || []))
-      .catch(() => {}); // silent fallback — no itineraries shown
+      .catch(() => {});
   }, []);
-
-  if (itineraries.length === 0) return null;
 
   return (
     <section className="relative py-20 lg:py-28 bg-[#f5f0e8] overflow-hidden">
@@ -49,7 +72,9 @@ export function TrendingSection() {
               <span className="text-[#c4785a]"> được yêu thích</span>
             </h2>
             <p className="text-[#6b6b6b] text-base lg:text-lg leading-relaxed">
-              Những hành trình được cộng đồng đánh giá cao và chia sẻ nhiều nhất trong tuần qua.
+              {hasLiveItineraries
+                ? "Những hành trình được cộng đồng đánh giá cao và chia sẻ nhiều nhất trong tuần qua."
+                : "Một vài gợi ý để bạn bắt đầu nhanh khi chưa có lịch trình cộng đồng mới."}
             </p>
           </div>
 
@@ -64,13 +89,57 @@ export function TrendingSection() {
 
         {/* Clean 3-column grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-          {itineraries.map((itinerary, index) => (
-            <ItineraryCard
-              key={itinerary.id}
-              itinerary={itinerary}
-              index={index}
-            />
-          ))}
+          {hasLiveItineraries
+            ? itineraries.map((itinerary, index) => (
+              <ItineraryCard
+                key={itinerary.id}
+                itinerary={itinerary}
+                index={index}
+              />
+            ))
+            : fallbackTrips.map((trip, index) => (
+              <motion.div
+                key={trip.title}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.08 }}
+                viewport={{ once: true }}
+              >
+                <Link
+                  href={`/ai-planner?q=${encodeURIComponent(trip.prompt)}`}
+                  className="group block h-full overflow-hidden rounded-2xl border border-[#e8e2d9] bg-white transition-all duration-300 hover:-translate-y-1 hover:border-[#c4785a]/30 hover:shadow-xl"
+                >
+                  <div className="relative aspect-[16/10] overflow-hidden">
+                    <div
+                      className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
+                      style={{ backgroundImage: `url('${trip.image}')` }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a]/70 via-[#1a1a1a]/10 to-transparent" />
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <h3 className="text-xl font-semibold leading-tight tracking-tight text-white">
+                        {trip.title}
+                      </h3>
+                      <div className="mt-2 flex items-center gap-3 text-sm text-white/80">
+                        <span className="inline-flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" />
+                          {trip.destination}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {trip.duration}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-5">
+                    <span className="text-sm font-medium text-[#1a1a1a]">
+                      Tạo lịch trình tương tự
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-[#c4785a] transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
         </div>
       </div>
     </section>
