@@ -68,7 +68,7 @@ services:
   # ─────────────────────────── Application ─────────────────────────────────────
 
   9router:
-    image: antiantiops/9router:${NINEROUTER_IMAGE_TAG:-0.3.69}
+    image: antiantiops/9router:${NINEROUTER_IMAGE_TAG:-0.4.41}
     restart: unless-stopped
     environment:
       JWT_SECRET: ${NINEROUTER_JWT_SECRET}
