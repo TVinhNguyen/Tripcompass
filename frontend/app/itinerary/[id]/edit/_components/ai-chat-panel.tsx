@@ -81,10 +81,14 @@ export function AIChatPanel({
         const lbl = label ?? getToolLabel(tool).vi;
         setToolRunning(`${getToolLabel(tool).icon} ${lbl}`);
       },
+      onThinking() {
+        setToolRunning((prev) => prev ?? "🤔 AI đang suy nghĩ...");
+      },
       onToken(token) {
         setMessages((prev) =>
           prev.map((m) => (m.id === aiMsgId ? { ...m, content: m.content + token } : m)),
         );
+        setToolRunning((prev) => (prev === "🤔 AI đang suy nghĩ..." ? null : prev));
       },
       onDone(newSessionId, fullText, plan, toolCalls) {
         setSessionId(newSessionId);

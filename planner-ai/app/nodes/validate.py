@@ -25,6 +25,35 @@ FOOD_SLOT_TYPES = {"breakfast", "lunch", "dinner"}
 BUFFER_SLOT_TYPES = {"buffer", "evening", "transit"}
 EARTH_RADIUS_KM = 6371.0
 
+RETRYABLE_VIOLATION_TYPES = {
+    "HALLUCINATED_PLACE",
+    "INCOMPLETE_SCHEDULE",
+    "INVALID_TIME_RANGE",
+    "CLOSED_HOURS",
+    "TIME_OVERLAP",
+    "INSUFFICIENT_TRAVEL_TIME",
+}
+
+
+def _violation(
+    violation_type: str,
+    day,
+    message: str,
+    place: str | None = None,
+) -> dict:
+    retryable = violation_type in RETRYABLE_VIOLATION_TYPES
+    violation = {
+        "type": violation_type,
+        "rule": violation_type,
+        "severity": "error" if retryable else "warning",
+        "retryable": retryable,
+        "day": day,
+        "message": message,
+    }
+    if place is not None:
+        violation["place"] = place
+    return violation
+
 
 def _time_to_mins(t: str) -> int:
     """Convert 'HH:MM' → minutes since midnight. Returns 0 on bad input
@@ -107,17 +136,17 @@ def node_validate(state: TravelPlanState) -> dict:
         expected_days = 0
 
     if not days:
-        violations.append({
-            "type":    "INCOMPLETE_SCHEDULE",
-            "day":     "all",
-            "message": "Schedule không có ngày nào.",
-        })
+        violations.append(_violation(
+            "INCOMPLETE_SCHEDULE",
+            "all",
+            "Schedule không có ngày nào.",
+        ))
     elif expected_days > 0 and len(days) != expected_days:
-        violations.append({
-            "type":    "INCOMPLETE_SCHEDULE",
-            "day":     "all",
-            "message": f"Schedule có {len(days)} ngày nhưng yêu cầu {expected_days} ngày.",
-        })
+        violations.append(_violation(
+            "INCOMPLETE_SCHEDULE",
+            "all",
+            f"Schedule có {len(days)} ngày nhưng yêu cầu {expected_days} ngày.",
+        ))
 
     # Track across days
     seen_place_ids: dict[str, int] = {}  # id → first day_num
@@ -142,16 +171,16 @@ def node_validate(state: TravelPlanState) -> dict:
                 start_min = _time_to_mins(start_str)
                 end_min = _time_to_mins(end_str)
                 if end_min < start_min:
-                    violations.append({
-                        "type":    "INVALID_TIME_RANGE",
-                        "day":     day_num,
-                        "place":   place_name,
-                        "message": (
+                    violations.append(_violation(
+                        "INVALID_TIME_RANGE",
+                        day_num,
+                        (
                             f"'{place_name}' có khung giờ {start_str}–{end_str} qua nửa đêm. "
                             "Mỗi slot phải nằm trong cùng một ngày; hãy kết thúc trước 23:59 "
                             "hoặc chuyển phần sau nửa đêm sang ngày kế tiếp."
                         ),
-                    })
+                        place_name,
+                    ))
                     invalid_time = True
 
             if slot_type in BUFFER_SLOT_TYPES or not place_id:
@@ -159,12 +188,12 @@ def node_validate(state: TravelPlanState) -> dict:
 
             # ── 1. HALLUCINATED_PLACE ──────────────────────────────────────
             if place_id not in valid_ids:
-                violations.append({
-                    "type":    "HALLUCINATED_PLACE",
-                    "day":     day_num,
-                    "place":   place_name,
-                    "message": f"'{place_name}' không có trong danh sách địa điểm được retrieve. LLM có thể đã bịa.",
-                })
+                violations.append(_violation(
+                    "HALLUCINATED_PLACE",
+                    day_num,
+                    f"'{place_name}' không có trong danh sách địa điểm được retrieve. LLM có thể đã bịa.",
+                    place_name,
+                ))
                 continue  # skip further checks on this slot
 
             place = place_index[place_id]
@@ -174,24 +203,24 @@ def node_validate(state: TravelPlanState) -> dict:
             breakfast_exempt = slot_type == "breakfast"
             if hours and not breakfast_exempt and "00:00-24:00" not in hours:
                 if not _fits_hours(hours, start_str, end_str):
-                    violations.append({
-                        "type":    "CLOSED_HOURS",
-                        "day":     day_num,
-                        "place":   place_name,
-                        "message": f"'{place_name}' m\u1edf c\u1eeda {hours} nh\u01b0ng "
-                                   f"\u0111\u01b0\u1ee3c x\u1ebfp {start_str}\u2013{end_str}.",
-                    })
+                    violations.append(_violation(
+                        "CLOSED_HOURS",
+                        day_num,
+                        f"'{place_name}' mở cửa {hours} nhưng "
+                        f"được xếp {start_str}–{end_str}.",
+                        place_name,
+                    ))
 
             # ── 3. DUPLICATE_PLACE ─────────────────────────────────────────
             if place_id in seen_place_ids:
                 first_day = seen_place_ids[place_id]
                 if first_day != day_num:
-                    violations.append({
-                        "type":    "DUPLICATE_PLACE",
-                        "day":     day_num,
-                        "place":   place_name,
-                        "message": f"'{place_name}' xuất hiện ở cả ngày {first_day} và ngày {day_num}.",
-                    })
+                    violations.append(_violation(
+                        "DUPLICATE_PLACE",
+                        day_num,
+                        f"'{place_name}' xuất hiện ở cả ngày {first_day} và ngày {day_num}.",
+                        place_name,
+                    ))
             else:
                 seen_place_ids[place_id] = day_num
 
@@ -211,13 +240,13 @@ def node_validate(state: TravelPlanState) -> dict:
             _, end_a, name_a = day_times[i]
             start_b, _, name_b = day_times[i + 1]
             if end_a > start_b:
-                violations.append({
-                    "type":    "TIME_OVERLAP",
-                    "day":     day_num,
-                    "place":   f"{name_a} / {name_b}",
-                    "message": f"'{name_a}' kết thúc {end_a//60:02d}:{end_a%60:02d} "
-                               f"nhưng '{name_b}' bắt đầu lúc {start_b//60:02d}:{start_b%60:02d}.",
-                })
+                violations.append(_violation(
+                    "TIME_OVERLAP",
+                    day_num,
+                    f"'{name_a}' kết thúc {end_a//60:02d}:{end_a%60:02d} "
+                    f"nhưng '{name_b}' bắt đầu lúc {start_b//60:02d}:{start_b%60:02d}.",
+                    f"{name_a} / {name_b}",
+                ))
 
         # ── 7. INSUFFICIENT_TRAVEL_TIME (within day) ──────────────────────
         route_slots.sort(key=lambda x: x[0])
@@ -232,30 +261,31 @@ def node_validate(state: TravelPlanState) -> dict:
             required_min = _estimate_travel_min(distance_km)
             gap_min = start_b - end_a
             if gap_min < required_min:
-                violations.append({
-                    "type":    "INSUFFICIENT_TRAVEL_TIME",
-                    "day":     day_num,
-                    "place":   f"{name_a} / {name_b}",
-                    "message": (
+                violations.append(_violation(
+                    "INSUFFICIENT_TRAVEL_TIME",
+                    day_num,
+                    (
                         f"'{name_a}' → '{name_b}' cần khoảng {required_min} phút di chuyển "
                         f"({distance_km:.1f}km) nhưng lịch chỉ chừa {gap_min} phút."
                     ),
-                })
+                    f"{name_a} / {name_b}",
+                ))
 
     # ── 8. OVER_BUDGET ────────────────────────────────────────────────────
     if attr_budget > 0 and total_attr_spend > attr_budget:
-        violations.append({
-            "type":    "OVER_BUDGET",
-            "day":     "all",
-            "message": (
+        violations.append(_violation(
+            "OVER_BUDGET",
+            "all",
+            (
                 f"Tổng chi phí attractions {total_attr_spend:,}đ "
                 f"vượt quá budget {attr_budget:,}đ."
             ),
-        })
+        ))
 
     passed = len(violations) == 0
     return {
         "violations":        violations,
+        "retryable_violations": [v for v in violations if v.get("retryable")],
         "validation_passed": passed,
         "retry_count":       state.get("retry_count", 0) + (0 if passed else 1),
     }
@@ -270,6 +300,8 @@ def route_after_validate(state: TravelPlanState) -> str:
 
     if state.get("validation_passed"):
         return "enrich"
-    if state.get("retry_count", 0) >= config.MAX_SCHEDULE_RETRIES:
+    if state.get("retry_count", 0) > config.MAX_SCHEDULE_RETRIES:
         return "enrich"   # proceed with best-effort plan + warnings
+    if not any(v.get("retryable") for v in state.get("violations", [])):
+        return "enrich"
     return "schedule"     # retry Node 5

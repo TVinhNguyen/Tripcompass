@@ -57,8 +57,8 @@ export function CTASection() {
               size="lg"
               className="bg-[#d4a853] hover:bg-[#c4985a] text-[#1a1a1a] border-0 rounded-full px-10 py-6 text-base font-medium transition-all hover:shadow-xl hover:shadow-[#d4a853]/20"
             >
-              <Link href="/planner" className="flex items-center gap-3">
-                <span>Tạo lịch trình</span>
+              <Link href="/ai-planner" className="flex items-center gap-3">
+                <span>Lên kế hoạch với AI</span>
                 <ArrowRight className="w-5 h-5" />
               </Link>
             </Button>

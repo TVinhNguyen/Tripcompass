@@ -6,23 +6,10 @@ import json
 from typing import Any
 
 from app.services.redis import get_redis
+from app.services.normalize import normalize_destination, normalize_preferences
 from app import config
 
 CACHE_KEY_VERSION = "v2"
-
-
-# ── Key building ──────────────────────────────────────────────────────────────
-
-def _normalize_destination(destination: str) -> str:
-    return " ".join((destination or "").strip().lower().split())
-
-
-def _normalize_preferences(preferences: list[str] | None) -> list[str]:
-    return sorted({
-        str(pref).strip().lower()
-        for pref in (preferences or [])
-        if str(pref).strip()
-    })
 
 
 def _get(request: Any, name: str, default: Any = None) -> Any:
@@ -36,13 +23,13 @@ def _hash_payload(payload: dict[str, Any]) -> str:
 
 def destination_cache_scope(destination: str) -> str:
     """Stable destination scope used for granular cache invalidation."""
-    normalized = _normalize_destination(destination)
+    normalized = normalize_destination(destination)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
 def build_plan_cache_key(request: Any) -> str:
     """Build a collision-resistant key from all plan-affecting request fields."""
-    destination = _normalize_destination(request.destination)
+    destination = normalize_destination(request.destination)
     payload = {
         "version": CACHE_KEY_VERSION,
         "destination": destination,
@@ -57,7 +44,7 @@ def build_plan_cache_key(request: Any) -> str:
         "daily_start_time": _get(request, "daily_start_time"),
         "daily_end_time": _get(request, "daily_end_time"),
         "time_strictness": _get(request, "time_strictness", "balanced"),
-        "preferences": _normalize_preferences(getattr(request, "preferences", None)),
+        "preferences": normalize_preferences(getattr(request, "preferences", None)),
         "need_hotel": getattr(request, "need_hotel", True),
         "need_flight": getattr(request, "need_flight", False),
         # raw_input intentionally excluded: it's free-text that varies by typo /

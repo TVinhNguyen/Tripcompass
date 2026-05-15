@@ -53,6 +53,9 @@ async def generate_plan(req: PlanRequest):
             preferences=req.preferences,
             need_hotel=req.need_hotel,
             need_flight=req.need_flight,
+            # /plan direct serves the structured-form UI which renders enrich
+            # descriptions/tips. Chat path opts out of enrich for speed.
+            include_enrich=True,
         )
     except UnresolvedDestinationError as e:
         logger.info(f"[/plan] unresolved destination: {req.destination!r}")

@@ -1,5 +1,11 @@
 import pytest
-from app.streaming import _to_generate_response, _ThinkStripper, _strip_thinking
+
+from app.streaming import _to_generate_response, _ThinkStripper, _strip_thinking, stream_chat_response
+
+
+class _FakeAIMessage:
+    def __init__(self, content: str):
+        self.content = content
 
 
 # ─── _ThinkStripper ──────────────────────────────────────────────────────────
@@ -194,3 +200,82 @@ def test_to_generate_response_budget_exceeded():
     # Total budget (200k) < Spent (900k) -> total_budget is updated to Spent
     assert recap["total_budget_vnd"] == 900000
     assert recap["remaining_vnd"] == 0
+
+
+def _payloads(chunks):
+    import json
+
+    out = []
+    for chunk in chunks:
+        assert chunk.startswith("data: ")
+        out.append(json.loads(chunk.removeprefix("data: ").strip()))
+    return out
+
+
+class _EndOnlyAgent:
+    async def astream_events(self, *_args, **_kwargs):
+        yield {
+            "event": "on_chat_model_end",
+            "run_id": "r1",
+            "data": {"output": _FakeAIMessage(content="Xin chào từ provider buffer.")},
+        }
+
+
+@pytest.mark.asyncio
+async def test_stream_chat_response_uses_chat_model_end_when_provider_buffers():
+    chunks = [chunk async for chunk in stream_chat_response(_EndOnlyAgent(), [], "s1")]
+    events = _payloads(chunks)
+
+    streamed_text = "".join(e.get("content", "") for e in events if e["type"] == "token")
+    assert "provider buffer" in streamed_text
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["full_text"] == "Xin chào từ provider buffer."
+
+
+class _PlanToolAgent:
+    async def astream_events(self, *_args, **_kwargs):
+        yield {"event": "on_tool_start", "name": "create_travel_plan", "data": {}}
+        yield {
+            "event": "on_tool_end",
+            "name": "create_travel_plan",
+            "data": {
+                "output": {
+                    "success": True,
+                    "destination": "Đà Nẵng",
+                    "num_days": 1,
+                    "budget_vnd": 1000000,
+                    "plan": {
+                        "days": [
+                            {
+                                "day_num": 1,
+                                "date_str": "2026-06-01",
+                                "slots": [
+                                    {
+                                        "start": "08:00",
+                                        "end": "10:00",
+                                        "slot_type": "morning_activity",
+                                        "place_id": "p1",
+                                        "place_name": "Bà Nà Hills",
+                                        "price_vnd": 500000,
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                }
+            },
+        }
+        raise AssertionError("stream should stop before the final LLM call")
+
+
+@pytest.mark.asyncio
+async def test_stream_chat_response_fast_finishes_after_plan_tool():
+    chunks = [chunk async for chunk in stream_chat_response(_PlanToolAgent(), [], "s1")]
+    events = _payloads(chunks)
+
+    assert any(e["type"] == "tool_start" and e["tool"] == "create_travel_plan" for e in events)
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["plan"]["days"][0]["slots"][0]["place"]["name"] == "Bà Nà Hills"
+    assert "lịch trình" in done["full_text"].lower()

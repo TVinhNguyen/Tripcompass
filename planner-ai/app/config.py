@@ -51,11 +51,19 @@ USE_STRUCTURED_SCHEDULE = os.environ.get("USE_STRUCTURED_SCHEDULE", "false").low
 
 
 def _openai_compat_kwargs() -> dict:
-    """Shared kwargs for every ChatOpenAI-compatible client."""
+    """Shared kwargs for every ChatOpenAI-compatible client.
+
+    streaming=True is explicit so the provider sees `stream: true` in the
+    request body. Without it some OpenAI-compatible gateways (NVIDIA NIM,
+    self-hosted proxies) silently buffer the response — astream_events
+    then fires a single on_chat_model_end with the whole text, and the
+    frontend appears to "not stream".
+    """
     return {
         "temperature":     LLM_TEMPERATURE,
         "request_timeout": LLM_REQUEST_TIMEOUT,
         "max_retries":     LLM_MAX_RETRIES,
+        "streaming":       True,
     }
 
 
@@ -231,13 +239,18 @@ ENABLE_REAL_PRICES    = os.environ.get("ENABLE_REAL_PRICE_CHECK", "true").lower(
 # ── Tuning ────────────────────────────────────────────────────────────────────
 MAX_TOOL_ROUNDS       = int(os.environ.get("MAX_TOOL_ROUNDS",         "8"))
 TOOL_TIMEOUT          = int(os.environ.get("TOOL_TIMEOUT_SECONDS",    "5"))
-MAX_SCHEDULE_RETRIES  = int(os.environ.get("MAX_SCHEDULE_RETRIES",    "2"))
-# Schedule LLM is the long step — free-tier providers easily exceed 40s on a
-# full Đà Nẵng / Hà Nội payload. Default 90s; override per env if needed.
-SCHEDULE_LLM_TIMEOUT  = int(os.environ.get("SCHEDULE_LLM_TIMEOUT_SECONDS", "90"))
-# Enrichment is cosmetic (descriptions / tips). Keep it short so a slow LLM
-# doesn't tank total planning latency; if it times out we just skip prose.
-ENRICH_LLM_TIMEOUT    = int(os.environ.get("ENRICH_LLM_TIMEOUT_SECONDS", "30"))
+# Default 1 retry (was 2). Combined with retryable filtering in node_validate,
+# this caps worst-case schedule time at 2 LLM calls instead of 3 — and only
+# retries when violations are truly retryable (HALLUCINATED_PLACE, CLOSED_HOURS,
+# TIME_OVERLAP, …). Soft warnings (OVER_BUDGET, DUPLICATE_PLACE) never retry.
+MAX_SCHEDULE_RETRIES  = int(os.environ.get("MAX_SCHEDULE_RETRIES",    "1"))
+# Default 45s (was 90s) — fail fast and use the deterministic fallback rather
+# than letting a flaky free-tier provider stall the whole pipeline.
+SCHEDULE_LLM_TIMEOUT  = int(os.environ.get("SCHEDULE_LLM_TIMEOUT_SECONDS", "45"))
+# Enrichment is cosmetic (descriptions / tips). The chat path passes
+# include_enrich=False so this only fires for /plan direct callers; keep it
+# short (8s) so a slow LLM doesn't tank total /plan latency.
+ENRICH_LLM_TIMEOUT    = int(os.environ.get("ENRICH_LLM_TIMEOUT_SECONDS", "8"))
 
 TODAY = datetime.now().strftime("%B %d, %Y")
 

@@ -1,5 +1,10 @@
 """
-routes/cache.py — Cache management endpoints.
+routes/cache.py — Admin endpoints for flushing Redis working memory.
+
+Manages two cache categories:
+  - Sessions: chat history (chat:*) + session metadata (session:meta:*) in Redis.
+    These are planner-ai's own working memory, NOT Go/Postgres user sessions.
+  - Plans: cached plan results keyed by destination + parameters.
 """
 import secrets
 
@@ -26,10 +31,10 @@ router = APIRouter(prefix="/cache", tags=["cache"], dependencies=[Depends(requir
 
 @router.delete("")
 async def flush_all():
-    """Flush ALL caches: sessions + plans."""
+    """Flush ALL Redis working memory: chat history + session metadata + plan caches."""
     sessions = await flush_all_sessions()
     plans    = await flush_all_plans()
-    return {"deleted": sessions + plans, "sessions": sessions, "plans": plans}
+    return {"deleted": sessions + plans, "chat_sessions": sessions, "plans": plans}
 
 
 @router.delete("/plans")

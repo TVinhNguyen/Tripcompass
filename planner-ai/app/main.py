@@ -19,7 +19,6 @@ from app.services.database import get_pool, close_pool
 from app.services.redis import get_redis, close_redis, ping_redis
 from app.routes.chat     import router as chat_router
 from app.routes.plan     import router as plan_router
-from app.routes.sessions import router as sessions_router
 from app.routes.cache    import router as cache_router
 
 
@@ -101,7 +100,6 @@ async def attach_request_id(request: Request, call_next):
 
 app.include_router(chat_router)
 app.include_router(plan_router)
-app.include_router(sessions_router)
 app.include_router(cache_router)
 
 

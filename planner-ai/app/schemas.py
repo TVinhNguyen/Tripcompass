@@ -38,13 +38,6 @@ class StreamEvent(BaseModel):
     message: Optional[str] = None
 
 
-class ChatResponse(BaseModel):
-    session_id:  str
-    response:    str
-    plan:        Optional[dict] = None  # populated when create_travel_plan is called
-    tool_calls:  list[str] = []
-    duration_ms: int = 0
-
 
 # ── POST /plan ────────────────────────────────────────────────────────────────
 
@@ -93,20 +86,3 @@ class PlanResponse(BaseModel):
     violations:        list[dict]
     duration_ms:       int
     cache_hit:         bool
-
-
-# ── Session management ────────────────────────────────────────────────────────
-
-class SessionInfo(BaseModel):
-    session_id:    str
-    created_at:    Optional[str] = None
-    last_active:   Optional[str] = None
-    message_count: int = 0
-    destination:   Optional[str] = None
-
-
-class SessionHistoryResponse(BaseModel):
-    session_id:    str
-    messages:      list[dict]
-    message_count: int
-    meta:          Optional[dict] = None
