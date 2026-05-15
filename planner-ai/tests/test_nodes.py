@@ -72,7 +72,12 @@ def load_schedule_helpers(monkeypatch):
     messages_mod.HumanMessage = object
     monkeypatch.setitem(sys.modules, "langchain_core.messages", messages_mod)
 
-    fake_config = _types.SimpleNamespace(TOOL_TIMEOUT=5, llm=None, SCHEDULE_LLM_TIMEOUT=90)
+    fake_config = _types.SimpleNamespace(
+        TOOL_TIMEOUT=5,
+        llm=None,
+        SCHEDULE_LLM_TIMEOUT=90,
+        MAX_SCHEDULE_RETRIES=1,
+    )
     monkeypatch.setattr(app, "config", fake_config, raising=False)
     monkeypatch.setitem(sys.modules, "app.config", fake_config)
 
@@ -395,6 +400,75 @@ class TestNodeValidate:
         types = [v["type"] for v in result["violations"]]
         assert "INCOMPLETE_SCHEDULE" in types
 
+    # ── Violation shape (FE contract) ────────────────────────────────────
+    def test_violation_shape_matches_frontend_contract(self):
+        """FE Violation type expects {rule, severity: error|warning, message, day?}."""
+        schedule = make_schedule([
+            make_slot("fake-id-xyz", "Bịa Đặt Island", 500_000),
+        ])
+        state = self._state_with_schedule(schedule)
+        result = node_validate(state)
+        v = next(x for x in result["violations"] if x["type"] == "HALLUCINATED_PLACE")
+        assert v["rule"] == "HALLUCINATED_PLACE"
+        assert v["severity"] in ("error", "warning")
+        assert "message" in v
+        assert "retryable" in v
+
+    def test_hallucinated_place_is_retryable_error(self):
+        schedule = make_schedule([
+            make_slot("fake-id-xyz", "Bịa Đặt Island", 500_000),
+        ])
+        state = self._state_with_schedule(schedule)
+        result = node_validate(state)
+        v = next(x for x in result["violations"] if x["type"] == "HALLUCINATED_PLACE")
+        assert v["severity"] == "error"
+        assert v["retryable"] is True
+
+    def test_over_budget_is_warning_not_retryable(self):
+        """OVER_BUDGET is a soft warning — should not trigger retry."""
+        schedule = make_schedule([
+            make_slot("place-1", "Ngũ Hành Sơn", 900_000),
+        ])
+        state = self._state_with_schedule(schedule, attr_budget=500_000)
+        result = node_validate(state)
+        v = next(x for x in result["violations"] if x["type"] == "OVER_BUDGET")
+        assert v["severity"] == "warning"
+        assert v["retryable"] is False
+
+    def test_duplicate_place_is_warning_not_retryable(self):
+        schedule = make_schedule(
+            [make_slot("place-1", "Ngũ Hành Sơn", 40_000, "09:00", "11:00")],
+            [make_slot("place-1", "Ngũ Hành Sơn", 40_000, "09:00", "11:00")],
+        )
+        state = self._state_with_schedule(schedule)
+        result = node_validate(state)
+        v = next(x for x in result["violations"] if x["type"] == "DUPLICATE_PLACE")
+        assert v["severity"] == "warning"
+        assert v["retryable"] is False
+
+    def test_retryable_violations_populated(self):
+        """validate must expose retryable_violations as a separate key for the
+        planning_service retry loop — derived once, not re-filtered each iter."""
+        schedule = make_schedule([
+            make_slot("fake-xyz", "Bịa Đặt", 999_999),    # retryable
+            make_slot("place-1", "Ngũ Hành Sơn", 900_000),  # non-retryable (with low budget)
+        ])
+        state = self._state_with_schedule(schedule, attr_budget=500_000)
+        result = node_validate(state)
+        retryable_rules = [v["rule"] for v in result["retryable_violations"]]
+        assert "HALLUCINATED_PLACE" in retryable_rules
+        assert "OVER_BUDGET" not in retryable_rules
+
+    def test_route_skips_retry_when_only_warnings(self):
+        """When violations exist but none are retryable, route_after_validate
+        must go to enrich (not schedule) — saves an LLM call."""
+        schedule = make_schedule([
+            make_slot("place-1", "Ngũ Hành Sơn", 900_000),
+        ])
+        state = self._state_with_schedule(schedule, attr_budget=500_000)
+        state.update(node_validate(state))
+        assert route_after_validate(state) == "enrich"
+
 
 class TestFallbackSchedule:
 
@@ -620,10 +694,13 @@ class TestRouteAfterValidate:
         assert route_after_validate(state) == "enrich"
 
     def test_routes_to_schedule_on_first_failure(self):
-        state = make_state(validation_passed=False, retry_count=0)
+        state = make_state(validation_passed=False, retry_count=1)
+        state["violations"] = [{"type": "HALLUCINATED_PLACE", "retryable": True}]
         assert route_after_validate(state) == "schedule"
 
     def test_routes_to_enrich_on_max_retries(self):
-        # After 2 retries → proceed anyway
-        state = make_state(validation_passed=False, retry_count=2)
+        # MAX_SCHEDULE_RETRIES=2 means initial attempt + 2 retries. The next
+        # failed validation proceeds with best-effort output.
+        state = make_state(validation_passed=False, retry_count=3)
+        state["violations"] = [{"type": "HALLUCINATED_PLACE", "retryable": True}]
         assert route_after_validate(state) == "enrich"

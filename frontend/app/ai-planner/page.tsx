@@ -2,8 +2,9 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, Suspense } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles, Send, Plus, Trash2, Loader2, MessageSquare,
@@ -40,10 +41,12 @@ interface UiMessage {
 // Main page
 // ---------------------------------------------------------------------------
 function AIPlannerContent() {
+  const searchParams = useSearchParams()
+  const initialQuery = searchParams.get("q") || ""
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<UiMessage[]>([])
-  const [input, setInput] = useState("")
+  const [input, setInput] = useState(initialQuery)
   const [streaming, setStreaming] = useState(false)
   const [toolRunning, setToolRunning] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -155,10 +158,19 @@ function AIPlannerContent() {
         setToolRunning(`${getToolLabel(tool).icon} ${lbl}`)
       },
 
+      onThinking() {
+        // Heartbeat from planner-ai while the LLM is silent (typically inside
+        // a <think> block on reasoning models). Show a generic indicator so
+        // the chat doesn't feel stuck — overwritten by tool_start / token.
+        setToolRunning((prev) => prev ?? "🤔 AI đang suy nghĩ...")
+      },
+
       onToken(token) {
         setMessages((prev) =>
           prev.map((m) => m.id === aiMsgId ? { ...m, content: m.content + token } : m)
         )
+        // First real token → drop the thinking placeholder.
+        setToolRunning((prev) => (prev === "🤔 AI đang suy nghĩ..." ? null : prev))
       },
 
       onDone(newSessionId, fullText, plan, toolCalls) {
@@ -532,7 +544,9 @@ function MessageBubble({ message, onRetry }: MessageBubbleProps) {
 export default function AIPlannerPage() {
   return (
     <RequireAuth>
-      <AIPlannerContent />
+      <Suspense>
+        <AIPlannerContent />
+      </Suspense>
     </RequireAuth>
   )
 }

@@ -18,6 +18,8 @@ export type StreamHandlers = {
   onToolStart?: (tool: string, label?: string) => void;
   /** Called for each streaming text token */
   onToken?: (text: string) => void;
+  /** Heartbeat — fired ~every 5s while the LLM is silent. Use for keep-alive UI. */
+  onThinking?: () => void;
   /** Called when the stream completes */
   onDone: (
     sessionId: string,
@@ -38,6 +40,7 @@ export type StreamHandlers = {
 type SseEvent =
   | { type: "tool_start"; tool: string; label?: string }
   | { type: "token"; content: string }
+  | { type: "thinking" }
   | {
       type: "done";
       session_id: string;
@@ -150,6 +153,9 @@ export async function streamChat(
             break;
           case "token":
             onToken?.(evt.content ?? "");
+            break;
+          case "thinking":
+            handlers.onThinking?.();
             break;
           case "done":
             onDone(

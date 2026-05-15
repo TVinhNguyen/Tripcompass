@@ -1,20 +1,22 @@
 """
-routes/chat.py — POST /chat and POST /chat/stream endpoints.
+routes/chat.py — POST /chat/stream (primary) and POST /chat/debug-stream (admin diagnostic).
+
+POST /chat (non-stream) was removed in Pha 2 refactor — no caller existed.
 """
 import json
-import time
 import uuid
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage
 
 from app.agent import get_chat_agent
-from app.schemas import ChatRequest, ChatResponse, StreamChatRequest
+from app.schemas import ChatRequest, StreamChatRequest
 from app.services.chat_history import (
     load_history, save_history, history_to_lc_messages,
     build_user_message, build_assistant_message,
 )
 from app.streaming import stream_chat_response
+from app.routes.cache import require_cache_admin
 from loguru import logger
 
 router = APIRouter(tags=["chat"])
@@ -29,74 +31,6 @@ def _itinerary_context_message(context: dict | None) -> str | None:
         "Hãy dùng dữ liệu này làm nguồn chính khi user hỏi về lịch trình đang chỉnh sửa. "
         "Nếu user yêu cầu tối ưu, thêm, xoá hoặc sắp xếp lại, hãy đưa ra đề xuất cụ thể "
         "theo ngày/giờ/hoạt động; đừng nói rằng bạn đã sửa DB vì chat này chỉ có quyền tư vấn."
-    )
-
-
-def _extract_result(result: dict) -> tuple[str, list[str], dict | None]:
-    """Extract (ai_text, tools_used, plan_data) from agent result.
-
-    plan_data is unwrapped to GenerateResponse shape: {days: [...], ...}
-    (FE expects `plan.days` at top-level, not `plan.plan.days`).
-    """
-    ai_text    = ""
-    tools_used = []
-    plan_data  = None
-
-    for msg in result.get("messages", []):
-        if isinstance(msg, AIMessage) and msg.content:
-            ai_text = msg.content
-        if hasattr(msg, "tool_calls"):
-            for tc in (msg.tool_calls or []):
-                tools_used.append(tc.get("name", ""))
-        if getattr(msg, "name", None) == "create_travel_plan":
-            try:
-                parsed = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
-                if isinstance(parsed, dict):
-                    # Unwrap: planning_service returns {success, plan: {days}, ...}
-                    inner = parsed.get("plan")
-                    if isinstance(inner, dict) and isinstance(inner.get("days"), list):
-                        plan_data = inner
-                    elif isinstance(parsed.get("days"), list):
-                        plan_data = parsed
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-    return ai_text, tools_used, plan_data
-
-
-@router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    t0         = time.time()
-    session_id = req.session_id or str(uuid.uuid4())
-
-    history  = await load_history(session_id)
-    messages = history_to_lc_messages(history)
-    context_msg = _itinerary_context_message(req.itinerary_context)
-    if context_msg:
-        messages.append(HumanMessage(content=context_msg))
-    messages.append(HumanMessage(content=req.message))
-
-    try:
-        result = await get_chat_agent().ainvoke({"messages": messages})
-    except Exception as e:
-        logger.error(f"[/chat] {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    ai_text, tools_used, plan_data = _extract_result(result)
-
-    await save_history(session_id, history + [
-        build_user_message(req.message),
-        build_assistant_message(ai_text, tool_calls=tools_used, has_plan=bool(plan_data)),
-    ])
-    logger.info(f"[/chat] session={session_id[:8]}… tools={tools_used} "
-                f"plan={'yes' if plan_data else 'no'} {int((time.time()-t0)*1000)}ms")
-
-    return ChatResponse(
-        session_id=session_id,
-        response=ai_text,
-        plan=plan_data,
-        tool_calls=tools_used,
-        duration_ms=int((time.time() - t0) * 1000),
     )
 
 
@@ -140,6 +74,48 @@ async def chat_stream(req: StreamChatRequest):
 
     return StreamingResponse(
         _generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ── Diagnostic: bypass agent, stream raw from LLM ─────────────────────────────
+@router.post("/chat/debug-stream", dependencies=[Depends(require_cache_admin)])
+async def chat_debug_stream(req: ChatRequest):
+    """Stream the user message directly through the LLM with no agent / tools.
+
+    Gated by X-Admin-Token header (reuses require_cache_admin dependency).
+
+    Use this to isolate where latency comes from:
+      - If THIS endpoint streams token-by-token in <1s → pipe (Caddy/backend/SSE)
+        is fine; the slowness is the agent + tools layer.
+      - If THIS endpoint also batches / takes 10+s → the LLM provider is the
+        bottleneck (it doesn't actually honor stream=true, or the model is slow).
+    """
+    from app.config import get_llm
+
+    async def _gen():
+        import time as _t
+        from langchain_core.messages import HumanMessage as _HM
+
+        started = _t.monotonic()
+        first_token_at = None
+        count = 0
+        async for chunk in get_llm().astream([_HM(content=req.message)]):
+            content = getattr(chunk, "content", "") or ""
+            if not content:
+                continue
+            count += 1
+            if first_token_at is None:
+                first_token_at = _t.monotonic() - started
+                logger.info(f"[debug-stream] first token at +{first_token_at:.2f}s")
+            yield f"data: {json.dumps({'type': 'token', 'content': content}, ensure_ascii=False)}\n\n"
+        total = _t.monotonic() - started
+        logger.info(f"[debug-stream] done — tokens={count} first={first_token_at} total={total:.2f}s")
+        yield f"data: {json.dumps({'type': 'done', 'tokens': count, 'first_token_s': first_token_at, 'total_s': total})}\n\n"
+
+    return StreamingResponse(
+        _gen(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
