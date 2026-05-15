@@ -3,11 +3,11 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
-  Search,
   ArrowRight,
   MapPin,
   Calendar,
   Users,
+  Sparkles,
 } from "lucide-react";
 
 export function HeroSection() {
@@ -76,28 +76,40 @@ export function HeroSection() {
               Tạo lịch trình du lịch Việt Nam hoàn hảo với công nghệ AI. Từ Hạ Long đến Phú Quốc, chúng tôi giúp bạn khám phá mọi vùng đất.
             </motion.p>
 
-            {/* Search Bar */}
-            <motion.div
+            {/* AI search → routes to /ai-planner with the prompt prefilled */}
+            <motion.form
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
               className="mb-8"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const data = new FormData(e.currentTarget)
+                const q = String(data.get("q") || "").trim()
+                window.location.href = q
+                  ? `/ai-planner?q=${encodeURIComponent(q)}`
+                  : "/ai-planner"
+              }}
             >
               <div className="flex items-center bg-white/5 border border-white/10 rounded-full p-1.5 hover:border-[#d4a853]/30 transition-colors max-w-xl">
                 <div className="flex items-center gap-3 flex-1 px-4">
-                  <Search className="w-5 h-5 text-white/40" />
+                  <Sparkles className="w-5 h-5 text-[#d4a853]" />
                   <input
+                    name="q"
                     type="text"
-                    placeholder="Bạn muốn đi đâu?"
+                    placeholder="Bạn muốn đi đâu? Hãy hỏi AI Planner..."
                     className="flex-1 bg-transparent border-none outline-none py-3 text-white placeholder-white/40"
                   />
                 </div>
-                <button className="flex items-center gap-2 px-6 py-3 bg-[#d4a853] hover:bg-[#c4985a] text-[#1a1a1a] rounded-full font-medium transition-all">
-                  <span>Tìm kiếm</span>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 px-6 py-3 bg-[#d4a853] hover:bg-[#c4985a] text-[#1a1a1a] rounded-full font-medium transition-all"
+                >
+                  <span>Hỏi AI</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
-            </motion.div>
+            </motion.form>
 
             {/* Quick Stats */}
             <motion.div

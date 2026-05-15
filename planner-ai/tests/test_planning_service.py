@@ -39,7 +39,12 @@ redis_asyncio_mod.Redis = object
 redis_asyncio_mod.from_url = lambda *args, **kwargs: None
 httpx_mod = types.ModuleType("httpx")
 httpx_mod.AsyncClient = object
+httpx_mod.TimeoutException = TimeoutError
+httpx_mod.ConnectError = ConnectionError
+httpx_mod.ReadError = OSError
+httpx_mod.HTTPStatusError = RuntimeError
 fastapi_mod = types.ModuleType("fastapi")
+tenacity_mod = types.ModuleType("tenacity")
 
 
 class FakeAPIRouter:
@@ -59,11 +64,16 @@ class FakeHTTPException(Exception):
 
 fastapi_mod.APIRouter = FakeAPIRouter
 fastapi_mod.HTTPException = FakeHTTPException
+tenacity_mod.retry = lambda *args, **kwargs: (lambda func: func)
+tenacity_mod.retry_if_exception = lambda predicate: predicate
+tenacity_mod.stop_after_attempt = lambda attempts: attempts
+tenacity_mod.wait_exponential = lambda **kwargs: kwargs
 sys.modules.setdefault("asyncpg", asyncpg_mod)
 sys.modules.setdefault("fastapi", fastapi_mod)
 sys.modules.setdefault("httpx", httpx_mod)
 sys.modules.setdefault("redis", redis_mod)
 sys.modules.setdefault("redis.asyncio", redis_asyncio_mod)
+sys.modules.setdefault("tenacity", tenacity_mod)
 
 
 class FakeStructuredTool:
@@ -100,20 +110,30 @@ class FakeTool:
         return json.dumps(self.payload, ensure_ascii=False)
 
 
+class FakeDataSource:
+    def __init__(self, payload):
+        self.payload = payload
+        self.calls = []
+
+    async def __call__(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.payload
+
+
 @pytest.mark.asyncio
 async def test_generate_travel_plan_returns_dict_and_passes_preferences(monkeypatch):
-    places_tool = FakeTool({
+    places_source = FakeDataSource({
         "places": [
             {"id": "p1", "name": "Museum", "hours": "08:00-17:00", "base_price": 10_000},
         ],
     })
-    food_tool = FakeTool({
+    food_source = FakeDataSource({
         "food": [
             {"id": "f1", "name": "Noodles", "hours": "06:00-21:00", "base_price": 50_000},
         ],
     })
-    weather_tool = FakeTool({"success": True, "month": 5, "rain_chance": 20})
-    combos_tool = FakeTool({
+    weather_source = FakeDataSource({"success": True, "month": 5, "rain_chance": 20})
+    combos_source = FakeDataSource({
         "combos": [
             {"id": "c1", "name": "City combo", "price_per_person": 300_000},
         ],
@@ -157,20 +177,20 @@ async def test_generate_travel_plan_returns_dict_and_passes_preferences(monkeypa
         }
 
     resolve_mod = importlib.import_module("app.nodes.resolve")
-    places_mod = importlib.import_module("app.tools.get_places")
-    food_mod = importlib.import_module("app.tools.get_food_venues")
-    weather_mod = importlib.import_module("app.tools.get_weather")
-    combos_mod = importlib.import_module("app.tools.get_combos")
+    places_mod = importlib.import_module("app.data_sources.places")
+    food_mod = importlib.import_module("app.data_sources.food")
+    weather_mod = importlib.import_module("app.data_sources.weather")
+    combos_mod = importlib.import_module("app.data_sources.combos")
     budget_mod = importlib.import_module("app.nodes.budget")
     schedule_mod = importlib.import_module("app.nodes.schedule")
     validate_mod = importlib.import_module("app.nodes.validate")
     enrich_mod = importlib.import_module("app.nodes.enrich")
 
     monkeypatch.setattr(resolve_mod, "resolve_destination", resolve_destination)
-    monkeypatch.setattr(places_mod, "get_places", places_tool)
-    monkeypatch.setattr(food_mod, "get_food_venues", food_tool)
-    monkeypatch.setattr(weather_mod, "get_weather", weather_tool)
-    monkeypatch.setattr(combos_mod, "get_combos", combos_tool)
+    monkeypatch.setattr(places_mod, "fetch_places", places_source)
+    monkeypatch.setattr(food_mod, "fetch_food_venues", food_source)
+    monkeypatch.setattr(weather_mod, "fetch_weather", weather_source)
+    monkeypatch.setattr(combos_mod, "fetch_combos", combos_source)
     monkeypatch.setattr(budget_mod, "node_budget", node_budget)
     monkeypatch.setattr(schedule_mod, "node_schedule", node_schedule)
     monkeypatch.setattr(validate_mod, "node_validate", node_validate)
@@ -197,10 +217,10 @@ async def test_generate_travel_plan_returns_dict_and_passes_preferences(monkeypa
     assert result["budget_tier"] == "standard"
     assert result["plan"] == {"days": [{"day_num": 1, "slots": []}]}
     assert result["warnings"] == ["resolve warning"]
-    assert places_tool.calls[0]["tags"] == ["culture", "food"]
-    assert food_tool.calls[0]["tags"] == ["culture", "food"]
-    assert weather_tool.calls[0] == {"destination": "Da Nang", "month": 5}
-    assert combos_tool.calls[0] == {"destination": "da nang"}
+    assert places_source.calls[0]["tags"] == ["culture", "food"]
+    assert food_source.calls[0]["tags"] == ["culture", "food"]
+    assert weather_source.calls[0] == {"destination": "Da Nang", "month": 5}
+    assert combos_source.calls[0] == {"destination": "da nang"}
     assert schedule_states[0]["retrieved_data"]["combos"] == [
         {"id": "c1", "name": "City combo", "price_per_person": 300_000},
     ]
@@ -298,3 +318,113 @@ def test_plan_request_accepts_preference_tags_alias():
     req = PlanRequest(destination="Da Nang", preference_tags=[" Food ", "culture", "food"])
 
     assert req.preferences == ["culture", "food"]
+
+
+# ── include_enrich flag ──────────────────────────────────────────────────────
+
+async def _run_pipeline_capturing_enrich(monkeypatch, include_enrich: bool) -> dict:
+    """Helper: run generate_travel_plan with all pipeline nodes mocked,
+    return {"called": bool, "result": dict} so tests can assert whether
+    node_enrich actually fired."""
+    enrich_called = {"value": False}
+
+    places_source = FakeDataSource({"places": []})
+    food_source = FakeDataSource({"food": []})
+    weather_source = FakeDataSource({"success": True, "month": 5})
+    combos_source = FakeDataSource({"combos": []})
+
+    async def resolve_destination(destination):
+        return {
+            "destination_id": "da nang",
+            "destination_name": "Da Nang",
+            "resolve_method": "exact",
+            "warnings": [],
+        }
+
+    def node_budget(state):
+        return {"budget_tier": "standard", "attr_budget": 500_000,
+                "food_budget": 200_000, "hotel_budget_per_night": 0,
+                "warnings": state.get("warnings", [])}
+
+    async def node_schedule(state):
+        return {
+            "draft_schedule": {"days": [{"day_num": 1, "slots": []}]},
+            "schedule_version": 1,
+            "violations": [],
+            "validation_passed": False,
+            "warnings": state.get("warnings", []),
+        }
+
+    def node_validate(state):
+        return {
+            "validation_passed": True,
+            "violations": [],
+            "retryable_violations": [],
+            "retry_count": 0,
+        }
+
+    async def node_enrich(state):
+        enrich_called["value"] = True
+        return {"final_plan": state["draft_schedule"], "warnings": state.get("warnings", [])}
+
+    resolve_mod = importlib.import_module("app.nodes.resolve")
+    places_mod = importlib.import_module("app.data_sources.places")
+    food_mod = importlib.import_module("app.data_sources.food")
+    weather_mod = importlib.import_module("app.data_sources.weather")
+    combos_mod = importlib.import_module("app.data_sources.combos")
+    budget_mod = importlib.import_module("app.nodes.budget")
+    schedule_mod = importlib.import_module("app.nodes.schedule")
+    validate_mod = importlib.import_module("app.nodes.validate")
+    enrich_mod = importlib.import_module("app.nodes.enrich")
+
+    monkeypatch.setattr(resolve_mod, "resolve_destination", resolve_destination)
+    monkeypatch.setattr(places_mod, "fetch_places", places_source)
+    monkeypatch.setattr(food_mod, "fetch_food_venues", food_source)
+    monkeypatch.setattr(weather_mod, "fetch_weather", weather_source)
+    monkeypatch.setattr(combos_mod, "fetch_combos", combos_source)
+    monkeypatch.setattr(budget_mod, "node_budget", node_budget)
+    monkeypatch.setattr(schedule_mod, "node_schedule", node_schedule)
+    monkeypatch.setattr(validate_mod, "node_validate", node_validate)
+    monkeypatch.setattr(enrich_mod, "node_enrich", node_enrich)
+
+    result = await planning_service.generate_travel_plan(
+        destination="Da Nang",
+        num_days=1,
+        need_hotel=False,
+        include_enrich=include_enrich,
+    )
+    return {"called": enrich_called["value"], "result": result}
+
+
+@pytest.mark.asyncio
+async def test_include_enrich_true_runs_enrich(monkeypatch):
+    out = await _run_pipeline_capturing_enrich(monkeypatch, include_enrich=True)
+    assert out["called"] is True
+
+
+@pytest.mark.asyncio
+async def test_include_enrich_false_skips_enrich(monkeypatch):
+    """Chat path passes include_enrich=False to skip the cosmetic LLM call."""
+    out = await _run_pipeline_capturing_enrich(monkeypatch, include_enrich=False)
+    assert out["called"] is False
+    # Plan still returned — final_plan falls back to draft_schedule.
+    assert out["result"]["plan"] == {"days": [{"day_num": 1, "slots": []}]}
+
+
+@pytest.mark.asyncio
+async def test_create_travel_plan_passes_include_enrich_false(monkeypatch):
+    """create_travel_plan tool (chat path) must opt out of enrich."""
+    captured_kwargs = {}
+
+    async def fake_generate_travel_plan(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"success": True, "destination": "Da Nang", "plan": {"days": []}}
+
+    monkeypatch.setattr(create_plan, "generate_travel_plan", fake_generate_travel_plan)
+
+    await create_plan.create_travel_plan.ainvoke({
+        "destination": "Da Nang",
+        "num_days": 2,
+    })
+
+    assert captured_kwargs.get("include_enrich") is False

@@ -358,29 +358,36 @@ type streamDonePayload struct {
 
 // streamIdleTimeout caps the gap between two upstream chunks. Without this,
 // a planner-ai that ships headers and then stalls would hold the backend
-// goroutine open indefinitely (ResponseHeaderTimeout bounds the header wait,
-// IdleConnTimeout bounds idle pooled conns, but neither bounds a stalled body).
-// Two minutes is generous — minimax thinking time can hit 90s on a fresh plan.
+// goroutine open indefinitely. Two minutes is generous — minimax thinking
+// time on a fresh plan can hit 90s.
 const streamIdleTimeout = 2 * time.Minute
 
-type readResult struct {
-	n   int
-	err error
+// chunkResult carries an OWNED byte slice (allocated per-read) so the main
+// loop can safely write/parse it while the reader goroutine moves on to the
+// next Read into a brand-new buffer.
+type chunkResult struct {
+	data []byte
+	err  error
 }
 
 func (h *AIChatHandler) proxySSE(c *gin.Context, body io.Reader, done *streamDonePayload) error {
 	flusher, _ := c.Writer.(http.Flusher)
-	buf := make([]byte, 4096)
 	var pending string
 
 	ctx := c.Request.Context()
-	results := make(chan readResult, 1)
-	// Background reader so we can race Read against an idle timer / client cancel.
-	// Closing body (via the deferred Close in the caller) makes Read return.
+	results := make(chan chunkResult, 1)
+	// Background reader. Each iteration allocates its own buffer so the main
+	// loop can keep using the previous slice while the reader fills the next.
+	// Allocation cost is negligible (~100 chunks per chat).
 	go func() {
 		for {
+			buf := make([]byte, 4096)
 			n, err := body.Read(buf)
-			results <- readResult{n: n, err: err}
+			out := chunkResult{err: err}
+			if n > 0 {
+				out.data = buf[:n]
+			}
+			results <- out
 			if err != nil {
 				return
 			}
@@ -396,15 +403,14 @@ func (h *AIChatHandler) proxySSE(c *gin.Context, body io.Reader, done *streamDon
 		case <-idle.C:
 			return fmt.Errorf("upstream stream idle for %s", streamIdleTimeout)
 		case r := <-results:
-			if r.n > 0 {
-				chunk := buf[:r.n]
-				if _, writeErr := c.Writer.Write(chunk); writeErr != nil {
+			if len(r.data) > 0 {
+				if _, writeErr := c.Writer.Write(r.data); writeErr != nil {
 					return writeErr
 				}
 				if flusher != nil {
 					flusher.Flush()
 				}
-				pending += string(chunk)
+				pending += string(r.data)
 				pending = parseSSEBuffer(pending, done)
 			}
 			if r.err != nil {
