@@ -36,9 +36,14 @@ class _ThinkStripper:
 
     def __init__(
         self,
-        initial_buffer_chars: int = 300,
-        initial_buffer_seconds: float = 2.0,
+        initial_buffer_chars: int = 80,
+        initial_buffer_seconds: float = 0.4,
     ) -> None:
+        # Initial buffer exists ONLY to catch a lone </think> that some providers
+        # emit without an opening tag. As soon as the first 80 chars (or 0.4s)
+        # pass without seeing any '<', we flush — otherwise non-thinking models
+        # like Gemma/GPT/Claude get their entire short reply held silently and
+        # the FE never sees streaming.
         self._pending = ""
         self._in_think = False
         self._initial_buffer_chars = initial_buffer_chars
@@ -77,10 +82,10 @@ class _ThinkStripper:
         return text
 
     def feed(self, token: str) -> str:
-        # Initial-buffer phase: accumulate, don't emit yet. Exit the phase
-        # the moment we see ANY think marker, then push what we held through
-        # the regular state machine so it handles both lone-close drops AND
-        # explicit <think>...</think> blocks correctly.
+        # Initial-buffer phase: hold tokens just long enough to catch a lone
+        # </think> at the very start (some providers drop the opening tag).
+        # The moment we either (a) see ANY think marker, or (b) see plain
+        # text with no '<' (so a tag can't be straddling), flush immediately.
         if self._initial_phase_active():
             self._buffered_initial += token
             saw_marker = (
@@ -91,7 +96,16 @@ class _ThinkStripper:
                 token = self._close_initial()
                 if not token:
                     return ""
+            elif "<" not in self._buffered_initial:
+                # No tag possible — release the buffer NOW for snappy UX.
+                # This is what makes non-thinking models (Gemma/Claude/GPT)
+                # actually stream token-by-token instead of being held silent.
+                token = self._close_initial()
+                if not token:
+                    return ""
             else:
+                # '<' seen but no full marker yet — keep buffering up to the
+                # char/time budget (could be a tag straddling chunks).
                 return ""
         elif self._buffered_initial:
             # Budget exhausted before any marker — flush whatever we held.
