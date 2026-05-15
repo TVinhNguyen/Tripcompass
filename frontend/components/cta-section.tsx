@@ -40,14 +40,14 @@ export function CTASection() {
 
           {/* Title */}
           <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-semibold text-white mb-6 leading-tight tracking-tight">
-            Sẵn sàng cho
+            Bắt đầu với
             <br />
-            <span className="text-[#d4a853]">cuộc phiêu lưu</span> mới?
+            <span className="text-[#d4a853]">lịch trình đầu tiên</span>
           </h2>
 
           {/* Subtitle */}
           <p className="text-lg text-white/60 mb-12 max-w-2xl mx-auto">
-            Hãy để chúng tôi giúp bạn tạo nên hành trình tuyệt vời nhất. Miễn phí, đơn giản và đầy cảm hứng.
+            Nhập điểm đến, số ngày và phong cách du lịch. TripCompass sẽ tạo bản nháp để bạn chỉnh tiếp.
           </p>
 
           {/* CTA Buttons */}
@@ -58,7 +58,7 @@ export function CTASection() {
               className="bg-[#d4a853] hover:bg-[#c4985a] text-[#1a1a1a] border-0 rounded-full px-10 py-6 text-base font-medium transition-all hover:shadow-xl hover:shadow-[#d4a853]/20"
             >
               <Link href="/ai-planner" className="flex items-center gap-3">
-                <span>Lên kế hoạch với AI</span>
+                <span>Hỏi AI Planner</span>
                 <ArrowRight className="w-5 h-5" />
               </Link>
             </Button>
@@ -71,32 +71,6 @@ export function CTASection() {
               <Link href="/explore">Khám phá cộng đồng</Link>
             </Button>
           </div>
-
-          {/* Trust Indicators */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            viewport={{ once: true }}
-            className="mt-16 pt-16 border-t border-white/10"
-          >
-            <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6 text-sm text-white/50">
-              <div className="flex items-baseline gap-2">
-                <span className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">10,000+</span>
-                <span className="text-[10px] tracking-[0.2em] uppercase">Người dùng</span>
-              </div>
-              <div className="w-px h-6 bg-white/10 hidden sm:block" />
-              <div className="flex items-baseline gap-2">
-                <span className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">500+</span>
-                <span className="text-[10px] tracking-[0.2em] uppercase">Lịch trình</span>
-              </div>
-              <div className="w-px h-6 bg-white/10 hidden sm:block" />
-              <div className="flex items-baseline gap-2">
-                <span className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">63</span>
-                <span className="text-[10px] tracking-[0.2em] uppercase">Tỉnh thành</span>
-              </div>
-            </div>
-          </motion.div>
         </motion.div>
       </div>
     </section>

@@ -3,10 +3,10 @@
 import { motion } from "framer-motion";
 import { Sparkles, Users, Calendar, Wallet, ArrowRight, CheckCircle2 } from "lucide-react";
 const features = [
-  { icon: "sparkles", title: "AI Thông Minh", description: "Gợi ý lịch trình cá nhân hóa dựa trên sở thích của bạn" },
-  { icon: "users", title: "Cộng Đồng", description: "Khám phá và chia sẻ lịch trình với cộng đồng du lịch" },
-  { icon: "calendar", title: "Dễ Dàng Lập Kế Hoạch", description: "Kéo thả để tạo lịch trình hoàn hảo trong vài phút" },
-  { icon: "wallet", title: "Quản Lý Ngân Sách", description: "Theo dõi chi phí và tối ưu hóa ngân sách chuyến đi" },
+  { icon: "sparkles", title: "Hiểu ý định chuyến đi", description: "Từ một câu chat, AI nắm điểm đến, thời lượng, sở thích và nhịp di chuyển." },
+  { icon: "calendar", title: "Lịch trình theo từng ngày", description: "Sắp xếp hoạt động theo buổi, giảm di chuyển vòng và giữ thời gian nghỉ hợp lý." },
+  { icon: "wallet", title: "Ước tính chi phí rõ ràng", description: "Tổng hợp ngân sách theo nhóm chi tiêu để bạn dễ điều chỉnh trước khi đi." },
+  { icon: "users", title: "Lưu và chia sẻ dễ dàng", description: "Biến bản nháp thành lịch trình có thể chỉnh sửa, cộng tác và dùng lại." },
 ];
 import Image from "next/image";
 
@@ -18,10 +18,10 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 const featureHighlights = [
-  "Lên lịch trình trong 5 phút",
-  "Gợi ý địa điểm theo sở thích",
-  "Ước tính chi phí chính xác",
-  "Chia sẻ với bạn bè dễ dàng",
+  "Chat để mô tả nhu cầu chuyến đi",
+  "Nhận lịch trình theo ngày và theo buổi",
+  "Chỉnh sửa, lưu lại và chia sẻ khi cần",
+  "Kết hợp địa điểm, combo và lịch trình cộng đồng",
 ];
 
 export function FeaturesSection() {
@@ -49,12 +49,12 @@ export function FeaturesSection() {
             </span>
           </div>
           <h2 className="font-serif text-4xl lg:text-5xl font-semibold text-white mb-6 leading-tight tracking-tight">
-            Công nghệ AI kết hợp
+            Từ ý tưởng đến
             <br />
-            <span className="text-[#d4a853]">trải nghiệm địa phương</span>
+            <span className="text-[#d4a853]">lịch trình có thể dùng ngay</span>
           </h2>
           <p className="text-white/60 text-lg max-w-2xl mx-auto">
-            Chúng tôi kết hợp trí tuệ nhân tạo với kiến thức địa phương để mang đến lịch trình hoàn hảo nhất cho bạn.
+            TripCompass tập trung vào luồng lập kế hoạch thực tế: hỏi nhanh, nhận bản nháp, rồi tinh chỉnh theo cách bạn muốn đi.
           </p>
         </motion.div>
 
@@ -77,27 +77,22 @@ export function FeaturesSection() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a]/80 via-transparent to-transparent" />
               
-              {/* Floating Stats Card */}
-              <div className="absolute bottom-6 left-6 right-6 p-5 bg-[#1a1a1a]/90 backdrop-blur-sm rounded-2xl border border-white/10">
-                <div className="flex items-center justify-between">
-                  <div className="text-center">
-                    <p className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">50K+</p>
-                    <p className="text-[10px] text-white/50 tracking-[0.18em] uppercase mt-0.5">Du khách</p>
+              <div className="absolute bottom-6 left-6 right-6 rounded-2xl border border-white/10 bg-[#1a1a1a]/90 p-5 backdrop-blur-sm">
+                <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-[#d4a853]">
+                  Luồng lập kế hoạch
+                </p>
+                <div className="grid grid-cols-3 gap-3 text-sm text-white/75">
+                  <div>
+                    <p className="mb-1 text-lg font-semibold text-white">1</p>
+                    <p>Hỏi AI</p>
                   </div>
-                  <div className="w-px h-10 bg-white/10" />
-                  <div className="text-center">
-                    <p className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">500+</p>
-                    <p className="text-[10px] text-white/50 tracking-[0.18em] uppercase mt-0.5">Lịch trình</p>
+                  <div>
+                    <p className="mb-1 text-lg font-semibold text-white">2</p>
+                    <p>Tinh chỉnh</p>
                   </div>
-                  <div className="w-px h-10 bg-white/10" />
-                  <div className="text-center">
-                    <p className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">63</p>
-                    <p className="text-[10px] text-white/50 tracking-[0.18em] uppercase mt-0.5">Tỉnh thành</p>
-                  </div>
-                  <div className="w-px h-10 bg-white/10" />
-                  <div className="text-center">
-                    <p className="font-mono tabular-nums text-2xl font-semibold text-[#d4a853]">4.9</p>
-                    <p className="text-[10px] text-white/50 tracking-[0.18em] uppercase mt-0.5">Đánh giá</p>
+                  <div>
+                    <p className="mb-1 text-lg font-semibold text-white">3</p>
+                    <p>Lưu kế hoạch</p>
                   </div>
                 </div>
               </div>
@@ -134,14 +129,14 @@ export function FeaturesSection() {
             </div>
 
             <motion.a
-              href="/explore"
+              href="/ai-planner"
               initial={{ opacity: 0, y: 10 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.5 }}
               viewport={{ once: true }}
               className="inline-flex items-center gap-2 mt-8 px-6 py-3 bg-[#d4a853] text-[#1a1a1a] rounded-full font-medium hover:bg-[#c4985a] transition-colors group"
             >
-              Khám phá ngay
+              Thử lập lịch trình
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </motion.a>
           </motion.div>

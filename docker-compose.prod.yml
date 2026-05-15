@@ -67,46 +67,6 @@ services:
 
   # ─────────────────────────── Application ─────────────────────────────────────
 
-  9router:
-    image: antiantiops/9router:${NINEROUTER_IMAGE_TAG:-0.4.41}
-    restart: unless-stopped
-    environment:
-      JWT_SECRET: ${NINEROUTER_JWT_SECRET}
-      INITIAL_PASSWORD: ${NINEROUTER_INITIAL_PASSWORD}
-      API_KEY_SECRET: ${NINEROUTER_API_KEY_SECRET}
-      MACHINE_ID_SALT: ${NINEROUTER_MACHINE_ID_SALT}
-      DATA_DIR: /app/data
-      PORT: "20128"
-      HOSTNAME: "0.0.0.0"
-      NODE_ENV: production
-      BASE_URL: http://9router:20128
-      CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://9router.com}
-      NEXT_PUBLIC_BASE_URL: ${NINEROUTER_PUBLIC_BASE_URL:-https://router.tripcompass.studio}
-      NEXT_PUBLIC_CLOUD_URL: ${NINEROUTER_CLOUD_URL:-https://9router.com}
-      AUTH_COOKIE_SECURE: ${NINEROUTER_AUTH_COOKIE_SECURE:-true}
-      REQUIRE_API_KEY: ${NINEROUTER_REQUIRE_API_KEY:-true}
-      OBSERVABILITY_ENABLED: ${NINEROUTER_OBSERVABILITY_ENABLED:-false}
-    volumes:
-      - 9router_data:/app/data
-      - 9router_usage:/root/.9router
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:20128').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - internal
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
-
   planner-ai:
     image: ${DOCKERHUB_USERNAME}/tripcompass-planner:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -116,13 +76,17 @@ services:
       DB_SCHEMA: schema_travel
       LLM_PROVIDER: ${LLM_PROVIDER}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0}
+      LLM_REQUEST_TIMEOUT: ${LLM_REQUEST_TIMEOUT:-60}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-3}
+      LLM_MODEL_GOOGLE: ${LLM_MODEL_GOOGLE:-gemma-4-31b-it}
       LLM_MODEL_XIAOMI: ${LLM_MODEL_XIAOMI:-mimo-v2-pro}
       LLM_MODEL_NVIDIA: ${LLM_MODEL_NVIDIA:-minimaxai/minimax-m2.7}
-      LLM_MODEL_OPENROUTER: ${LLM_MODEL_OPENROUTER:-qwen/qwen3.6-plus:free}
+      LLM_MODEL_OPENROUTER: ${LLM_MODEL_OPENROUTER:-google/gemma-4-31b-it:free}
       LLM_MODEL_NEBIUS: ${LLM_MODEL_NEBIUS:-meta-llama/llama-3.3-70b-instruct}
       LLM_MODEL_ANTHROPIC: ${LLM_MODEL_ANTHROPIC:-claude-sonnet-4-20250514}
       LLM_MODEL_AGENTROUTER: ${LLM_MODEL_AGENTROUTER:-deepseek-v3.2}
       LLM_MODEL_MODAL: ${LLM_MODEL_MODAL:-zai-org/GLM-5.1-FP8}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       XIAOMI_API_KEY: ${XIAOMI_API_KEY:-}
       XIAOMI_BASE_URL: ${XIAOMI_BASE_URL:-https://api.xiaomimimo.com/v1}
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
@@ -132,6 +96,7 @@ services:
       OPENROUTER_HTTP_REFERER: ${OPENROUTER_HTTP_REFERER:-}
       OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-Tripcompass Planner}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
       AGENTROUTER_API_KEY: ${AGENTROUTER_API_KEY:-}
       AGENTROUTER_BASE_URL: ${AGENTROUTER_BASE_URL:-https://agentrouter.org/v1}
       MODAL_API_KEY: ${MODAL_API_KEY:-}
@@ -271,7 +236,6 @@ services:
       - "443:443/udp"   # HTTP/3
     environment:
       DOMAIN: ${DOMAIN}
-      NINEROUTER_DOMAIN: ${NINEROUTER_DOMAIN:-router.tripcompass.studio}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -328,8 +292,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  9router_data:
-  9router_usage:
   caddy_data:
   caddy_config:
 

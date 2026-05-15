@@ -22,12 +22,59 @@ from loguru import logger
 router = APIRouter(tags=["chat"])
 
 
+def _compact_itinerary_context(context: dict) -> dict:
+    """Keep only fields useful for chat about the current itinerary."""
+    root_keys = (
+        "id", "title", "destination", "destination_id", "start_date", "end_date",
+        "num_days", "guest_count", "budget_vnd", "budget_tier", "status",
+    )
+    compact = {
+        key: context[key]
+        for key in root_keys
+        if key in context and context[key] not in (None, "", [])
+    }
+
+    plan = context.get("plan") or context.get("final_plan") or context
+    days = plan.get("days") if isinstance(plan, dict) else None
+    if isinstance(days, list):
+        compact["days"] = []
+        for day in days[:7]:
+            if not isinstance(day, dict):
+                continue
+            day_data = {
+                key: day[key]
+                for key in ("day_num", "day_type", "date_str", "day_highlight")
+                if key in day and day[key] not in (None, "", [])
+            }
+            slots = []
+            for slot in (day.get("slots", []) or [])[:8]:
+                if not isinstance(slot, dict):
+                    continue
+                slots.append({
+                    key: slot[key]
+                    for key in ("start", "end", "slot_type", "place_name", "price_vnd")
+                    if key in slot and slot[key] not in (None, "", [])
+                })
+            if slots:
+                day_data["slots"] = slots
+            compact["days"].append(day_data)
+
+    warnings = context.get("warnings")
+    if not warnings and isinstance(plan, dict):
+        warnings = plan.get("warnings")
+    if isinstance(warnings, list) and warnings:
+        compact["warnings"] = warnings[:5]
+
+    return compact or {"summary": "itinerary_context provided but no compact fields matched"}
+
+
 def _itinerary_context_message(context: dict | None) -> str | None:
     if not context:
         return None
+    compact = _compact_itinerary_context(context)
     return (
         "DỮ LIỆU LỊCH TRÌNH HIỆN TẠI CỦA USER:\n"
-        f"{json.dumps(context, ensure_ascii=False, separators=(',', ':'))}\n\n"
+        f"{json.dumps(compact, ensure_ascii=False, separators=(',', ':'))}\n\n"
         "Hãy dùng dữ liệu này làm nguồn chính khi user hỏi về lịch trình đang chỉnh sửa. "
         "Nếu user yêu cầu tối ưu, thêm, xoá hoặc sắp xếp lại, hãy đưa ra đề xuất cụ thể "
         "theo ngày/giờ/hoạt động; đừng nói rằng bạn đã sửa DB vì chat này chỉ có quyền tư vấn."

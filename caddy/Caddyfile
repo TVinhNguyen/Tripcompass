@@ -46,20 +46,3 @@
 		reverse_proxy frontend:3000
 	}
 }
-
-{$NINEROUTER_DOMAIN} {
-	encode gzip zstd
-
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		-Server
-	}
-
-	reverse_proxy 9router:20128 {
-		transport http {
-			read_timeout 5m
-		}
-	}
-}

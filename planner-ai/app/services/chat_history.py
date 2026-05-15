@@ -8,7 +8,7 @@ from app.services.redis import get_redis
 from app.services.session_manager import register_session
 
 CHAT_HISTORY_TTL     = 259_200   # 72h — users plan trips over multiple days
-MAX_HISTORY_MESSAGES = 30        # 15 conversation turns
+MAX_HISTORY_MESSAGES = 16        # first pair + recent context without bloating every prompt
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
