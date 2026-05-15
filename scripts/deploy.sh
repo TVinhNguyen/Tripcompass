@@ -68,12 +68,12 @@ echo "🔄 Starting services..."
 # ── Wait for health checks ───────────────────────────────────────────────────
 echo "⏳ Waiting for services to become healthy..."
 deadline=$((SECONDS + 180))
-health_services=(postgres redis 9router planner-ai backend frontend)
+required_health_services=(postgres redis planner-ai backend frontend)
 
 while true; do
   unhealthy=()
 
-  for service in "${health_services[@]}"; do
+  for service in "${required_health_services[@]}"; do
     container_id="$("${COMPOSE[@]}" ps -q "$service" 2>/dev/null || true)"
     if [ -z "$container_id" ]; then
       unhealthy+=("$service:missing")

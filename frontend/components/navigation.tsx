@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
-import { Menu, X, ArrowUpRight, ChevronDown, MapPin, Route, Utensils, Camera, Hotel, User, LayoutList, LogOut, Sparkles } from "lucide-react"
+import { Menu, X, ArrowUpRight, ChevronDown, MapPin, Route, Utensils, Camera, Hotel, User, LayoutList, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
@@ -16,7 +16,6 @@ const exploreSubItems = [
 ]
 
 const navItems = [
-  { href: "/ai-planner", label: "AI Planner", highlight: true },
   { href: "/planner", label: "Lịch trình của tôi" },
   { href: "/combos", label: "Combo" },
   { href: "/blog", label: "Cẩm nang" },
@@ -64,7 +63,7 @@ export function Navigation() {
         "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
         needsSolidBg
           ? "bg-[#1a1a1a]/95 backdrop-blur-md border-b border-white/5"
-          : "bg-transparent",
+          : "bg-[#1a1a1a]/35 backdrop-blur-md border-b border-white/10 shadow-[0_1px_24px_rgba(0,0,0,0.18)]",
       )}
     >
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -144,23 +143,6 @@ export function Navigation() {
 
             {navItems.map((item) => {
               const active = pathname === item.href || pathname.startsWith(item.href + "/")
-              if (item.highlight) {
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-1.5 px-4 py-2 text-sm rounded-full transition-all border",
-                      active
-                        ? "bg-[#d4a853] text-[#1a1a1a] border-[#d4a853]"
-                        : "bg-[#d4a853]/10 text-[#d4a853] border-[#d4a853]/30 hover:bg-[#d4a853] hover:text-[#1a1a1a] hover:border-[#d4a853]",
-                    )}
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    {item.label}
-                  </Link>
-                )
-              }
               return (
                 <Link
                   key={item.href}
@@ -301,14 +283,9 @@ export function Navigation() {
                   <Link key={item.href} href={item.href} onClick={() => setIsMobileMenuOpen(false)}
                     className={cn(
                       "flex items-center justify-between px-4 py-3 rounded-lg mx-2",
-                      item.highlight
-                        ? "text-[#d4a853] bg-[#d4a853]/10 hover:bg-[#d4a853]/20 font-medium"
-                        : "text-white/90 hover:text-white hover:bg-white/5",
+                      "text-white/90 hover:text-white hover:bg-white/5",
                     )}>
-                    <span className="flex items-center gap-2">
-                      {item.highlight && <Sparkles className="w-4 h-4" />}
-                      {item.label}
-                    </span>
+                    <span>{item.label}</span>
                     <ArrowUpRight className="w-4 h-4 text-[#d4a853]" />
                   </Link>
                 ))}

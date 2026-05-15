@@ -8,7 +8,7 @@ import { useSearchParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles, Send, Plus, Trash2, Loader2, MessageSquare,
-  Compass, Bot, User as UserIcon,
+  Compass,
   AlertCircle, RefreshCw, LayoutGrid,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -155,14 +155,14 @@ function AIPlannerContent() {
 
       onToolStart(tool, label) {
         const lbl = label ?? getToolLabel(tool).vi
-        setToolRunning(`${getToolLabel(tool).icon} ${lbl}`)
+        setToolRunning(lbl)
       },
 
       onThinking() {
         // Heartbeat from planner-ai while the LLM is silent (typically inside
         // a <think> block on reasoning models). Show a generic indicator so
         // the chat doesn't feel stuck — overwritten by tool_start / token.
-        setToolRunning((prev) => prev ?? "🤔 AI đang suy nghĩ...")
+        setToolRunning((prev) => prev ?? "AI đang suy nghĩ...")
       },
 
       onToken(token) {
@@ -170,7 +170,7 @@ function AIPlannerContent() {
           prev.map((m) => m.id === aiMsgId ? { ...m, content: m.content + token } : m)
         )
         // First real token → drop the thinking placeholder.
-        setToolRunning((prev) => (prev === "🤔 AI đang suy nghĩ..." ? null : prev))
+        setToolRunning((prev) => (prev === "AI đang suy nghĩ..." ? null : prev))
       },
 
       onDone(newSessionId, fullText, plan, toolCalls) {
@@ -367,8 +367,8 @@ function AIPlannerContent() {
         {/* Tool chip (floating above messages when streaming) */}
         {toolRunning && (
           <div className="flex justify-center pt-3 shrink-0">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#d4a853]/10 border border-[#d4a853]/30 rounded-full text-sm text-[#a8842a]">
-              <Loader2 className="w-4 h-4 animate-spin" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#e8e2d9] bg-white/80 px-3.5 py-1.5 text-sm text-[#6b6b6b] shadow-sm">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#3d5a3d]" />
               {toolRunning}
             </div>
           </div>
@@ -393,10 +393,9 @@ function AIPlannerContent() {
                     <button
                       key={s}
                       onClick={() => handleSend(s)}
-                      className="group p-4 bg-white border border-[#e8e2d9] rounded-xl hover:border-[#3d5a3d] hover:shadow-md transition-all text-sm text-[#1a1a1a] flex items-start gap-3"
+                      className="group rounded-xl border border-[#e8e2d9] bg-white p-4 text-left text-sm leading-6 text-[#1a1a1a] transition-all hover:border-[#3d5a3d] hover:shadow-md"
                     >
-                      <Sparkles className="w-4 h-4 text-[#c4785a] shrink-0 mt-0.5" />
-                      <span>{s}</span>
+                      {s}
                     </button>
                   ))}
                 </div>
@@ -487,19 +486,22 @@ interface MessageBubbleProps {
 function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   const isUser = message.role === "user"
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={cn("flex gap-3", isUser && "flex-row-reverse")}>
-      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", isUser ? "bg-[#3d5a3d]" : "bg-gradient-to-br from-[#3d5a3d] to-[#c4785a]")}>
-        {isUser ? <UserIcon className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4 text-white" />}
-      </div>
-      <div className={cn("flex-1 min-w-0", isUser && "flex flex-col items-end")}>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
+    >
+      <div className={cn("min-w-0", isUser ? "max-w-[82%] sm:max-w-[72%]" : "w-full")}>
         {/* Tool badges */}
         {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
+          <div className="mb-2 text-xs text-[#8b8378]">
+            <span>Đã dùng: </span>
             {message.toolCalls.map((tc, index) => {
               const lbl = getToolLabel(tc)
               return (
-                <span key={`${tc}-${index}`} className="text-xs px-2 py-0.5 bg-[#d4a853]/10 text-[#a8842a] rounded-full border border-[#d4a853]/30">
-                  {lbl.icon} {tc}
+                <span key={`${tc}-${index}`}>
+                  {index > 0 ? ", " : ""}
+                  {lbl.vi.replace(/^Đang\s+/i, "").replace(/\.\.\.$/, "")}
                 </span>
               )
             })}
@@ -508,9 +510,11 @@ function MessageBubble({ message, onRetry }: MessageBubbleProps) {
         {/* Bubble */}
         {(message.content || message.streaming || message.error) && (
           <div className={cn(
-            "inline-block max-w-full overflow-hidden break-words px-4 py-3 rounded-2xl text-sm leading-relaxed [overflow-wrap:anywhere]",
-            isUser ? "bg-[#3d5a3d] text-white rounded-tr-sm whitespace-pre-wrap" : "bg-white border border-[#e8e2d9] text-[#1a1a1a] rounded-tl-sm",
-            message.error && "border-red-200 bg-red-50 text-red-700",
+            "max-w-full overflow-hidden break-words [overflow-wrap:anywhere]",
+            isUser
+              ? "inline-block rounded-2xl rounded-tr-md bg-[#3d5a3d] px-4 py-2.5 text-[15px] leading-6 text-white whitespace-pre-wrap"
+              : "w-full px-0 py-1 text-[15px] leading-7 text-[#1a1a1a] sm:text-base",
+            message.error && "rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700",
           )}>
             {message.error && <AlertCircle className="w-4 h-4 inline mr-1" />}
             {isUser ? message.content : <ChatMarkdown content={message.content} />}

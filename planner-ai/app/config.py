@@ -1,7 +1,7 @@
 """
 Settings for planner-ai service.
 Follows the same pattern as scraper-service/app/config/settings.py.
-Supports multiple LLM providers: xiaomi / nvidia / openrouter / nebius / anthropic / agentrouter / modal.
+Builds LangChain chat models directly per provider — no LiteLLM abstraction.
 """
 import os
 from pathlib import Path
@@ -34,14 +34,15 @@ os.environ.setdefault("LANGCHAIN_PROJECT", "Planner AI")
 
 
 # ── LLM Provider config ───────────────────────────────────────────────────────
-LLM_PROVIDER    = os.environ.get("LLM_PROVIDER", "xiaomi").strip().lower()
+# LLM_PROVIDER: google | xiaomi | nvidia | openrouter | nebius | anthropic | agentrouter | modal
+LLM_PROVIDER    = os.environ.get("LLM_PROVIDER", "google").strip().lower()
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0"))
 # Free-tier providers (NVIDIA NIM, OpenRouter free models) frequently close
 # long streams mid-token. These knobs keep the OpenAI-compatible clients alive
 # under that flakiness:
 #   request_timeout — drop a hung request instead of blocking the agent forever
 #   max_retries     — retry transient HTTP / RemoteProtocolError before giving up
-LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "180"))
+LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "60"))
 LLM_MAX_RETRIES     = int(os.environ.get("LLM_MAX_RETRIES", "3"))
 # When true, the schedule node asks the LLM via function-calling so the response
 # is guaranteed-shaped JSON. Off by default because not every provider (minimax
@@ -77,19 +78,94 @@ def _get_env_first(*keys: str, default: str = "") -> str:
 
 def _default_model_for(provider: str) -> str:
     defaults = {
+        "google":       "gemma-4-31b-it",
         "xiaomi":       "mimo-v2-pro",
         "nvidia":       "minimaxai/minimax-m2.7",
-        "openrouter":   "qwen/qwen3.6-plus:free",
+        "openrouter":   "google/gemma-4-31b-it:free",
         "nebius":       "meta-llama/llama-3.3-70b-instruct",
         "anthropic":    "claude-sonnet-4-20250514",
         "agentrouter":  "deepseek-v3.2",
         "modal":        "zai-org/GLM-5.1-FP8",
     }
-    return defaults.get(provider, "mimo-v2-pro")
+    return defaults.get(provider, "gemma-4-31b-it")
+
+
+def _provider_credentials(provider: str) -> tuple[str, str, dict[str, str]]:
+    """Return api_key, api_base and optional provider headers."""
+    p = (provider or "").strip().lower()
+    headers: dict[str, str] = {}
+
+    if p == "google":
+        # Google AI Studio uses GOOGLE_API_KEY (canonical) but also accepts the
+        # legacy GEMINI_API_KEY var. base_url is empty — ChatGoogleGenerativeAI
+        # routes through generativelanguage.googleapis.com automatically.
+        api_key = (
+            os.environ.get("GOOGLE_API_KEY", "").strip()
+            or os.environ.get("GEMINI_API_KEY", "").strip()
+        )
+        return (api_key, "", headers)
+    if p == "xiaomi":
+        return (
+            os.environ.get("XIAOMI_API_KEY", "").strip(),
+            os.environ.get("XIAOMI_BASE_URL", "https://api.xiaomimimo.com/v1").strip(),
+            headers,
+        )
+    if p == "nvidia":
+        return (
+            os.environ.get("NVIDIA_API_KEY", "").strip(),
+            os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1").strip(),
+            headers,
+        )
+    if p == "openrouter":
+        if referer := os.environ.get("OPENROUTER_HTTP_REFERER", "").strip():
+            headers["HTTP-Referer"] = referer
+        if app_name := os.environ.get("OPENROUTER_APP_NAME", "Tripcompass Planner").strip():
+            headers["X-Title"] = app_name
+        return (
+            os.environ.get("OPENROUTER_API_KEY", "").strip(),
+            os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").strip(),
+            headers,
+        )
+    if p == "nebius":
+        return (os.environ.get("NEBIUS_API_KEY", "").strip(), "", headers)
+    if p == "anthropic":
+        return (os.environ.get("ANTHROPIC_API_KEY", "").strip(), "", headers)
+    if p == "agentrouter":
+        return (
+            os.environ.get("AGENTROUTER_API_KEY", "").strip(),
+            os.environ.get("AGENTROUTER_BASE_URL", "https://agentrouter.org/v1").strip(),
+            headers,
+        )
+    if p == "modal":
+        return (
+            os.environ.get("MODAL_API_KEY", "").strip(),
+            os.environ.get("MODAL_BASE_URL", "https://api.us-west-2.modal.direct/v1").strip(),
+            headers,
+        )
+    return ("", "", headers)
+
+
+def _require_api_key(provider: str, api_key: str) -> None:
+    if not api_key:
+        key_names = {
+            "google": "GOOGLE_API_KEY",
+            "xiaomi": "XIAOMI_API_KEY",
+            "nvidia": "NVIDIA_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
+            "nebius": "NEBIUS_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "agentrouter": "AGENTROUTER_API_KEY",
+            "modal": "MODAL_API_KEY",
+        }
+        key_name = key_names.get(provider, f"{provider.upper()}_API_KEY")
+        raise RuntimeError(f"{key_name} required when LLM_PROVIDER={provider}")
 
 
 def _resolve_model(provider: str) -> str:
     p = (provider or "").strip().lower()
+    if p == "google":
+        return _get_env_first("LLM_MODEL_Google", "LLM_MODEL_GOOGLE", "LLM_MODEL",
+                              default=_default_model_for(p))
     if p == "xiaomi":
         return _get_env_first("LLM_MODEL_Xiaomi", "LLM_MODEL_XIAOMI", "LLM_MODEL",
                               default=_default_model_for(p))
@@ -118,38 +194,21 @@ def _build_llm(provider: str, model: str) -> Any:
     """Build a LangChain chat model for the given provider."""
     p = (provider or "").strip().lower()
 
-    if p == "xiaomi":
-        from langchain_openai import ChatOpenAI
-        api_key  = os.environ.get("XIAOMI_API_KEY", "").strip()
-        base_url = os.environ.get("XIAOMI_BASE_URL", "https://api.xiaomimimo.com/v1").strip()
-        if not api_key:
-            raise RuntimeError("XIAOMI_API_KEY required when LLM_PROVIDER=xiaomi")
-        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
-                          **_openai_compat_kwargs())
-
-    if p == "nvidia":
-        from langchain_openai import ChatOpenAI
-        api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
-        base_url = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1").strip()
-        if not api_key:
-            raise RuntimeError("NVIDIA_API_KEY required when LLM_PROVIDER=nvidia")
-        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
-                          **_openai_compat_kwargs())
-
-    if p == "openrouter":
-        from langchain_openai import ChatOpenAI
-        api_key  = os.environ.get("OPENROUTER_API_KEY", "").strip()
-        base_url = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").strip()
-        headers  = {}
-        if referer := os.environ.get("OPENROUTER_HTTP_REFERER", "").strip():
-            headers["HTTP-Referer"] = referer
-        if app_name := os.environ.get("OPENROUTER_APP_NAME", "Tripcompass Planner").strip():
-            headers["X-Title"] = app_name
-        if not api_key:
-            raise RuntimeError("OPENROUTER_API_KEY required when LLM_PROVIDER=openrouter")
-        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
-                          default_headers=headers or None,
-                          **_openai_compat_kwargs())
+    if p == "google":
+        # Google AI Studio (Gemini API) — serves both Gemini and Gemma models
+        # via generativelanguage.googleapis.com. ChatGoogleGenerativeAI uses
+        # different param names than ChatOpenAI: timeout (not request_timeout),
+        # disable_streaming (default False, so streaming is on).
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        api_key, _base_url, _headers = _provider_credentials(p)
+        _require_api_key(p, api_key)
+        return ChatGoogleGenerativeAI(
+            model=model,
+            google_api_key=api_key,
+            temperature=LLM_TEMPERATURE,
+            timeout=LLM_REQUEST_TIMEOUT,
+            max_retries=LLM_MAX_RETRIES,
+        )
 
     if p == "nebius":
         from langchain_nebius import ChatNebius
@@ -157,31 +216,26 @@ def _build_llm(provider: str, model: str) -> Any:
 
     if p == "anthropic":
         from langchain_anthropic import ChatAnthropic
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-        if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY required when LLM_PROVIDER=anthropic")
+        api_key, _base_url, _headers = _provider_credentials(p)
+        _require_api_key(p, api_key)
         return ChatAnthropic(model=model, temperature=LLM_TEMPERATURE, api_key=api_key)
 
-    if p == "agentrouter":
+    # All remaining providers (xiaomi/nvidia/openrouter/agentrouter/modal) expose
+    # an OpenAI-compatible REST API → one ChatOpenAI build path.
+    if p in {"xiaomi", "nvidia", "openrouter", "agentrouter", "modal"}:
         from langchain_openai import ChatOpenAI
-        api_key  = os.environ.get("AGENTROUTER_API_KEY", "").strip()
-        base_url = os.environ.get("AGENTROUTER_BASE_URL", "https://agentrouter.org/v1").strip()
-        if not api_key:
-            raise RuntimeError("AGENTROUTER_API_KEY required when LLM_PROVIDER=agentrouter")
-        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
-                          **_openai_compat_kwargs())
-
-    if p == "modal":
-        from langchain_openai import ChatOpenAI
-        api_key  = os.environ.get("MODAL_API_KEY", "").strip()
-        base_url = os.environ.get("MODAL_BASE_URL", "https://api.us-west-2.modal.direct/v1").strip()
-        if not api_key:
-            raise RuntimeError("MODAL_API_KEY required when LLM_PROVIDER=modal")
-        return ChatOpenAI(model=model, api_key=api_key, base_url=base_url,
-                          **_openai_compat_kwargs())
+        api_key, base_url, headers = _provider_credentials(p)
+        _require_api_key(p, api_key)
+        return ChatOpenAI(
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            default_headers=headers or None,
+            **_openai_compat_kwargs(),
+        )
 
     raise ValueError(f"Unsupported LLM_PROVIDER: '{provider}'. "
-                     f"Use xiaomi/nvidia/openrouter/nebius/anthropic/agentrouter/modal.")
+                     f"Use google/xiaomi/nvidia/openrouter/nebius/anthropic/agentrouter/modal.")
 
 
 # ── LLM instance (lazy) ───────────────────────────────────────────────────────
