@@ -48,7 +48,10 @@ async def node_enrich(state: dict) -> dict:
         response = await asyncio.wait_for(
             config.llm.ainvoke(messages), timeout=_ENRICH_TIMEOUT_S,
         )
-        raw = response.content.strip()
+        # Gemini/Gemma return `content` as list[dict] (multimodal parts), not str.
+        # Normalize through the shared helper so this stays a string concat.
+        from app.streaming.helpers import _content_to_text
+        raw = _content_to_text(response.content).strip()
 
         if raw.startswith("```"):
             lines = raw.split("\n")

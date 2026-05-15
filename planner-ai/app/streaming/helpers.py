@@ -9,14 +9,12 @@ def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _message_content(output) -> str:
-    """Best-effort content extraction from LangChain chat end events."""
-    if output is None:
-        return ""
-    message = getattr(output, "message", output)
-    content = getattr(message, "content", None)
-    if content is None and isinstance(message, dict):
-        content = message.get("content")
+def _content_to_text(content) -> str:
+    """Normalize LangChain/OpenAI content into plain text.
+
+    Some OpenAI-compatible providers stream content as a list of content
+    parts instead of a string. The SSE layer only deals in text tokens.
+    """
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -30,6 +28,17 @@ def _message_content(output) -> str:
                     parts.append(text)
         return "".join(parts)
     return ""
+
+
+def _message_content(output) -> str:
+    """Best-effort content extraction from LangChain chat end events."""
+    if output is None:
+        return ""
+    message = getattr(output, "message", output)
+    content = getattr(message, "content", None)
+    if content is None and isinstance(message, dict):
+        content = message.get("content")
+    return _content_to_text(content)
 
 
 def _has_tool_calls(output) -> bool:

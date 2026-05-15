@@ -1,14 +1,26 @@
 import pytest
 
-from app.streaming import _to_generate_response, _ThinkStripper, _strip_thinking, stream_chat_response
+from app.streaming import _content_to_text, _to_generate_response, _ThinkStripper, _strip_thinking, stream_chat_response
 
 
 class _FakeAIMessage:
-    def __init__(self, content: str):
+    def __init__(self, content):
+        self.content = content
+
+
+class _FakeChunk:
+    def __init__(self, content):
         self.content = content
 
 
 # ─── _ThinkStripper ──────────────────────────────────────────────────────────
+
+
+def test_content_to_text_accepts_openai_content_parts():
+    assert _content_to_text([
+        {"type": "text", "text": "Xin "},
+        {"type": "text", "text": "chào"},
+    ]) == "Xin chào"
 
 
 class TestThinkStripper:
@@ -231,6 +243,25 @@ async def test_stream_chat_response_uses_chat_model_end_when_provider_buffers():
     done = events[-1]
     assert done["type"] == "done"
     assert done["full_text"] == "Xin chào từ provider buffer."
+
+
+class _ListContentStreamAgent:
+    async def astream_events(self, *_args, **_kwargs):
+        yield {
+            "event": "on_chat_model_stream",
+            "run_id": "r-list",
+            "data": {"chunk": _FakeChunk(content=[{"type": "text", "text": "Xin "}, {"type": "text", "text": "chào"}])},
+        }
+
+
+@pytest.mark.asyncio
+async def test_stream_chat_response_normalizes_list_content_chunks():
+    chunks = [chunk async for chunk in stream_chat_response(_ListContentStreamAgent(), [], "s1")]
+    events = _payloads(chunks)
+
+    streamed_text = "".join(e.get("content", "") for e in events if e["type"] == "token")
+    assert streamed_text == "Xin chào"
+    assert events[-1]["full_text"] == "Xin chào"
 
 
 class _PlanToolAgent:

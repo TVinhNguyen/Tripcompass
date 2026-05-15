@@ -147,7 +147,10 @@ async def node_schedule(state: dict) -> dict:
             response = await asyncio.wait_for(
                 config.llm.ainvoke(messages), timeout=llm_timeout_s,
             )
-            raw = response.content.strip()
+            # Gemini/Gemma return `content` as list[dict] (multimodal parts), not str.
+            # Normalize through the shared helper so this stays a string concat.
+            from app.streaming.helpers import _content_to_text
+            raw = _content_to_text(response.content).strip()
             if raw.startswith("```"):
                 lines = raw.split("\n")
                 raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])

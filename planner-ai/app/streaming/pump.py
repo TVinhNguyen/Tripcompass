@@ -15,7 +15,7 @@ from typing import AsyncGenerator
 
 from loguru import logger
 
-from app.streaming.helpers import _sse, _message_content, _has_tool_calls
+from app.streaming.helpers import _sse, _content_to_text, _message_content, _has_tool_calls
 from app.streaming.think_stripper import _ThinkStripper, _strip_thinking
 from app.streaming.response_shape import _to_generate_response, _extract_plan
 from app.streaming.summary import _strip_json_objects, _deterministic_summary
@@ -141,7 +141,9 @@ async def stream_chat_response(
                 chunk = data.get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     token_event_count += 1
-                    token = chunk.content
+                    token = _content_to_text(chunk.content)
+                    if not token:
+                        continue
                     full_text += token
                     if first_token_at is None:
                         first_token_at = time.monotonic() - started_at

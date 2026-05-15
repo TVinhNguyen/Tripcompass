@@ -144,12 +144,13 @@ async def chat_debug_stream(req: ChatRequest):
     async def _gen():
         import time as _t
         from langchain_core.messages import HumanMessage as _HM
+        from app.streaming.helpers import _content_to_text
 
         started = _t.monotonic()
         first_token_at = None
         count = 0
         async for chunk in get_llm().astream([_HM(content=req.message)]):
-            content = getattr(chunk, "content", "") or ""
+            content = _content_to_text(getattr(chunk, "content", "") or "")
             if not content:
                 continue
             count += 1
