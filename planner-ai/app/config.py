@@ -34,7 +34,7 @@ os.environ.setdefault("LANGCHAIN_PROJECT", "Planner AI")
 
 
 # ── LLM Provider config ───────────────────────────────────────────────────────
-# LLM_PROVIDER: google | xiaomi | nvidia | openrouter | nebius | anthropic | agentrouter | modal
+# LLM_PROVIDER: google | ollama | xiaomi | nvidia | openrouter | nebius | anthropic | agentrouter | modal
 LLM_PROVIDER    = os.environ.get("LLM_PROVIDER", "google").strip().lower()
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0"))
 # Free-tier providers (NVIDIA NIM, OpenRouter free models) frequently close
@@ -79,6 +79,7 @@ def _get_env_first(*keys: str, default: str = "") -> str:
 def _default_model_for(provider: str) -> str:
     defaults = {
         "google":       "gemma-4-31b-it",
+        "ollama":       "gemma4:31b-cloud",
         "xiaomi":       "mimo-v2-pro",
         "nvidia":       "minimaxai/minimax-m2.7",
         "openrouter":   "google/gemma-4-31b-it:free",
@@ -104,6 +105,16 @@ def _provider_credentials(provider: str) -> tuple[str, str, dict[str, str]]:
             or os.environ.get("GEMINI_API_KEY", "").strip()
         )
         return (api_key, "", headers)
+    if p == "ollama":
+        # Ollama daemon — no API key needed (cloud auth lives in the daemon's
+        # own SSH key store via `ollama signin`). base_url points at the daemon
+        # HTTP endpoint; for `:cloud` model tags the daemon proxies to Ollama
+        # Cloud, so the request still leaves the host.
+        return (
+            "",
+            os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434").strip(),
+            headers,
+        )
     if p == "xiaomi":
         return (
             os.environ.get("XIAOMI_API_KEY", "").strip(),
@@ -146,6 +157,10 @@ def _provider_credentials(provider: str) -> tuple[str, str, dict[str, str]]:
 
 
 def _require_api_key(provider: str, api_key: str) -> None:
+    # Ollama daemon doesn't use API keys — auth is handled out-of-band by
+    # `ollama signin` on the host. Skip the check entirely.
+    if provider == "ollama":
+        return
     if not api_key:
         key_names = {
             "google": "GOOGLE_API_KEY",
@@ -165,6 +180,9 @@ def _resolve_model(provider: str) -> str:
     p = (provider or "").strip().lower()
     if p == "google":
         return _get_env_first("LLM_MODEL_Google", "LLM_MODEL_GOOGLE", "LLM_MODEL",
+                              default=_default_model_for(p))
+    if p == "ollama":
+        return _get_env_first("LLM_MODEL_Ollama", "LLM_MODEL_OLLAMA", "LLM_MODEL",
                               default=_default_model_for(p))
     if p == "xiaomi":
         return _get_env_first("LLM_MODEL_Xiaomi", "LLM_MODEL_XIAOMI", "LLM_MODEL",
@@ -210,6 +228,21 @@ def _build_llm(provider: str, model: str) -> Any:
             max_retries=LLM_MAX_RETRIES,
         )
 
+    if p == "ollama":
+        # Talks to a local Ollama daemon (or `:cloud` model tags that the
+        # daemon proxies to Ollama Cloud). No API key — `ollama signin` on
+        # the host handles cloud auth via SSH key. Tool-calling support
+        # depends on the model: gemma2/3 are unreliable, llama3.1+ works.
+        # If the agent loops without calling tools, switch back to google.
+        from langchain_ollama import ChatOllama
+        _api_key, base_url, _headers = _provider_credentials(p)
+        return ChatOllama(
+            model=model,
+            base_url=base_url,
+            temperature=LLM_TEMPERATURE,
+            # ChatOllama streams by default; no `streaming=True` flag needed.
+        )
+
     if p == "nebius":
         from langchain_nebius import ChatNebius
         return ChatNebius(model=model, temperature=LLM_TEMPERATURE)
@@ -235,7 +268,7 @@ def _build_llm(provider: str, model: str) -> Any:
         )
 
     raise ValueError(f"Unsupported LLM_PROVIDER: '{provider}'. "
-                     f"Use google/xiaomi/nvidia/openrouter/nebius/anthropic/agentrouter/modal.")
+                     f"Use google/ollama/xiaomi/nvidia/openrouter/nebius/anthropic/agentrouter/modal.")
 
 
 # ── LLM instance (lazy) ───────────────────────────────────────────────────────

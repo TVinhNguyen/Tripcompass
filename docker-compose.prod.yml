@@ -77,6 +77,8 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0}
       LLM_MODEL_GOOGLE: ${LLM_MODEL_GOOGLE:-gemma-4-31b-it}
+      LLM_MODEL_OLLAMA: ${LLM_MODEL_OLLAMA:-gemma4:31b-cloud}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       LLM_MODEL_XIAOMI: ${LLM_MODEL_XIAOMI:-mimo-v2-pro}
       LLM_MODEL_NVIDIA: ${LLM_MODEL_NVIDIA:-minimaxai/minimax-m2.7}
       LLM_MODEL_OPENROUTER: ${LLM_MODEL_OPENROUTER:-google/gemma-4-31b-it:free}
@@ -123,6 +125,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Allow the container to reach the Ollama daemon running on the EC2 host
+    # via http://host.docker.internal:11434. On Linux this isn't auto-resolved
+    # like on Mac/Win — `host-gateway` is the special token Docker translates
+    # to the host's IP on the bridge network (typically 172.17.0.1).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=3).read()\""]
       interval: 15s
