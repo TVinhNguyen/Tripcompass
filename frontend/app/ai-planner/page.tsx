@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useRef, useEffect, useCallback, Suspense } from "react"
+import { flushSync } from "react-dom"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
@@ -166,9 +167,15 @@ function AIPlannerContent() {
       },
 
       onToken(token) {
-        setMessages((prev) =>
-          prev.map((m) => m.id === aiMsgId ? { ...m, content: m.content + token } : m)
-        )
+        // flushSync defeats React 18 automatic batching so each token paints
+        // on its own frame. Otherwise multiple SSE events arriving in the same
+        // network read get coalesced into one render and the user sees text
+        // appear in chunks instead of streaming.
+        flushSync(() => {
+          setMessages((prev) =>
+            prev.map((m) => m.id === aiMsgId ? { ...m, content: m.content + token } : m)
+          )
+        })
         // First real token → drop the thinking placeholder.
         setToolRunning((prev) => (prev === "AI đang suy nghĩ..." ? null : prev))
       },
