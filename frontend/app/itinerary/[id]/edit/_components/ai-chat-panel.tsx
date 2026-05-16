@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { motion } from "framer-motion";
 import { Bot, Loader2, RefreshCw, Send, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -85,9 +86,17 @@ export function AIChatPanel({
         setToolRunning((prev) => prev ?? "🤔 AI đang suy nghĩ...");
       },
       onToken(token) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === aiMsgId ? { ...m, content: m.content + token } : m)),
-        );
+        // flushSync defeats React 18's automatic batching so each token paints
+        // on its own frame. Without this, when the SSE reader returns multiple
+        // events in a single network read (very common with Ollama's bursty
+        // delivery), every onToken call inside that synchronous loop gets
+        // coalesced into one render — the user sees text appear in chunks
+        // instead of streaming smoothly.
+        flushSync(() => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === aiMsgId ? { ...m, content: m.content + token } : m)),
+          );
+        });
         setToolRunning((prev) => (prev === "🤔 AI đang suy nghĩ..." ? null : prev));
       },
       onDone(newSessionId, fullText, plan, toolCalls) {
