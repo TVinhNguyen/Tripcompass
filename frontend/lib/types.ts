@@ -51,6 +51,8 @@ export type Place = {
   base_price?: number;           // VND
   phone?: string;
   website?: string;
+  parent_id?: string;
+  sub_attractions?: string[];
   source_url?: string;
   metadata?: Record<string, unknown>;
   created_at?: string;
@@ -222,6 +224,7 @@ export type TimeSlot = {
   slot_type: string;
   is_buffer: boolean;
   combo_covered?: boolean;
+  notes?: string;
   place?: SlotPlace;
 };
 

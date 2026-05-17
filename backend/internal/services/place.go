@@ -7,6 +7,7 @@ import (
 	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -43,6 +44,8 @@ type CreatePlaceInput struct {
 	Website             *string              `json:"website"`
 	ExternalID          *string              `json:"external_id"`
 	ExternalSource      *string              `json:"external_source"`
+	ParentID            *string              `json:"parent_id"`
+	SubAttractions      []string             `json:"sub_attractions"`
 	Metadata            datatypes.JSON       `json:"metadata"`
 	SourceURL           *string              `json:"source_url"`
 	MustVisit           bool                 `json:"must_visit"`
@@ -71,6 +74,8 @@ type UpdatePlaceInput struct {
 	Website             *string               `json:"website"`
 	ExternalID          *string               `json:"external_id"`
 	ExternalSource      *string               `json:"external_source"`
+	ParentID            *string               `json:"parent_id"`
+	SubAttractions      []string              `json:"sub_attractions"`
 	Metadata            *datatypes.JSON       `json:"metadata"`
 	SourceURL           *string               `json:"source_url"`
 	MustVisit           *bool                 `json:"must_visit"`
@@ -260,6 +265,14 @@ func (s *PlaceService) Create(input CreatePlaceInput) (*models.Place, error) {
 	}
 
 	now := time.Now()
+	var parentID *uuid.UUID
+	if input.ParentID != nil && strings.TrimSpace(*input.ParentID) != "" {
+		parsed, err := uuid.Parse(strings.TrimSpace(*input.ParentID))
+		if err != nil {
+			return nil, fmt.Errorf("parent_id must be a valid UUID")
+		}
+		parentID = &parsed
+	}
 	p := models.Place{
 		Destination:         strings.ToLower(strings.TrimSpace(input.Destination)),
 		Category:            category,
@@ -281,6 +294,8 @@ func (s *PlaceService) Create(input CreatePlaceInput) (*models.Place, error) {
 		Website:             input.Website,
 		ExternalID:          input.ExternalID,
 		ExternalSource:      input.ExternalSource,
+		ParentID:            parentID,
+		SubAttractions:      nilSafePQArray(input.SubAttractions),
 		Metadata:            input.Metadata,
 		SourceURL:           input.SourceURL,
 		MustVisit:           input.MustVisit,
@@ -382,6 +397,21 @@ func (s *PlaceService) Update(id string, input UpdatePlaceInput) (*models.Place,
 	}
 	if input.ExternalSource != nil {
 		updates["external_source"] = *input.ExternalSource
+	}
+	if input.ParentID != nil {
+		raw := strings.TrimSpace(*input.ParentID)
+		if raw == "" {
+			updates["parent_id"] = nil
+		} else {
+			parsed, err := uuid.Parse(raw)
+			if err != nil {
+				return nil, fmt.Errorf("parent_id must be a valid UUID")
+			}
+			updates["parent_id"] = parsed
+		}
+	}
+	if input.SubAttractions != nil {
+		updates["sub_attractions"] = pq.StringArray(input.SubAttractions)
 	}
 
 	if err := s.db.Model(&p).Updates(updates).Error; err != nil {

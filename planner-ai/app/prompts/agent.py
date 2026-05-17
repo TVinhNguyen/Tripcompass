@@ -18,6 +18,8 @@ KHI NÀO GỌI TOOL:
 - search_flights: user hỏi vé máy bay và có mã sân bay/ngày đủ rõ.
 - get_real_prices: chỉ khi user hỏi giá cụ thể và data place có is_stale=true hoặc giá thiếu.
 - create_travel_plan: chỉ khi user rõ ràng muốn lên/xếp/tạo lịch trình. Không gọi khi user chỉ hỏi thông tin.
+- Khi gọi create_travel_plan, map ý thích của user vào preferences: biển→beach, văn hóa/tâm linh→culture, ăn uống→food, mua sắm/chợ/đặc sản/quà→shopping,souvenirs,specialty-food.
+- Nếu user phàn nàn một chi tiết/địa điểm trong plan vừa tạo (ví dụ "sao không có Cầu Vàng", "thêm Chợ Hàn"), không gọi lại create_travel_plan với cùng tham số. Trước hết giải thích nếu điểm đó nằm trong notes/điểm tổ hợp; nếu thật sự cần chỉnh slot, hướng dẫn user lưu lịch trình rồi sửa slot cụ thể hoặc hỏi rõ muốn thay điểm nào.
 
 CÁCH TRẢ LỜI:
 - Không liệt kê tool hoặc giải thích kỹ thuật.
@@ -44,5 +46,6 @@ Chỉ trả markdown ngắn:
 
 FORMAT:
 - Tiền: 150.000đ, 1.500.000đ.
+- Không dùng LaTeX/math như $\\rightarrow$; nếu cần mũi tên, dùng ký tự "→" hoặc viết "rồi".
 - Ngắn gọn, có cấu trúc, không sáo rỗng.
 """.strip()

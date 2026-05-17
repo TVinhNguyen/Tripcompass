@@ -88,11 +88,21 @@ interface ChatMarkdownProps {
   className?: string
 }
 
+function normalizeChatMarkdown(content: string) {
+  return content
+    .replace(/\$\\rightarrow\$/g, "→")
+    .replace(/\\rightarrow/g, "→")
+    .replace(/\$\\leftarrow\$/g, "←")
+    .replace(/\\leftarrow/g, "←")
+}
+
 export function ChatMarkdown({ content, className }: ChatMarkdownProps) {
+  const normalizedContent = normalizeChatMarkdown(content)
+
   return (
     <div className={className}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   )

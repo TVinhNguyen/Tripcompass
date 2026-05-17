@@ -12,12 +12,36 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Loader2, MapPin, Calendar, Wallet, X } from "lucide-react";
+import { ChevronDown, Loader2, MapPin, Calendar, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { savePlanAsItinerary } from "@/lib/plan-to-itinerary";
 import { toast } from "sonner";
 import type { GenerateResponse } from "@/lib/types";
+
+const slotLabels: Record<string, string> = {
+  breakfast: "Ăn sáng",
+  lunch: "Ăn trưa",
+  dinner: "Ăn tối",
+  morning_activity: "Sáng",
+  afternoon_activity: "Chiều",
+  evening_activity: "Tối",
+  full_day_activity: "Cả ngày",
+};
+
+function slotSummary(slot: GenerateResponse["days"][number]["slots"][number]) {
+  const label = slotLabels[slot.slot_type] ?? "";
+  const name = slot.place?.name ?? "";
+  const notes = typeof slot.notes === "string" ? slot.notes.trim() : "";
+  const text = name && notes ? `${name} (${notes})` : name || notes;
+
+  if (!text) return "";
+  return label ? `${label}: ${text}` : text;
+}
+
+function slotTitle(slot: GenerateResponse["days"][number]["slots"][number]) {
+  return slot.place?.name ?? slot.notes ?? slotLabels[slot.slot_type] ?? "Hoạt động";
+}
 
 interface PlanPreviewCardProps {
   plan: GenerateResponse;
@@ -30,6 +54,7 @@ export function PlanPreviewCard({ plan, onSaved }: PlanPreviewCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   const totalDays = plan.days?.length ?? 0;
   const dest = plan.days?.[0]?.primary_area ?? "Việt Nam";
@@ -125,8 +150,8 @@ export function PlanPreviewCard({ plan, onSaved }: PlanPreviewCardProps) {
                     </div>
                     <span className="truncate">
                       {day.slots
-                        .filter((s) => !s.is_buffer && s.place)
-                        .map((s) => s.place?.name)
+                        .map(slotSummary)
+                        .filter(Boolean)
                         .join(" · ")}
                     </span>
                   </li>
@@ -135,6 +160,47 @@ export function PlanPreviewCard({ plan, onSaved }: PlanPreviewCardProps) {
                   <li className="text-xs text-white/40">+{plan.days.length - 3} ngày nữa...</li>
                 )}
               </ul>
+
+              <button
+                type="button"
+                onClick={() => setTimelineOpen((open) => !open)}
+                className="mt-3 flex w-full items-center justify-between rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-white/80 hover:bg-white/5"
+                aria-expanded={timelineOpen}
+              >
+                <span>Chi tiết lịch trình</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${timelineOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {timelineOpen && (
+                <div className="mt-3 max-h-72 space-y-3 overflow-y-auto pr-1">
+                  {plan.days.map((day) => (
+                    <div key={day.day_num} className="space-y-2">
+                      <div className="text-xs font-medium text-[#d4a853]">
+                        Ngày {day.day_num}
+                        {day.date_str ? ` · ${day.date_str}` : ""}
+                      </div>
+                      <ol className="space-y-2">
+                        {day.slots.map((slot, index) => {
+                          const label = slotLabels[slot.slot_type] ?? slot.slot_type;
+                          const time = slot.start && slot.end ? `${slot.start}-${slot.end}` : "";
+                          const notes = typeof slot.notes === "string" ? slot.notes.trim() : "";
+
+                          return (
+                            <li key={`${day.day_num}-${slot.start}-${slot.end}-${index}`} className="grid grid-cols-[4.5rem_1fr] gap-2 text-xs">
+                              <span className="font-medium text-white/45">{time}</span>
+                              <span className="min-w-0">
+                                <span className="block text-white/55">{label}</span>
+                                <span className="block truncate text-white/90">{slotTitle(slot)}</span>
+                                {notes && <span className="block text-white/55">{notes}</span>}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

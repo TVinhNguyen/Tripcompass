@@ -26,6 +26,7 @@ async def fetch_places(
             OR LOWER(destination) = $2
             OR LOWER(destination) ILIKE '%' || $2 || '%')""",
         "category = 'ATTRACTION'",
+        "parent_id IS NULL",
     ]
     params: list = [destination, dest_ascii]
     idx = 3
@@ -57,7 +58,7 @@ async def fetch_places(
                must_visit, priority_score, best_time_of_day, tags,
                open_time::text AS open_time, close_time::text AS close_time,
                hours, recommended_duration,
-               base_price, price_updated_at
+               base_price, price_updated_at, sub_attractions
         FROM {config.DB_SCHEMA}.places
         WHERE {" AND ".join(conditions)}
         ORDER BY {preference_rank} must_visit DESC, priority_score DESC, rating DESC NULLS LAST
@@ -91,6 +92,7 @@ async def fetch_places(
             "priority_score": int(r["priority_score"]),
             "best_time_of_day": r["best_time_of_day"] or "",
             "tags": list(r["tags"] or []),
+            "sub_attractions": list(r["sub_attractions"] or []),
             "hours": hours or "08:00-17:00",
             "duration_min": int(r["recommended_duration"] or 90),
             "base_price": int(r["base_price"] or 0),
@@ -99,4 +101,3 @@ async def fetch_places(
 
     logger.info(f"[get_places] dest={destination!r} → {len(places)} attractions")
     return {"success": True, "count": len(places), "places": places}
-
