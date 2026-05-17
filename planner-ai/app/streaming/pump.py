@@ -17,6 +17,7 @@ from loguru import logger
 
 from app.streaming.helpers import _sse, _content_to_text, _message_content, _has_tool_calls
 from app.streaming.think_stripper import _ThinkStripper, _strip_thinking
+from app.streaming.json_stripper import _JsonStripper
 from app.streaming.response_shape import _to_generate_response, _extract_plan
 from app.streaming.summary import _strip_json_objects, _deterministic_summary
 
@@ -30,17 +31,20 @@ async def stream_chat_response(
 
     Yields SSE-formatted strings: "data: {...}\\n\\n"
 
-    JSON suppression note:
-      The agent prompt instructs the LLM not to dump raw JSON. If the LLM
-      complies, no JSON tokens appear in the stream. We do NOT attempt
-      real-time token suppression (fragile with 1-3 char tokens). Instead,
-      _strip_json_objects cleans full_text in the done event as a safety net.
+    JSON suppression: two live layers + one post-hoc safety net.
+      L1: chunks carrying tool_call_chunks have their content dropped — the
+          model is mid-serializing a tool call, any content is unintended.
+      L2: _JsonStripper drops balanced top-level {...} blocks char-by-char,
+          for providers (Gemma+Ollama) that emit tool args as JSON text in
+          content instead of using the tool_call_chunks channel.
+      Final: _strip_json_objects also cleans full_text in the done event.
     """
     tools_used: list[str] = []
     plan_data: dict | None = None
     full_text = ""
     stream_dropped = False  # True if upstream LLM closed the connection mid-stream
     think_stripper = _ThinkStripper()
+    json_stripper = _JsonStripper()
 
     # ── Diagnostics ──────────────────────────────────────────────────────────
     started_at = time.monotonic()
@@ -139,6 +143,11 @@ async def stream_chat_response(
                 if event.get("run_id"):
                     streamed_run_ids.add(str(event["run_id"]))
                 chunk = data.get("chunk")
+                # L1: chunk carries tool_call_chunks → it's mid-serializing a
+                # tool call. Any content alongside is unintended duplicate.
+                if chunk and getattr(chunk, "tool_call_chunks", None):
+                    logger.debug("[stream] L1 skipped content from tool-call chunk")
+                    continue
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     token_event_count += 1
                     token = _content_to_text(chunk.content)
@@ -149,6 +158,8 @@ async def stream_chat_response(
                         first_token_at = time.monotonic() - started_at
                         logger.info(f"[stream] first chat-model token at +{first_token_at:.2f}s")
                     clean_token = think_stripper.feed(token)
+                    # L2: drop top-level {...} blocks for non-native tool calling.
+                    clean_token = json_stripper.feed(clean_token)
                     if clean_token:
                         yield _sse({"type": "token", "content": clean_token})
 
@@ -171,6 +182,7 @@ async def stream_chat_response(
                         first_token_at = time.monotonic() - started_at
                         logger.info(f"[stream] first buffered chat-model output at +{first_token_at:.2f}s")
                     clean_token = think_stripper.feed(content)
+                    clean_token = json_stripper.feed(clean_token)
                     if clean_token:
                         yield _sse({"type": "token", "content": clean_token})
 
@@ -218,6 +230,9 @@ async def stream_chat_response(
 
     # Emit anything still buffered by the think-stripper (post-</think> tail).
     trailing = think_stripper.flush()
+    if trailing:
+        trailing = json_stripper.feed(trailing)
+    json_stripper.flush()
     if trailing:
         yield _sse({"type": "token", "content": trailing})
 

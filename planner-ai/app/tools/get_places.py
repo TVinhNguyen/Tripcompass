@@ -7,9 +7,11 @@ from typing import Optional
 from langchain_core.tools import tool
 
 from app.data_sources.places import fetch_places
+from app.services.tool_cache import cached_tool
 
 
 @tool
+@cached_tool()
 async def get_places(
     destination: str,
     area: Optional[str] = None,

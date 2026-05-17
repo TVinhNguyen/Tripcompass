@@ -7,9 +7,11 @@ from typing import Optional
 from langchain_core.tools import tool
 
 from app.data_sources.food import fetch_food_venues
+from app.services.tool_cache import cached_tool
 
 
 @tool
+@cached_tool()
 async def get_food_venues(
     destination: str,
     area: Optional[str] = None,
