@@ -14,7 +14,10 @@ from loguru import logger
 
 from app import config
 from app.services.normalize import (
+    ascii_fold,
+    extract_required_places,
     normalize_preferences,
+    normalize_required_places,
     normalize_time,
     normalize_time_strictness,
     normalize_travel_style,
@@ -35,6 +38,8 @@ async def generate_travel_plan(
     daily_end_time: Optional[str] = None,
     time_strictness: Optional[str] = "balanced",
     preferences: Optional[list[str]] = None,
+    required_places: Optional[list[str]] = None,
+    raw_input: Optional[str] = None,
     need_hotel: bool = True,
     need_flight: bool = False,
     include_enrich: bool = True,
@@ -54,6 +59,10 @@ async def generate_travel_plan(
     from app.nodes.enrich import node_enrich
 
     prefs = normalize_preferences(preferences)
+    required_names = normalize_required_places([
+        *normalize_required_places(required_places),
+        *extract_required_places(raw_input),
+    ])
 
     # Per-request stage timings — emitted as one structured log line at the
     # end so we can grep production for [plan-timing] and aggregate. All
@@ -79,7 +88,7 @@ async def generate_travel_plan(
 
     # ── 3. Gather data (parallel — these queries are independent) ────────
     places_data, food_data, weather_data, combos_data = await asyncio.gather(
-        fetch_places(destination=dest_id, tags=prefs or None, limit=30),
+        fetch_places(destination=dest_id, tags=prefs or None, limit=80),
         fetch_food_venues(destination=dest_id, tags=prefs or None, limit=20),
         fetch_weather(destination=dest_name, month=travel_month),
         fetch_combos(destination=dest_id),
@@ -93,12 +102,16 @@ async def generate_travel_plan(
         "hotels": [],
         "combos": combos_data.get("combos", []),
     }
+    required_resolved, missing_required = _resolve_required_places(required_names, retrieved["places"])
+    retrieved["required_places"] = required_resolved
 
     warnings = list(resolve.get("warnings", []))
     if not retrieved["places"]:
         warnings.append(f"Không tìm thấy địa điểm nào cho '{dest_id}'.")
     if not retrieved["food"]:
         warnings.append(f"Không tìm thấy nhà hàng nào cho '{dest_id}'.")
+    for name in missing_required:
+        warnings.append(f"Không tìm thấy địa điểm bắt buộc '{name}' trong dữ liệu {dest_name}.")
 
     # ── 4. Build state for sub-pipeline ──────────────────────────────────
     base_warnings = list(warnings)
@@ -118,6 +131,8 @@ async def generate_travel_plan(
         "daily_end_time": normalize_time(daily_end_time),
         "time_strictness": normalize_time_strictness(time_strictness),
         "preferences": prefs,
+        "required_place_names": required_names,
+        "required_places": required_resolved,
         "need_hotel": need_hotel,
         "need_flight": need_flight,
         "retrieved_data": retrieved,
@@ -224,3 +239,56 @@ async def generate_travel_plan(
         "plan": state.get("final_plan", state.get("draft_schedule", {})),
         "weather": weather_data,
     }
+
+
+def _required_match_score(required_name: str, place: dict) -> tuple[int, int] | None:
+    needle = ascii_fold(required_name)
+    aliases = [
+        ascii_fold(str(place.get("name") or "")),
+        *(ascii_fold(str(item)) for item in (place.get("sub_attractions") or [])),
+    ]
+    aliases = [alias for alias in aliases if alias]
+    if not needle:
+        return None
+    for alias in aliases:
+        if needle == alias:
+            return (0, -int(place.get("priority_score") or 0))
+    for alias in aliases:
+        if needle in alias or alias in needle:
+            return (1, -int(place.get("priority_score") or 0))
+    needle_tokens = set(needle.replace("-", " ").split())
+    if not needle_tokens:
+        return None
+    best_overlap = 0
+    for alias in aliases:
+        alias_tokens = set(alias.replace("-", " ").split())
+        overlap = len(needle_tokens & alias_tokens)
+        if overlap > best_overlap:
+            best_overlap = overlap
+    if best_overlap >= min(2, len(needle_tokens)):
+        return (2, -best_overlap)
+    return None
+
+
+def _resolve_required_places(required_names: list[str], places: list[dict]) -> tuple[list[dict], list[str]]:
+    resolved: list[dict] = []
+    missing: list[str] = []
+    used_ids: set[str] = set()
+
+    for name in required_names:
+        candidates = []
+        for place in places:
+            score = _required_match_score(name, place)
+            if score is not None:
+                candidates.append((score, place))
+        if not candidates:
+            missing.append(name)
+            continue
+        candidates.sort(key=lambda item: item[0])
+        place = candidates[0][1]
+        place_id = str(place.get("id") or "")
+        if place_id and place_id not in used_ids:
+            used_ids.add(place_id)
+            resolved.append(place)
+
+    return resolved, missing

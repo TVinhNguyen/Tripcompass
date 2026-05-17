@@ -316,6 +316,9 @@ func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, err
 }
 
 // Publish sets itinerary status explicitly. Accepted statuses: "PUBLISHED", "DRAFT".
+// Returns the itinerary with Activities + Place + Owner preloaded so the response
+// shape matches GET /itineraries/:id — frontend can safely replace its cached
+// state without losing the activity list.
 func (s *ItineraryService) Publish(id, ownerID, status string) (*models.Itinerary, error) {
 	if status != "PUBLISHED" && status != "DRAFT" {
 		return nil, fmt.Errorf("%w: status must be PUBLISHED or DRAFT", apperror.ErrInvalidInput)
@@ -327,8 +330,16 @@ func (s *ItineraryService) Publish(id, ownerID, status string) (*models.Itinerar
 	if err := s.db.Model(&it).UpdateColumn("status", status).Error; err != nil {
 		return nil, fmt.Errorf("update status: %w", err)
 	}
-	it.Status = status
-	return &it, nil
+	var full models.Itinerary
+	if err := s.db.
+		Preload("Activities", func(db *gorm.DB) *gorm.DB {
+			return db.Order("day_number ASC, order_index ASC").Preload("Place")
+		}).
+		Preload("Owner").
+		Where("id = ?", id).First(&full).Error; err != nil {
+		return nil, fmt.Errorf("reload after publish: %w", err)
+	}
+	return &full, nil
 }
 
 // GetPublic returns a published itinerary visible to anyone (no auth required).

@@ -11,6 +11,7 @@ type GenerateRequest struct {
 	BudgetVND      int      `json:"budget_vnd" binding:"required"`
 	GuestCount     int      `json:"guest_count"`
 	PreferenceTags []string `json:"preference_tags,omitempty"`  // ["beach","culture","food","adventure","nature","nightlife"]
+	RequiredPlaces []string `json:"required_places,omitempty"`  // explicit places user selected / said "must include"
 	TravelStyle    string   `json:"travel_style,omitempty"`     // "relaxed" | "balanced" | "standard" | "active"
 	TravelMonth    int      `json:"travel_month,omitempty"`     // 1-12; inferred from StartDate if absent
 	ArrivalTime    string   `json:"arrival_time,omitempty"`     // "10:00" default "15:00"

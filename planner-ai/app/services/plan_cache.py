@@ -6,7 +6,12 @@ import json
 from typing import Any
 
 from app.services.redis import get_redis
-from app.services.normalize import normalize_destination, normalize_preferences
+from app.services.normalize import (
+    extract_required_places,
+    normalize_destination,
+    normalize_preferences,
+    normalize_required_places,
+)
 from app import config
 
 CACHE_KEY_VERSION = "v2"
@@ -45,11 +50,17 @@ def build_plan_cache_key(request: Any) -> str:
         "daily_end_time": _get(request, "daily_end_time"),
         "time_strictness": _get(request, "time_strictness", "balanced"),
         "preferences": normalize_preferences(getattr(request, "preferences", None)),
+        # raw_input is excluded from the key directly (free-text, hurts hit rate),
+        # but it semantically affects the plan via extract_required_places().
+        # Merge both sources here so two requests with identical structured
+        # fields but different raw_input ("phải có: Cầu Vàng" vs "phải có:
+        # Chợ Hàn") produce distinct cache keys. Sorted for order-stability.
+        "required_places": sorted(normalize_required_places([
+            *(getattr(request, "required_places", []) or []),
+            *extract_required_places(getattr(request, "raw_input", None)),
+        ])),
         "need_hotel": getattr(request, "need_hotel", True),
         "need_flight": getattr(request, "need_flight", False),
-        # raw_input intentionally excluded: it's free-text that varies by typo /
-        # whitespace and would otherwise destroy cache hit rate. The structured
-        # fields above fully determine the plan.
         "llm_provider": config.LLM_PROVIDER,
         "llm_model": config.LLM_MODEL,
         "prompt_version": "schedule-v2-flex-time/enrich-v1",

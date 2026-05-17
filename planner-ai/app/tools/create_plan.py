@@ -30,6 +30,8 @@ async def create_travel_plan(
     daily_end_time: Optional[str] = None,
     time_strictness: Optional[str] = "balanced",
     preferences: Optional[list[str]] = None,
+    required_places: Optional[list[str]] = None,
+    raw_input: Optional[str] = None,
     need_hotel: bool = True,
     need_flight: bool = False,
 ) -> str:
@@ -53,6 +55,8 @@ async def create_travel_plan(
             daily_end_time=daily_end_time,
             time_strictness=time_strictness,
             preferences=preferences,
+            required_places=required_places,
+            raw_input=raw_input,
             need_hotel=need_hotel,
             need_flight=need_flight,
             include_enrich=False,

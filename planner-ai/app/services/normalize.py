@@ -17,6 +17,51 @@ def normalize_preferences(preferences: Optional[list[str]]) -> list[str]:
     })
 
 
+def normalize_required_places(required_places: Optional[list[str]]) -> list[str]:
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for place in required_places or []:
+        value = " ".join(str(place).strip(" .;:!?").split())
+        if not value:
+            continue
+        key = ascii_fold(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(value)
+    return normalized
+
+
+def extract_required_places(raw_input: Optional[str]) -> list[str]:
+    text = " ".join(str(raw_input or "").strip().split())
+    if not text:
+        return []
+
+    # Only colon-terminated markers — bare "phai co" matches anywhere in a
+    # sentence ("Bà Nà phải có thời gian sáng đẹp") and produces garbage
+    # required_places. Requiring the colon is the conventional way users
+    # introduce a list in Vietnamese chat ("phải có: A, B, C").
+    folded = ascii_fold(text)
+    markers = ["phai co:", "must have:", "must include:", "include:"]
+    start = -1
+    marker_len = 0
+    for marker in markers:
+        idx = folded.find(marker)
+        if idx >= 0:
+            start = idx
+            marker_len = len(marker)
+            break
+    if start < 0:
+        return []
+
+    segment = text[start + marker_len:]
+    for stop in (". ", "? ", "! ", "\n"):
+        if stop in segment:
+            segment = segment.split(stop, 1)[0]
+    segment = segment.replace(" và ", ",").replace(" and ", ",")
+    return normalize_required_places([s for s in segment.split(",")])
+
+
 def normalize_travel_style(value: Optional[str]) -> str:
     style = str(value or "balanced").strip().lower()
     if style == "standard":

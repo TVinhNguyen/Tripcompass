@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatVND } from "@/lib/format"
+import { useAuth } from "@/hooks/use-auth"
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   FOOD:       <Utensils className="w-3.5 h-3.5" />,
@@ -52,6 +53,7 @@ function formatDate(d: string) {
 
 export default function ItineraryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const { user } = useAuth()
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedDay, setSelectedDay] = useState(1)
@@ -103,6 +105,12 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
   }
 
   if (!itinerary) return null
+
+  // Publish + in-place Edit are owner-only on the backend. Hide the buttons for
+  // non-owners so they don't trigger silent backend rejections; collaborators
+  // who need to edit can deep-link to /edit directly (invitation flow) and
+  // anyone else uses the Clone button to fork the itinerary.
+  const isOwner = !!user && user.id === itinerary.owner_id
 
   const activities: Activity[] = itinerary.activities ?? []
   const days = [...new Set(activities.map((a) => a.day_number))].sort((a, b) => a - b)
@@ -184,16 +192,18 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
                 <Button variant="outline" onClick={handleClone} className="h-10 px-3 border-[#e8e2d9] bg-transparent text-[#1a1a1a]">
                   <Copy className="w-4 h-4 mr-2" />Nhân bản
                 </Button>
-                {itinerary.status === "DRAFT" && (
+                {isOwner && itinerary.status === "DRAFT" && (
                   <Button onClick={handlePublish} className="h-10 bg-[#3d5a3d] hover:bg-[#2d4a2d] text-white">
                     Xuất bản
                   </Button>
                 )}
-                <Button asChild className="h-10 bg-[#1a1a1a] hover:bg-[#3d5a3d] text-white">
-                  <Link href={`/itinerary/${id}/edit`}>
-                    <Edit3 className="w-4 h-4 mr-2" />Chỉnh sửa
-                  </Link>
-                </Button>
+                {isOwner && (
+                  <Button asChild className="h-10 bg-[#1a1a1a] hover:bg-[#3d5a3d] text-white">
+                    <Link href={`/itinerary/${id}/edit`}>
+                      <Edit3 className="w-4 h-4 mr-2" />Chỉnh sửa
+                    </Link>
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -217,9 +227,11 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
           {activities.length === 0 ? (
             <div className="text-center py-16 text-[#6b6b6b]">
               <p className="mb-4">Lịch trình này chưa có hoạt động nào.</p>
-              <Button asChild className="bg-[#3d5a3d] text-white hover:bg-[#2d4a2d]">
-                <Link href={`/itinerary/${id}/edit`}><Edit3 className="w-4 h-4 mr-2" />Thêm hoạt động</Link>
-              </Button>
+              {isOwner && (
+                <Button asChild className="bg-[#3d5a3d] text-white hover:bg-[#2d4a2d]">
+                  <Link href={`/itinerary/${id}/edit`}><Edit3 className="w-4 h-4 mr-2" />Thêm hoạt động</Link>
+                </Button>
+              )}
             </div>
           ) : (
             <div className="flex flex-col lg:flex-row gap-10 lg:gap-14">

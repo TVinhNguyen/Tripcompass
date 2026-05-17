@@ -58,6 +58,7 @@ class PlanRequest(BaseModel):
         default_factory=list,
         validation_alias=AliasChoices("preferences", "preference_tags"),
     )
+    required_places: list[str] = Field(default_factory=list)
     need_hotel:  bool = True
     need_flight: bool = False
     raw_input:   Optional[str] = None   # free-text override for intent node
@@ -70,6 +71,20 @@ class PlanRequest(BaseModel):
             for pref in (value or [])
             if str(pref).strip()
         })
+
+    @field_validator("required_places")
+    @classmethod
+    def normalize_required_places(cls, value: list[str]) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for place in value or []:
+            normalized = " ".join(str(place).strip().split())
+            key = normalized.lower()
+            if not normalized or key in seen:
+                continue
+            seen.add(key)
+            out.append(normalized)
+        return out
 
     class Config:
         populate_by_name = True

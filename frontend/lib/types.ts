@@ -190,6 +190,7 @@ export type GenerateRequest = {
   budget_vnd: number;
   guest_count?: number;
   preference_tags?: string[];
+  required_places?: string[];
   travel_style?: "relaxed" | "balanced" | "standard" | "active";
   travel_month?: number;
   arrival_time?: string;
@@ -320,6 +321,7 @@ export type PlanRequest = {
   guest_count?: number;
   preferences?: string[];
   preference_tags?: string[];
+  required_places?: string[];
   travel_style?: "relaxed" | "balanced" | "standard" | "active";
   arrival_time?: string;
   departure_time?: string;

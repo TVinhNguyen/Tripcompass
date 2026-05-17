@@ -207,6 +207,16 @@ class TestNodeValidate:
         types = [v["type"] for v in result["violations"]]
         assert "HALLUCINATED_PLACE" in types
 
+    def test_required_place_missing_detected(self):
+        schedule = make_schedule([
+            make_slot("place-1", "Ngũ Hành Sơn", 40_000, "09:00", "11:00"),
+        ])
+        state = self._state_with_schedule(schedule, extra={"required_places": [self.VALID_PLACE_2]})
+        result = node_validate(state)
+        types = [v["type"] for v in result["violations"]]
+        assert "REQUIRED_PLACE_MISSING" in types
+        assert result["retryable_violations"][0]["type"] == "REQUIRED_PLACE_MISSING"
+
     def test_over_budget_detected(self):
         schedule = make_schedule([
             make_slot("place-1", "Ngũ Hành Sơn", 900_000),
@@ -543,6 +553,51 @@ class TestFallbackSchedule:
         assert day1_slots[0]["start"] != "15:00"
         assert day1_slots[0]["start"] >= "10:00"
         assert day3_slots[-1]["end"] == "18:00"
+
+    def test_fallback_forces_required_places_generically(self, monkeypatch):
+        fallback_schedule = load_fallback_schedule(monkeypatch)
+        ba_na = {
+            "id": "ba-na",
+            "name": "Ba Na Hills SunWorld",
+            "hours": "08:00-17:00",
+            "base_price": 950_000,
+            "duration_min": 360,
+            "tags": ["theme-park", "golden-bridge", "mountain-resort"],
+            "sub_attractions": ["Cầu Vàng", "Làng Pháp", "Fantasy Park"],
+        }
+        retrieved = {
+            "places": [
+                {"id": "marble", "name": "The Marble Mountains", "hours": "07:00-17:30",
+                 "best_time_of_day": "morning", "base_price": 40_000},
+                {"id": "lady", "name": "Lady Buddha", "hours": "07:00-17:30",
+                 "best_time_of_day": "morning", "base_price": 0},
+                ba_na,
+                {"id": "dragon", "name": "Dragon Bridge", "hours": "00:00-23:59",
+                 "duration_min": 60, "base_price": 0, "tags": ["night-view", "fire-show"]},
+                {"id": "apec", "name": "APEC Park", "hours": "00:00-23:59",
+                 "duration_min": 60, "base_price": 0, "tags": ["parks"]},
+            ],
+            "food": [],
+            "hotels": [],
+        }
+        draft = fallback_schedule(
+            make_state(
+                num_days=3,
+                start_date="2026-05-01",
+                end_date="2026-05-03",
+                required_places=[ba_na, {"id": "dragon", "name": "Dragon Bridge", "base_price": 0},
+                                 {"id": "apec", "name": "APEC Park", "base_price": 0}],
+            ),
+            retrieved,
+        )
+
+        slots = [slot for day in draft["days"] for slot in day["slots"]]
+        ba_na_slot = next(slot for slot in slots if slot.get("place_id") == "ba-na")
+        assert ba_na_slot["slot_type"] == "full_day_activity"
+        assert "Cầu Vàng" in ba_na_slot["notes"]
+        assert sum(1 for slot in slots if slot.get("place_id") == "ba-na") == 1
+        assert any(slot.get("place_id") == "dragon" for slot in slots)
+        assert any(slot.get("place_id") == "apec" for slot in slots)
 
     def test_fallback_respects_hours(self, monkeypatch):
         """Regression test for the CLOSED_HOURS bug fixed in e695c88.
