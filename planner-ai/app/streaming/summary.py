@@ -90,6 +90,33 @@ def _strip_json_objects(text: str) -> str:
 
 
 _DAY_LABEL = {"arrival": "Đến nơi", "departure": "Trở về", "standard": ""}
+_SLOT_LABEL = {
+    "breakfast": "Ăn sáng",
+    "lunch": "Ăn trưa",
+    "dinner": "Ăn tối",
+    "morning_activity": "Sáng",
+    "afternoon_activity": "Chiều",
+    "evening_activity": "Tối",
+    "full_day_activity": "Cả ngày",
+}
+
+
+def _slot_summary(slot: dict) -> str:
+    slot_type = str(slot.get("slot_type") or "")
+    label = _SLOT_LABEL.get(slot_type, "")
+    place = slot.get("place")
+    name = ""
+    if isinstance(place, dict):
+        name = str(place.get("name") or "")
+    notes = str(slot.get("notes") or "").strip()
+
+    if name and notes:
+        text = f"{name} ({notes})"
+    else:
+        text = name or notes
+    if not text:
+        return ""
+    return f"{label}: {text}" if label else text
 
 
 def _deterministic_summary(plan: dict, stream_dropped: bool) -> str:
@@ -108,16 +135,16 @@ def _deterministic_summary(plan: dict, stream_dropped: bool) -> str:
         "",
     ]
     for d in days[:7]:
-        names = [
-            s["place"]["name"]
+        items = [
+            item
             for s in (d.get("slots") or [])
-            if isinstance(s.get("place"), dict) and s["place"].get("name")
+            if (item := _slot_summary(s))
         ]
-        if not names:
+        if not items:
             continue
         label = _DAY_LABEL.get(d.get("day_type", ""), "")
         prefix = f"**Ngày {d.get('day_num')}**" + (f" — {label}" if label else "")
-        lines.append(f"- {prefix}: {' · '.join(names)}")
+        lines.append(f"- {prefix}: {' · '.join(items)}")
 
     recap = plan.get("budget_recap") or {}
     total = recap.get("total_budget_vnd")

@@ -124,6 +124,11 @@ export async function savePlanAsItinerary(
       // Skip buffer slots & slots without a place
       if (slot.is_buffer || !slot.place) continue;
 
+      const notes = [
+        slot.notes,
+        slot.combo_covered ? "Đã bao gồm trong combo" : null,
+      ].filter(Boolean).join(" — ") || undefined;
+
       const body: CreateActivityInput = {
         itinerary_id: itinerary.id,
         place_id: slot.place.id,
@@ -137,7 +142,7 @@ export async function savePlanAsItinerary(
         lat: slot.place.lat,
         lng: slot.place.lng,
         image_url: slot.place.cover_image,
-        notes: slot.combo_covered ? "Đã bao gồm trong combo" : undefined,
+        notes,
       };
 
       await apiFetch("/activities", { method: "POST", body });

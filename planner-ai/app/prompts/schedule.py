@@ -12,8 +12,17 @@ HARD RULES:
 3. Tôn trọng hours, arrival/departure, daily_start/end, budget và travel_style.
 4. Slot phải trong cùng ngày: end > start, không dùng 23:00-01:00.
 5. Chừa travel buffer hợp lý; nhóm điểm gần nhau/cùng area.
-6. Meal slot phải dùng food từ context. Nếu food rỗng: place_id=null, tên "Ăn sáng/trưa/tối tự do", giá theo tier.
+6. Mỗi ngày phải có meal slots hợp lý:
+   - standard day: breakfast, lunch, dinner.
+   - arrival day: lunch/dinner; thêm breakfast nếu arrival_time trước 09:30.
+   - departure day: breakfast; thêm lunch nếu departure_time sau 13:00.
+   Meal slot ưu tiên food từ context. Nếu không có quán phù hợp giờ/bữa: place_id=null, place_name="Ăn sáng/trưa/tối tự do", giá theo tier.
 7. Hotel: nếu context.hotels có data thì dùng hotel phù hợp; nếu rỗng dùng "Khách sạn tại [destination]" và hotel_budget_per_night.
+8. Với điểm dạng tổ hợp, notes phải nêu điểm con/việc cần làm quan trọng:
+   - Nếu place.sub_attractions không rỗng: notes bắt buộc liệt kê sub_attractions, cách nhau bằng " · ".
+   - Nếu place có duration_min >= 240: dùng slot_type="full_day_activity" và notes liệt kê các điểm con nổi bật nếu biết.
+   - Nếu place có area="Bà Nà Hills" hoặc tags chứa theme-park/golden-bridge/ba-na-hills: notes bắt buộc ghi "Cầu Vàng, Làng Pháp, Fantasy Park".
+   - Nếu place có tags shopping/local-market/souvenirs/specialty-food: notes ghi mục tiêu mua sắm, ví dụ "mua đặc sản/quà".
 
 TIME STYLE:
 - relaxed: ít điểm, buffer dài, bắt đầu muộn hơn.
@@ -63,5 +72,5 @@ SCHEMA:
     "vs_budget":"within|over|under"
   }
 }
-Để notes trống. Validator sẽ tự tính lại ngân sách.
+Notes ngắn gọn, chỉ dùng để làm rõ điểm con/việc cần làm; không đổi giá. Validator sẽ tự tính lại ngân sách.
 """.strip()

@@ -20,7 +20,8 @@ from app.services.time_utils import (
 )
 # Fields the LLM needs for scheduling decisions — everything else is display-only
 _PLACE_FIELDS = ("id", "name", "hours", "base_price", "duration_min",
-                 "must_visit", "best_time_of_day", "latitude", "longitude", "area")
+                 "must_visit", "best_time_of_day", "latitude", "longitude",
+                 "area", "tags", "sub_attractions")
 _FOOD_FIELDS  = ("id", "name", "hours", "base_price", "area", "tags")
 _HOTEL_FIELDS = ("name", "price_per_night_vnd", "rating")
 _COMBO_FIELDS = ("name", "price_per_person", "duration_days", "requires_overnight", "includes")

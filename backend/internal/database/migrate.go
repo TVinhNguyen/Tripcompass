@@ -310,6 +310,33 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// L: Model parent/child attractions so planner prompts schedule
+			// top-level places and describe important sub-attractions in notes.
+			ID: "202605170012_place_parent_sub_attractions",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`ALTER TABLE schema_travel.places
+						ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES schema_travel.places(id) ON DELETE SET NULL;`,
+					`ALTER TABLE schema_travel.places
+						ADD COLUMN IF NOT EXISTS sub_attractions TEXT[] NOT NULL DEFAULT '{}';`,
+					`CREATE INDEX IF NOT EXISTS idx_places_parent_id
+						ON schema_travel.places (parent_id);`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				_ = tx.Exec(`DROP INDEX IF EXISTS schema_travel.idx_places_parent_id;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.places DROP COLUMN IF EXISTS sub_attractions;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.places DROP COLUMN IF EXISTS parent_id;`).Error
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()
