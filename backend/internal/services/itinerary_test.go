@@ -416,6 +416,20 @@ func TestItineraryService_Publish(t *testing.T) {
 		_, err := svc.Publish(uuid.New().String(), user.ID.String(), "PUBLISHED")
 		assert.Error(t, err)
 	})
+
+	// Regression: Publish used to return the itinerary without preloading
+	// Activities, which caused the frontend to clear its activity list after
+	// hitting "Xuất bản". The response shape must match GetOne.
+	t.Run("response includes activities and owner", func(t *testing.T) {
+		it := createTestItinerary(t, db, user.ID)
+		_ = createTestActivity(t, db, it.ID)
+		_ = createTestActivity(t, db, it.ID)
+		result, err := svc.Publish(it.ID.String(), user.ID.String(), "PUBLISHED")
+		require.NoError(t, err)
+		assert.Equal(t, "PUBLISHED", result.Status)
+		assert.Len(t, result.Activities, 2, "Publish must preload Activities")
+		assert.Equal(t, user.ID, result.Owner.ID, "Publish must preload Owner")
+	})
 }
 
 // ─── Explore ─────────────────────────────────────────────────────────────────

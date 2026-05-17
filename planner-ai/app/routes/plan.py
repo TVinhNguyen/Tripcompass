@@ -51,6 +51,8 @@ async def generate_plan(req: PlanRequest):
             daily_end_time=req.daily_end_time,
             time_strictness=req.time_strictness,
             preferences=req.preferences,
+            required_places=req.required_places,
+            raw_input=req.raw_input,
             need_hotel=req.need_hotel,
             need_flight=req.need_flight,
             # /plan direct serves the structured-form UI which renders enrich

@@ -32,6 +32,7 @@ RETRYABLE_VIOLATION_TYPES = {
     "CLOSED_HOURS",
     "TIME_OVERLAP",
     "INSUFFICIENT_TRAVEL_TIME",
+    "REQUIRED_PLACE_MISSING",
 }
 
 
@@ -150,6 +151,7 @@ def node_validate(state: TravelPlanState) -> dict:
 
     # Track across days
     seen_place_ids: dict[str, int] = {}  # id → first day_num
+    scheduled_place_ids: set[str] = set()
     total_attr_spend = 0
 
     for day in days:
@@ -185,6 +187,7 @@ def node_validate(state: TravelPlanState) -> dict:
 
             if slot_type in BUFFER_SLOT_TYPES or not place_id:
                 continue
+            scheduled_place_ids.add(place_id)
 
             # ── 1. HALLUCINATED_PLACE ──────────────────────────────────────
             if place_id not in valid_ids:
@@ -272,6 +275,20 @@ def node_validate(state: TravelPlanState) -> dict:
                 ))
 
     # ── 8. OVER_BUDGET ────────────────────────────────────────────────────
+    for required in state.get("required_places", []) or []:
+        # state["required_places"] is resolved dicts; guard against accidental
+        # pass-through of the parallel state["required_place_names"] (list[str]).
+        if not isinstance(required, dict):
+            continue
+        required_id = str(required.get("id") or "")
+        if required_id and required_id not in scheduled_place_ids:
+            violations.append(_violation(
+                "REQUIRED_PLACE_MISSING",
+                "all",
+                f"Lịch trình thiếu địa điểm bắt buộc '{required.get('name') or required_id}'.",
+                required.get("name") or required_id,
+            ))
+
     if attr_budget > 0 and total_attr_spend > attr_budget:
         violations.append(_violation(
             "OVER_BUDGET",

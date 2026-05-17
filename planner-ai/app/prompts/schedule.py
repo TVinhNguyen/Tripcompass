@@ -23,6 +23,7 @@ HARD RULES:
    - Nếu place có duration_min >= 240: dùng slot_type="full_day_activity" và notes liệt kê các điểm con nổi bật nếu biết.
    - Nếu place có area="Bà Nà Hills" hoặc tags chứa theme-park/golden-bridge/ba-na-hills: notes bắt buộc ghi "Cầu Vàng, Làng Pháp, Fantasy Park".
    - Nếu place có tags shopping/local-market/souvenirs/specialty-food: notes ghi mục tiêu mua sắm, ví dụ "mua đặc sản/quà".
+9. Nếu context.required_places không rỗng, lịch trình BẮT BUỘC có tất cả các place trong required_places, trừ khi không thể xếp đủ thời gian/budget; nếu không thể, vẫn phải ưu tiên xếp nhiều nhất có thể và validator sẽ báo REQUIRED_PLACE_MISSING.
 
 TIME STYLE:
 - relaxed: ít điểm, buffer dài, bắt đầu muộn hơn.
