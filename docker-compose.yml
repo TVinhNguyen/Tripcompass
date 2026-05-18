@@ -32,8 +32,13 @@ services:
     build:
       context: ./planner-ai
       dockerfile: Dockerfile.dev
-    ports:
-      - "8090:8090"
+    # No host port mapping: planner-ai has no auth and must only be reachable
+    # via the Go backend proxy. Uncomment ports below ONLY if you need to hit
+    # it directly from the host for debugging.
+    # ports:
+    #   - "8090:8090"
+    expose:
+      - "8090"
     env_file:
       - ./planner-ai/.env
     environment:

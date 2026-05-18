@@ -24,7 +24,8 @@ type Options = {
 };
 
 export function useUserNotifications(opts: Options = {}) {
-  const { token } = useAuth();
+  // Auth rides on the HttpOnly session cookie sent on the WS upgrade.
+  const { user } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(0);
   const onEventRef = useRef(opts.onEvent);
@@ -44,14 +45,12 @@ export function useUserNotifications(opts: Options = {}) {
   }, []);
 
   useEffect(() => {
-    if (!token) return;
+    if (!user) return;
     let cancelled = false;
 
     const connect = () => {
-      // Bearer subprotocol + ?token= fallback — same transition strategy as
-      // useItineraryWS. See its comment for why both paths coexist.
-      const url = `${WS_URL}/user?token=${encodeURIComponent(token)}`;
-      const ws = new WebSocket(url, ["bearer", token]);
+      const url = `${WS_URL}/user`;
+      const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => { retryRef.current = 0; };
@@ -81,5 +80,5 @@ export function useUserNotifications(opts: Options = {}) {
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [token, handle]);
+  }, [user, handle]);
 }

@@ -19,7 +19,9 @@ import (
 
 const (
 	keyPrefix     = "itinerary_views:"
-	FlushInterval = 30 * time.Second // flush buffered counts to DB every 30s
+	dedupePrefix  = "itinerary_view_dedupe:"
+	dedupeTTL     = 1 * time.Hour // one viewerKey counts at most once per hour
+	FlushInterval = 30 * time.Second
 )
 
 // Counter is a Redis-backed buffered view counter.
@@ -33,12 +35,26 @@ func New(rdb *redis.Client, db *gorm.DB) *Counter {
 	return &Counter{rdb: rdb, db: db}
 }
 
-// RecordView increments the view count for itineraryID.
-// Fast path: Redis INCR (no DB write). Fallback: direct DB UPDATE.
-func (c *Counter) RecordView(ctx context.Context, itineraryID string) {
+// RecordView increments the view count for itineraryID at most once per
+// dedupeTTL window per viewerKey. viewerKey is the caller's IP or user ID —
+// anything stable enough to suppress refresh-spam bots inflating popularity.
+// Pass "" to skip dedupe (e.g. internal/test paths).
+//
+// Fast path: Redis SET NX → INCR. Fallback: direct DB UPDATE without dedupe
+// (the in-memory degraded mode trades dedupe for "still works without Redis").
+func (c *Counter) RecordView(ctx context.Context, itineraryID, viewerKey string) {
 	if c.rdb == nil {
 		c.directIncrement(itineraryID)
 		return
+	}
+	if viewerKey != "" {
+		dk := dedupePrefix + itineraryID + ":" + viewerKey
+		ok, err := c.rdb.SetNX(ctx, dk, 1, dedupeTTL).Result()
+		if err != nil {
+			slog.Warn("viewcounter: redis SETNX failed, counting view anyway", "id", itineraryID, "err", err)
+		} else if !ok {
+			return // already counted within window
+		}
 	}
 	key := keyPrefix + itineraryID
 	if err := c.rdb.Incr(ctx, key).Err(); err != nil {

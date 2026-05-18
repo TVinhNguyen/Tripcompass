@@ -281,21 +281,9 @@ func TestItineraryService_Update(t *testing.T) {
 		assert.Equal(t, 10, updated.EndDate.Day())
 	})
 
-	t.Run("invalid status", func(t *testing.T) {
-		badStatus := "INVALID"
-		input := UpdateItineraryInput{Status: &badStatus}
-		_, err := svc.Update(it.ID.String(), user.ID.String(), input)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "status must be DRAFT or PUBLISHED")
-	})
-
-	t.Run("valid status - DRAFT", func(t *testing.T) {
-		status := "DRAFT"
-		input := UpdateItineraryInput{Status: &status}
-		updated, err := svc.Update(it.ID.String(), user.ID.String(), input)
-		require.NoError(t, err)
-		assert.Equal(t, "DRAFT", updated.Status)
-	})
+	// Status changes are no longer accepted by Update — they must go through
+	// PATCH /itineraries/:id/publish (Publish service method). Tests for
+	// status validity live in TestItineraryService_Publish.
 
 	t.Run("forbidden - wrong owner", func(t *testing.T) {
 		otherUser := createTestUserWith(t, db, "wrong@example.com")

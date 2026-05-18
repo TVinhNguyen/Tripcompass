@@ -15,12 +15,16 @@ type bucket struct {
 }
 
 var (
-	buckets = make(map[string]*bucket)
-	mu      sync.Mutex
+	buckets       = make(map[string]*bucket)
+	mu            sync.Mutex
+	cleanupOnce   sync.Once
 )
 
-func init() {
-	// Cleanup expired buckets every 5 minutes to prevent memory leak
+// startCleanup launches the background goroutine that evicts expired buckets.
+// Called lazily by RateLimit so the goroutine never starts when only the
+// Redis-backed limiter is in use (the typical path; this in-memory limiter
+// is only the fallback when Redis is unavailable).
+func startCleanup() {
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -39,7 +43,9 @@ func init() {
 
 // RateLimit returns a middleware that limits requests per IP.
 // maxRequests: maximum requests allowed within windowSecs.
+// This is the in-memory fallback limiter; production uses RateLimitRedis.
 func RateLimit(maxRequests int, windowSecs int) gin.HandlerFunc {
+	cleanupOnce.Do(startCleanup)
 	window := time.Duration(windowSecs) * time.Second
 
 	return func(c *gin.Context) {

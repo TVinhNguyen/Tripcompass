@@ -80,8 +80,9 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 		auth.POST("/login", middleware.RateLimitRedis(rdb, 10, 60), authHandler.Login)
 		auth.POST("/verify", middleware.RateLimitRedis(rdb, 20, 60), authHandler.VerifyEmail)
 		auth.POST("/resend-verification", middleware.RateLimitRedis(rdb, 3, 300), authHandler.ResendVerification)
-		auth.POST("/google", authHandler.GoogleLogin)
-		auth.POST("/facebook", authHandler.FacebookLogin)
+		auth.POST("/google", middleware.RateLimitRedis(rdb, 10, 60), authHandler.GoogleLogin)
+		auth.POST("/facebook", middleware.RateLimitRedis(rdb, 10, 60), authHandler.FacebookLogin)
+		auth.POST("/logout", authHandler.Logout)
 
 		api.GET("/explore", itineraryHandler.Explore)
 
@@ -139,15 +140,20 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 			protected.DELETE("/ai-chat/sessions/:id", aiChatHandler.DeleteSession)
 			protected.POST("/ai-chat/stream", middleware.RateLimitRedis(rdb, 30, 60), aiChatHandler.Stream)
 
-			protected.POST("/places", placeHandler.Create)
-			protected.PATCH("/places/:id", placeHandler.Update)
-			protected.DELETE("/places/:id", placeHandler.Delete)
+			// Master-catalog writes: any logged-in user must NOT be able to
+			// mutate places/combos/knowledge-base. Gated by admin-email
+			// allowlist on top of JWT. Paths kept under their original prefix
+			// so the existing admin frontend doesn't need to switch base URL.
+			adminGate := middleware.RequireAdminEmail(cfg.AdminEmails)
+			protected.POST("/places", adminGate, placeHandler.Create)
+			protected.PATCH("/places/:id", adminGate, placeHandler.Update)
+			protected.DELETE("/places/:id", adminGate, placeHandler.Delete)
 
-			protected.POST("/combos", comboHandler.Create)
-			protected.PATCH("/combos/:id", comboHandler.Update)
-			protected.DELETE("/combos/:id", comboHandler.Delete)
+			protected.POST("/combos", adminGate, comboHandler.Create)
+			protected.PATCH("/combos/:id", adminGate, comboHandler.Update)
+			protected.DELETE("/combos/:id", adminGate, comboHandler.Delete)
 
-			protected.POST("/knowledge-base/seed", seedHandler.BulkSeed)
+			protected.POST("/knowledge-base/seed", adminGate, seedHandler.BulkSeed)
 		}
 
 		// Admin routes (JWT + email allowlist) ───────────────────────────────

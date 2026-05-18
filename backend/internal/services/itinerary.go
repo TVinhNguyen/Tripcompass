@@ -61,7 +61,8 @@ type UpdateItineraryInput struct {
 	Tags           pq.StringArray `json:"tags"`
 	BudgetCategory *string        `json:"budget_category"`
 	CoverImageURL  *string        `json:"cover_image_url"`
-	Status         *string        `json:"status"` // DRAFT | PUBLISHED
+	// Status is intentionally NOT here — publish/unpublish must go through
+	// the dedicated PATCH /itineraries/:id/publish endpoint for audit clarity.
 }
 
 // ---------- Queries ----------
@@ -219,14 +220,6 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 		updates["end_date"] = t
 	}
 
-	if input.Status != nil {
-		s := *input.Status
-		if s != "DRAFT" && s != "PUBLISHED" {
-			return nil, fmt.Errorf("%w: status must be DRAFT or PUBLISHED, got %q", apperror.ErrInvalidInput, s)
-		}
-		updates["status"] = s
-	}
-
 	if err := s.db.Model(&it).Updates(updates).Error; err != nil {
 		return nil, fmt.Errorf("update itinerary: %w", err)
 	}
@@ -343,9 +336,11 @@ func (s *ItineraryService) Publish(id, ownerID, status string) (*models.Itinerar
 }
 
 // GetPublic returns a published itinerary visible to anyone (no auth required).
-func (s *ItineraryService) GetPublic(id string) (*models.Itinerary, error) {
+// viewerKey identifies the caller for view-count dedupe (IP or user ID). Pass
+// "" to skip dedupe — only safe for internal/test callers.
+func (s *ItineraryService) GetPublic(ctx context.Context, id, viewerKey string) (*models.Itinerary, error) {
 	var it models.Itinerary
-	err := s.db.
+	err := s.db.WithContext(ctx).
 		Preload("Activities", func(db *gorm.DB) *gorm.DB {
 			return db.Order("day_number ASC, order_index ASC").Preload("Place")
 		}).
@@ -357,7 +352,7 @@ func (s *ItineraryService) GetPublic(id string) (*models.Itinerary, error) {
 	// H10: buffered view increment — Redis INCR, flushed to DB every 30s by StartFlusher.
 	// Falls back to direct DB write if Redis/vc is unavailable.
 	if s.vc != nil {
-		s.vc.RecordView(context.Background(), it.ID.String())
+		s.vc.RecordView(ctx, it.ID.String(), viewerKey)
 	} else {
 		s.db.Model(&it).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
 	}

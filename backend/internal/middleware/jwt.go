@@ -57,13 +57,20 @@ func parseJWTClaims(secret, tokenStr string) (jwt.MapClaims, error) {
 
 func JWTAuth(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid Authorization header"})
-			return
+		// Prefer cookie (HttpOnly, set by /auth/login etc.) so XSS cannot
+		// read the token. Fall back to Authorization header so non-browser
+		// clients (mobile, server-to-server, tests) keep working.
+		tokenStr := ""
+		if cookie, err := c.Cookie("token"); err == nil && cookie != "" {
+			tokenStr = cookie
+		} else {
+			authHeader := c.GetHeader("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing credentials"})
+				return
+			}
+			tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
 		}
-
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
 		claims, err := parseJWTClaims(secret, tokenStr)
 		if err != nil {
