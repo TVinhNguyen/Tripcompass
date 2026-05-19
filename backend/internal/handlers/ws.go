@@ -33,6 +33,9 @@ func NewWSHandler(db *gorm.DB, hub *ws.Hub, jwtSecret, allowedOrigins string) *W
 			filtered = append(filtered, o)
 		}
 	}
+	if len(filtered) == 0 {
+		slog.Warn("ws: ALLOWED_ORIGINS is empty — all WebSocket upgrade attempts will be rejected. Set ALLOWED_ORIGINS in env.")
+	}
 	return &WSHandler{
 		db:             db,
 		itinerarySvc:   services.NewItineraryService(db),
@@ -63,11 +66,15 @@ func (h *WSHandler) newUpgrader() *websocket.Upgrader {
 	}
 }
 
-// tokenFromRequest extracts the JWT from the request. Preferred path is the
-// Sec-WebSocket-Protocol header ("bearer, <jwt>") so the token never lands in
-// access logs. Falls back to ?token= for one release; a warn log surfaces
-// remaining callers so the fallback can be removed.
+// tokenFromRequest extracts the JWT from the request. Order:
+//  1. HttpOnly cookie "token" — primary path now that auth is cookie-based.
+//  2. Sec-WebSocket-Protocol ("bearer, <jwt>") — kept for non-browser clients
+//     and for back-compat with already-connected sessions.
+//  3. ?token= query param — legacy fallback; a warn at the caller flags it.
 func tokenFromRequest(r *http.Request, q string) string {
+	if cookie, err := r.Cookie("token"); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
 	header := r.Header.Get("Sec-WebSocket-Protocol")
 	if header != "" {
 		for _, raw := range strings.Split(header, ",") {
@@ -91,7 +98,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	}
 
 	if tokenStr == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing bearer subprotocol"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing credentials"})
 		return
 	}
 
@@ -139,7 +146,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 func (h *WSHandler) HandleUserWebSocket(c *gin.Context) {
 	tokenStr := tokenFromRequest(c.Request, c.Query("token"))
 	if tokenStr == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing bearer subprotocol"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing credentials"})
 		return
 	}
 	userIDStr, err := middleware.ParseJWT(h.jwtSecret, tokenStr)

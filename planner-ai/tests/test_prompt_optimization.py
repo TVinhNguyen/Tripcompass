@@ -98,6 +98,74 @@ def test_itinerary_context_is_slimmed_for_chat():
     assert len(rendered) < 500
 
 
+def test_itinerary_context_keeps_saved_activities_grouped_by_day():
+    context = {
+        "id": "84406381-c80a-4b69-9bdf-4fafa1584bb3",
+        "title": "Lịch trình Đà Nẵng",
+        "destination": "Đà Nẵng",
+        "start_date": "2026-05-18",
+        "end_date": "2026-05-20",
+        "guest_count": 2,
+        "activities": [
+            {
+                "id": "a2",
+                "day_number": 1,
+                "order_index": 2,
+                "title": "Ăn mì Quảng",
+                "category": "food",
+                "start_time": "12:00",
+                "estimated_cost": 120_000,
+                "place_id": "hidden-place-id",
+                "lat": 16.0,
+                "lng": 108.0,
+            },
+            {
+                "id": "a1",
+                "day_number": 1,
+                "order_index": 1,
+                "title": "Ngũ Hành Sơn",
+                "category": "attraction",
+                "start_time": "09:00",
+                "end_time": "11:00",
+                "place_name": "Ngũ Hành Sơn",
+                "location": "81 Huyền Trân Công Chúa",
+                "notes": "Đi sáng cho mát.",
+            },
+        ],
+    }
+
+    compact = _compact_itinerary_context(context)
+    rendered = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+
+    assert compact["days"] == [
+        {
+            "day_num": 1,
+            "slots": [
+                {
+                    "order": 1,
+                    "title": "Ngũ Hành Sơn",
+                    "category": "attraction",
+                    "start": "09:00",
+                    "end": "11:00",
+                    "notes": "Đi sáng cho mát.",
+                    "place_name": "Ngũ Hành Sơn",
+                    "location": "81 Huyền Trân Công Chúa",
+                },
+                {
+                    "order": 2,
+                    "title": "Ăn mì Quảng",
+                    "category": "food",
+                    "start": "12:00",
+                    "price_vnd": 120_000,
+                },
+            ],
+        }
+    ]
+    assert "hidden-place-id" not in rendered
+    assert '"lat"' not in rendered
+    assert '"lng"' not in rendered
+
+
 def test_enrichment_patch_merges_without_changing_critical_fields():
     original = {
         "days": [

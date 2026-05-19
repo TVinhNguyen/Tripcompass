@@ -32,13 +32,24 @@ export type ReqOpts = Omit<RequestInit, "body"> & {
   query?: Record<string, string | number | boolean | undefined | null>;
   /** Which base URL to use — default "backend" */
   base?: "backend" | "ai";
-  /** Whether to attach Bearer token — default true */
+  /**
+   * Whether the request is expected to be authenticated. Default true.
+   * When false (login/register/logout, public reads), a 401 response will
+   * be surfaced as ApiError instead of triggering the login-redirect path.
+   * The HttpOnly session cookie is sent on every backend call regardless.
+   */
   auth?: boolean;
   /**
    * Skip JSON parsing and return raw Response.
    * Use this for SSE streams: `const res = await apiFetch<Response>("/chat/stream", { raw: true, ... })`
    */
   raw?: boolean;
+  /**
+   * Suppress the automatic redirect to /auth/login on a 401. Use this when
+   * a 401 is a normal expected outcome — e.g. the global useAuth bootstrap
+   * probing /auth/me on a page that may be viewed anonymously.
+   */
+  silent401?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -62,11 +73,6 @@ function buildUrl(
   return url.toString();
 }
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("token");
-}
-
 // ---------------------------------------------------------------------------
 // Core fetch
 // ---------------------------------------------------------------------------
@@ -81,6 +87,7 @@ export async function apiFetch<T = unknown>(
     base = "backend",
     auth = true,
     raw = false,
+    silent401 = false,
     headers,
     ...rest
   } = opts;
@@ -92,15 +99,16 @@ export async function apiFetch<T = unknown>(
     h.set("Content-Type", "application/json");
   }
 
-  // Auth
-  if (auth) {
-    const token = getToken();
-    if (token) h.set("Authorization", `Bearer ${token}`);
-  }
+  // Always send the HttpOnly session cookie on backend calls. `auth` is a
+  // policy flag (controls 401 redirect behaviour), not a transport flag —
+  // login/register/logout also need the cookie round-trip in dev where
+  // frontend and backend live on different origins.
+  const useCredentials = base === "backend";
 
   const res = await fetch(buildUrl(base, path, query), {
     ...rest,
     headers: h,
+    credentials: useCredentials ? "include" : rest.credentials,
     body:
       body instanceof FormData
         ? body
@@ -112,16 +120,16 @@ export async function apiFetch<T = unknown>(
   // Return raw Response for SSE consumers
   if (raw) return res as unknown as T;
 
-  // 401 — token expired / invalid
-  if (res.status === 401 && auth) {
-    localStorage.removeItem("token");
-    // Bug 3: also clear cookie to prevent middleware redirect loop
-    if (typeof document !== "undefined") {
-      document.cookie = "token=; path=/; max-age=0; SameSite=Lax";
-    }
+  // 401 → redirect to login, but only for requests that expected to be
+  // authenticated AND opted in to the redirect. Public reads and the global
+  // /auth/me probe pass silent401 / auth:false so anonymous visitors aren't
+  // bounced out of public pages.
+  if (res.status === 401 && auth && !silent401) {
     if (typeof window !== "undefined") {
       const here = window.location.pathname + window.location.search;
-      window.location.href = `/auth/login?redirect=${encodeURIComponent(here)}`;
+      if (!here.startsWith("/auth/login")) {
+        window.location.href = `/auth/login?redirect=${encodeURIComponent(here)}`;
+      }
     }
     throw new ApiError(401, null, "Phiên đăng nhập đã hết hạn.");
   }

@@ -213,6 +213,12 @@ func (s *ActivityService) Reorder(userID string, items []ReorderItem) (uuid.UUID
 	if len(items) == 0 {
 		return uuid.Nil, nil
 	}
+	// Cap at 10k to keep the -1000000-i staging trick collision-free and to
+	// reject obviously-malformed requests (no real itinerary needs this many
+	// reorders in a single call).
+	if len(items) > 10_000 {
+		return uuid.Nil, apperror.ErrInvalidInput
+	}
 	ids := make([]string, len(items))
 	for i, it := range items {
 		ids[i] = it.ID

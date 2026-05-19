@@ -389,9 +389,22 @@ func (s *AuthService) findOrCreateSocialUser(email, name, avatarURL, provider, p
 	switch {
 	case err == nil:
 		// Existing account — refresh avatar + verification, preserve password/provider.
+		// Also defensively run LinkPendingInvites: covers rare cases where a
+		// pending-by-email row survives past the original Register Tx (e.g.
+		// notification publish failed mid-Register). Idempotent.
 		user.AvatarURL = &av
 		user.IsVerified = true
-		if err := s.db.Save(&user).Error; err != nil {
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Save(&user).Error; err != nil {
+				return err
+			}
+			if s.collab != nil {
+				if _, err := s.collab.LinkPendingInvites(tx, user.ID, user.Email); err != nil {
+					slog.Warn("link pending invites failed (social login, existing user)", "user_id", user.ID, "err", err)
+				}
+			}
+			return nil
+		}); err != nil {
 			return nil, fmt.Errorf("failed to update social user: %w", err)
 		}
 	case errors.Is(err, gorm.ErrRecordNotFound):
@@ -402,7 +415,21 @@ func (s *AuthService) findOrCreateSocialUser(email, name, avatarURL, provider, p
 			Provider:   provider,
 			IsVerified: true,
 		}
-		if err := s.db.Create(&user).Error; err != nil {
+		// Mirror Register: create user + claim pending-by-email invites in one Tx
+		// so a social-login signup attaches existing PENDING collaborator rows to
+		// the new user_id. Without this, invites sent before signup keep
+		// user_id=NULL and Accept returns 403.
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(&user).Error; err != nil {
+				return err
+			}
+			if s.collab != nil {
+				if _, err := s.collab.LinkPendingInvites(tx, user.ID, user.Email); err != nil {
+					slog.Warn("link pending invites failed (social signup)", "user_id", user.ID, "err", err)
+				}
+			}
+			return nil
+		}); err != nil {
 			return nil, fmt.Errorf("failed to create social user: %w", err)
 		}
 	default:

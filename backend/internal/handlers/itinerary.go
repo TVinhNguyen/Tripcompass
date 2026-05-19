@@ -219,7 +219,16 @@ func (h *ItineraryHandler) Explore(c *gin.Context) {
 
 // GET /itineraries/:id/public — view a published itinerary without login
 func (h *ItineraryHandler) GetPublic(c *gin.Context) {
-	it, err := h.svc.GetPublic(c.Param("id"))
+	// Prefer authenticated user id for dedupe; fall back to client IP for
+	// anonymous viewers. Either is enough to stop refresh-spam from inflating
+	// the popularity counter — but neither survives a determined attacker
+	// rotating IPs, which is OK: this is a popularity heuristic, not a vote.
+	viewerKey, _ := c.Get(middleware.UserIDKey)
+	viewerKeyStr, _ := viewerKey.(string)
+	if viewerKeyStr == "" {
+		viewerKeyStr = c.ClientIP()
+	}
+	it, err := h.svc.GetPublic(c.Request.Context(), c.Param("id"), viewerKeyStr)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return

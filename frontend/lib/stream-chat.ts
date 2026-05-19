@@ -59,11 +59,6 @@ function friendlyStreamError(message?: string): string {
   return raw || "Lỗi không xác định từ AI.";
 }
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("token");
-}
-
 // ---------------------------------------------------------------------------
 // streamChat — main export
 // ---------------------------------------------------------------------------
@@ -91,12 +86,11 @@ export async function streamChat(
   let res: Response;
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const token = getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
 
     res = await fetch(`${BACKEND_URL.replace(/\/$/, "")}/ai-chat/stream`, {
       method: "POST",
       headers,
+      credentials: "include",
       body: JSON.stringify({
         session_id: sessionId ?? undefined,
         itinerary_id: itineraryId || undefined,

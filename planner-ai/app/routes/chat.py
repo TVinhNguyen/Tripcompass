@@ -26,7 +26,7 @@ def _compact_itinerary_context(context: dict) -> dict:
     """Keep only fields useful for chat about the current itinerary."""
     root_keys = (
         "id", "title", "destination", "destination_id", "start_date", "end_date",
-        "num_days", "guest_count", "budget_vnd", "budget_tier", "status",
+        "num_days", "guest_count", "budget", "budget_vnd", "budget_tier", "status",
     )
     compact = {
         key: context[key]
@@ -34,9 +34,42 @@ def _compact_itinerary_context(context: dict) -> dict:
         if key in context and context[key] not in (None, "", [])
     }
 
+    activities = context.get("activities")
+    if isinstance(activities, list) and activities:
+        grouped: dict[int, list[dict]] = {}
+        for activity in sorted(
+            (item for item in activities if isinstance(item, dict)),
+            key=lambda item: (item.get("day_number") or 0, item.get("order_index") or 0),
+        ):
+            day_num = activity.get("day_number") or 0
+            slot = {
+                key: value
+                for key, value in {
+                    "order": activity.get("order_index"),
+                    "title": activity.get("title"),
+                    "category": activity.get("category"),
+                    "start": activity.get("start_time"),
+                    "end": activity.get("end_time"),
+                    "price_vnd": activity.get("estimated_cost"),
+                    "notes": activity.get("notes"),
+                    "place_name": activity.get("place_name"),
+                    "location": activity.get("location"),
+                    "area": activity.get("area"),
+                }.items()
+                if value not in (None, "", [])
+            }
+            if slot:
+                grouped.setdefault(day_num, []).append(slot)
+
+        if grouped:
+            compact["days"] = [
+                {"day_num": day_num, "slots": slots[:12]}
+                for day_num, slots in sorted(grouped.items())[:14]
+            ]
+
     plan = context.get("plan") or context.get("final_plan") or context
     days = plan.get("days") if isinstance(plan, dict) else None
-    if isinstance(days, list):
+    if "days" not in compact and isinstance(days, list):
         compact["days"] = []
         for day in days[:7]:
             if not isinstance(day, dict):

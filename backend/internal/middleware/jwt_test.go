@@ -65,7 +65,7 @@ func TestJWTAuth_MissingHeader(t *testing.T) {
 
 	assert.True(t, c.IsAborted())
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
-	assert.Contains(t, w.Body.String(), "missing or invalid Authorization header")
+	assert.Contains(t, w.Body.String(), "missing credentials")
 }
 
 func TestJWTAuth_InvalidBearerFormat(t *testing.T) {
@@ -75,7 +75,7 @@ func TestJWTAuth_InvalidBearerFormat(t *testing.T) {
 
 	assert.True(t, c.IsAborted())
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
-	assert.Contains(t, w.Body.String(), "missing or invalid Authorization header")
+	assert.Contains(t, w.Body.String(), "missing credentials")
 }
 
 func TestJWTAuth_BearerWithoutToken(t *testing.T) {
