@@ -316,12 +316,19 @@ CACHE_ADMIN_TOKEN = os.environ.get("CACHE_ADMIN_TOKEN", "")
 # ── External APIs ─────────────────────────────────────────────────────────────
 SERPAPI_KEY     = os.environ.get("SERPAPI_API_KEY", "")
 WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY", "")
+TAVILY_API_KEY  = os.environ.get("TAVILY_API_KEY",  "")
 
 # ── Feature flags ─────────────────────────────────────────────────────────────
 ENABLE_HOTEL_SEARCH   = os.environ.get("ENABLE_HOTEL_SEARCH",    "true").lower() == "true"
 ENABLE_FLIGHT_SEARCH  = os.environ.get("ENABLE_FLIGHT_SEARCH",   "false").lower() == "true"
 ENABLE_WEATHER        = os.environ.get("ENABLE_WEATHER",          "true").lower() == "true"
 ENABLE_REAL_PRICES    = os.environ.get("ENABLE_REAL_PRICE_CHECK", "true").lower() == "true"
+# Web search is the only tool that goes outside the curated DB / SerpAPI flows.
+# Keep it gated so a missing key surfaces as "disabled" rather than runtime 500.
+ENABLE_WEB_SEARCH     = os.environ.get("ENABLE_WEB_SEARCH",       "true").lower() == "true"
+# Per-call cap. Tavily free tier = 1000 searches/month; with the cached_tool TTL
+# below the agent only burns budget on genuinely new queries.
+WEB_SEARCH_MAX_RESULTS = int(os.environ.get("WEB_SEARCH_MAX_RESULTS", "5"))
 
 # ── Tuning ────────────────────────────────────────────────────────────────────
 MAX_TOOL_ROUNDS       = int(os.environ.get("MAX_TOOL_ROUNDS",         "8"))
@@ -347,3 +354,5 @@ if not SERPAPI_KEY:
     console.print("[yellow]⚠ SERPAPI_API_KEY not set — hotel/flight/price search disabled.[/yellow]")
 if not WEATHER_API_KEY:
     console.print("[yellow]⚠ WEATHER_API_KEY not set — using static climate data.[/yellow]")
+if ENABLE_WEB_SEARCH and not TAVILY_API_KEY:
+    console.print("[yellow]⚠ TAVILY_API_KEY not set — web search tool disabled.[/yellow]")

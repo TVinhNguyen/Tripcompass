@@ -14,7 +14,7 @@ export type User = {
   avatar_url?: string;
   bio?: string;
   phone?: string;
-  role?: "user" | "admin";
+  is_admin?: boolean;
   status?: "UNVERIFIED" | "ACTIVE" | "BANNED";
   created_at: string;
 };
@@ -44,9 +44,7 @@ export type Place = {
   priority_score: number;
   best_time_of_day?: string;
   tags: string[];
-  open_time?: string;
-  close_time?: string;
-  hours?: string;
+  hours?: string;                // free-text opening hours, e.g. "08:00–22:00"
   recommended_duration?: number; // minutes
   base_price?: number;           // VND
   phone?: string;
@@ -157,25 +155,25 @@ export type UpdateActivityInput = Partial<Omit<CreateActivityInput, "itinerary_i
 export type ReorderItem = { id: string; day_number: number; order_index: number };
 
 // ---------------------------------------------------------------------------
-// Combo
+// Combo — mirrors backend models.Combo exactly (do NOT add fields the DB
+// doesn't have; previous drift caused silent data loss on save).
 // ---------------------------------------------------------------------------
 
 export type Combo = {
   id: string;
-  title: string;
   destination: string;
-  description?: string;
+  name: string;
   cover_image?: string;
-  num_days: number;
-  total_cost: number;       // VND sale price
-  original_cost?: number;   // VND original price (before discount)
-  savings_pct?: number;
-  num_places: number;
-  tags: string[];
-  places?: Place[];
-  status?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
-  clone_count?: number;     // how many itineraries created from this combo
+  provider?: string;
+  price_per_person?: number;
+  includes?: string[];
+  benefits?: string[];
+  duration_days?: number;
+  requires_overnight?: boolean;
+  book_url?: string;
+  price_updated_at?: string;
   created_at?: string;
+  updated_at?: string;
 };
 
 // ---------------------------------------------------------------------------

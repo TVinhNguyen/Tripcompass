@@ -1,5 +1,4 @@
 "use client"
-import { RequireAdmin } from "@/components/require-auth"
 
 import { useCallback, useEffect, useState } from "react"
 import Image from "next/image"
@@ -99,8 +98,7 @@ export default function AdminUsersPage() {
   const defaultAvatar = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80"
 
   return (
-    <RequireAdmin>
-      <AdminShell
+    <AdminShell
       title="Người dùng"
       description={`Quản lý ${users.length} tài khoản trên hệ thống`}
       action={
@@ -234,6 +232,5 @@ export default function AdminUsersPage() {
         </div>
       )}
     </AdminShell>
-    </RequireAdmin>
   )
 }

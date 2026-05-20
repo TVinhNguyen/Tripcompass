@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { MapPin, Calendar, Package, Search, Loader2 } from "lucide-react"
+import { MapPin, Calendar, Package, Search, Loader2, Building2, Moon } from "lucide-react"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import { apiFetch } from "@/lib/api"
@@ -54,7 +54,7 @@ export default function CombosPage() {
 
   // Client-side search filter on top of API results
   const filtered = query
-    ? combos.filter((c) => c.title.toLowerCase().includes(query.toLowerCase()))
+    ? combos.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
     : combos
 
   return (
@@ -172,22 +172,26 @@ function ComboCard({ combo, index }: { combo: Combo; index: number }) {
         <div className="relative aspect-[16/10] overflow-hidden">
           <Image
             src={combo.cover_image || "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800"}
-            alt={combo.title} fill className="object-cover group-hover:scale-105 transition-transform duration-700"
+            alt={combo.name} fill className="object-cover group-hover:scale-105 transition-transform duration-700"
           />
           <div className="absolute top-3 left-3 px-3 py-1 bg-[#d4a853] text-[#1a1a1a] rounded-full text-xs font-semibold">
             Combo
           </div>
-          {combo.savings_pct && combo.savings_pct > 0 && (
-            <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-[#c4785a] text-white text-xs font-semibold">
-              -{combo.savings_pct}%
+          {combo.requires_overnight && (
+            <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-[#c4785a] text-white text-xs font-semibold inline-flex items-center gap-1">
+              <Moon className="w-3 h-3" />Qua đêm
             </div>
           )}
         </div>
         <div className="flex-1 flex flex-col p-5">
           <h3 className="text-lg font-semibold text-[#1a1a1a] group-hover:text-[#3d5a3d] transition-colors mb-2 line-clamp-1 tracking-tight">
-            {combo.title}
+            {combo.name}
           </h3>
-          <p className="text-sm text-[#6b6b6b] line-clamp-2 mb-4 flex-1">{combo.description}</p>
+          {combo.provider && (
+            <p className="text-xs text-[#8b8378] mb-3 inline-flex items-center gap-1">
+              <Building2 className="w-3 h-3" />Cung cấp bởi {combo.provider}
+            </p>
+          )}
           <div className="grid grid-cols-3 gap-2 mb-4 text-xs">
             <div className="flex flex-col items-center p-2 bg-[#f5f0e8] rounded-lg">
               <MapPin className="w-3.5 h-3.5 text-[#3d5a3d] mb-1" />
@@ -195,17 +199,17 @@ function ComboCard({ combo, index }: { combo: Combo; index: number }) {
             </div>
             <div className="flex flex-col items-center p-2 bg-[#f5f0e8] rounded-lg">
               <Calendar className="w-3.5 h-3.5 text-[#c4785a] mb-1" />
-              <span className="text-[#1a1a1a] font-medium">{combo.num_days} ngày</span>
+              <span className="text-[#1a1a1a] font-medium">{combo.duration_days ?? "—"} ngày</span>
             </div>
             <div className="flex flex-col items-center p-2 bg-[#f5f0e8] rounded-lg">
               <Package className="w-3.5 h-3.5 text-[#d4a853] mb-1" />
-              <span className="text-[#1a1a1a] font-medium">{combo.num_places} điểm</span>
+              <span className="text-[#1a1a1a] font-medium">{combo.includes?.length ?? 0} mục</span>
             </div>
           </div>
           <div className="flex items-center justify-between pt-3 border-t border-[#e8e2d9]">
             <div>
-              <div className="text-[10px] font-mono tracking-[0.2em] uppercase text-[#8b8378]">Tổng gói</div>
-              <div className="font-mono tabular-nums text-base font-semibold text-[#3d5a3d]">{formatVnd(combo.total_cost)}</div>
+              <div className="text-[10px] font-mono tracking-[0.2em] uppercase text-[#8b8378]">Giá / người</div>
+              <div className="font-mono tabular-nums text-base font-semibold text-[#3d5a3d]">{formatVnd(combo.price_per_person)}</div>
             </div>
             <div className="text-xs text-[#c4785a] font-medium group-hover:translate-x-1 transition-transform">Xem chi tiết →</div>
           </div>

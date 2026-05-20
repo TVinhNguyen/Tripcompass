@@ -1,5 +1,4 @@
 "use client"
-import { RequireAdmin } from "@/components/require-auth"
 
 import { useCallback, useEffect, useState } from "react"
 import { Database, Zap, Clock, TrendingUp, Search, Trash2, RefreshCw, Eye } from "lucide-react"
@@ -71,8 +70,7 @@ export default function PlannerCachePage() {
     : queries
 
   return (
-    <RequireAdmin>
-      <AdminShell
+    <AdminShell
       title="Planner Cache"
       description="Quản lý cache kết quả AI Planner để tối ưu chi phí và độ trễ"
       action={
@@ -225,6 +223,5 @@ export default function PlannerCachePage() {
         </div>
       </div>
     </AdminShell>
-    </RequireAdmin>
   )
 }

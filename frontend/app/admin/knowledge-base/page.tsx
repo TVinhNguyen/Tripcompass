@@ -1,5 +1,4 @@
 "use client"
-import { RequireAdmin } from "@/components/require-auth"
 
 import { useCallback, useEffect, useState, useRef } from "react"
 import { Brain, FileText, Upload, Search, Plus, MoreVertical, Trash2, Edit2, Eye, FileCheck2, FileClock, Link as LinkIcon, Loader2, RefreshCw } from "lucide-react"
@@ -72,8 +71,7 @@ export default function KnowledgeBasePage() {
   const filteredDocs = docs.filter((d) => !search || d.title.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <RequireAdmin>
-      <AdminShell
+    <AdminShell
       title="Knowledge Base"
       description="Tài liệu và nguồn kiến thức cho AI Planner"
       action={
@@ -291,6 +289,5 @@ export default function KnowledgeBasePage() {
         </>
       )}
     </AdminShell>
-    </RequireAdmin>
   )
 }

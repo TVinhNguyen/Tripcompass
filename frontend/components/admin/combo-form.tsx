@@ -7,7 +7,6 @@ import {
   Save,
   Loader2,
   Package,
-  Tag,
   ImageIcon,
   Plus,
   X,
@@ -15,27 +14,34 @@ import {
   DollarSign,
   Calendar,
   ListChecks,
+  Link as LinkIcon,
+  Building2,
+  Moon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { apiFetch } from "@/lib/api"
+
 const CITIES = [
   "Đà Nẵng", "Hội An", "Đà Lạt", "Nha Trang", "Hà Nội",
   "Sapa", "Phú Quốc", "Vịnh Hạ Long", "Huế", "Hồ Chí Minh",
   "Mũi Né", "Côn Đảo",
 ]
 
-type ComboFormData = {
-  title?: string
+// Field names mirror backend services.CreateComboInput / models.Combo. Keeping
+// the form's internal state in the same shape as the wire payload prevents the
+// previous drift (title vs name, num_days vs duration_days, etc.) from
+// reappearing.
+export type ComboFormData = {
+  name?: string
   destination?: string
-  days?: number
-  nights?: number
-  price?: number
-  originalPrice?: number
-  image?: string
-  description?: string
+  duration_days?: number
+  price_per_person?: number
+  cover_image?: string
+  provider?: string
+  book_url?: string
   includes?: string[]
-  excludes?: string[]
-  status?: "draft" | "published"
+  benefits?: string[]
+  requires_overnight?: boolean
 }
 
 export function ComboForm({
@@ -50,24 +56,24 @@ export function ComboForm({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<ComboFormData>(initialData || {
-    title: "",
+    name: "",
     destination: "Đà Nẵng",
-    days: 3,
-    nights: 2,
-    price: 0,
-    originalPrice: 0,
-    image: "",
-    description: "",
+    duration_days: 3,
+    price_per_person: 0,
+    cover_image: "",
+    provider: "",
+    book_url: "",
     includes: [],
-    excludes: [],
-    status: "draft",
+    benefits: [],
+    requires_overnight: false,
   })
   const [includeInput, setIncludeInput] = useState("")
-  const [excludeInput, setExcludeInput] = useState("")
+  const [benefitInput, setBenefitInput] = useState("")
 
-  const update = (k: keyof ComboFormData, v: unknown) => setData((d) => ({ ...d, [k]: v }))
+  const update = <K extends keyof ComboFormData>(k: K, v: ComboFormData[K]) =>
+    setData((d) => ({ ...d, [k]: v }))
 
-  const addTo = (key: "includes" | "excludes", value: string, clear: () => void) => {
+  const addTo = (key: "includes" | "benefits", value: string, clear: () => void) => {
     const t = value.trim()
     if (t && !(data[key] || []).includes(t)) {
       update(key, [...(data[key] || []), t])
@@ -75,42 +81,47 @@ export function ComboForm({
     clear()
   }
 
-  const removeFrom = (key: "includes" | "excludes", t: string) => {
+  const removeFrom = (key: "includes" | "benefits", t: string) => {
     update(key, (data[key] || []).filter((x) => x !== t))
   }
 
-  const handleSave = async (status: "draft" | "published") => {
-    if (!data.title?.trim()) {
+  const handleSave = async () => {
+    if (!data.name?.trim()) {
       toast.error("Vui lòng nhập tên combo")
       return
     }
+    if (!data.destination?.trim()) {
+      toast.error("Vui lòng chọn điểm đến")
+      return
+    }
     setLoading(true)
+    // Send every field every time, including empty strings. Backend Update
+    // DTOs use *string — a missing key is interpreted as "leave as-is", so
+    // `|| undefined` would silently prevent users from clearing fields they
+    // had set previously.
     const body = {
-      title: data.title,
+      name: data.name,
       destination: data.destination,
-      num_days: data.days,
-      total_cost: data.price,
-      original_cost: data.originalPrice,
-      cover_image: data.image,
-      description: data.description,
-      includes: data.includes,
-      excludes: data.excludes,
-      status: status === "published" ? "PUBLISHED" : "DRAFT",
+      duration_days: data.duration_days,
+      price_per_person: data.price_per_person,
+      cover_image: data.cover_image ?? "",
+      provider: data.provider ?? "",
+      book_url: data.book_url ?? "",
+      includes: data.includes ?? [],
+      benefits: data.benefits ?? [],
+      requires_overnight: !!data.requires_overnight,
     }
     try {
       if (mode === "edit" && comboId) {
-        await apiFetch(`/combos/${comboId}`, { method: "PUT", body })
+        await apiFetch(`/combos/${comboId}`, { method: "PATCH", body })
+        toast.success("Đã cập nhật combo")
       } else {
         await apiFetch("/combos", { method: "POST", body })
+        toast.success("Đã tạo combo mới")
       }
-      toast.success(
-        status === "published"
-          ? mode === "edit" ? "Đã cập nhật combo" : "Đã xuất bản combo"
-          : "Đã lưu nháp"
-      )
       router.push("/admin/combos")
     } catch {
-      toast.error("Lưu combo thất bại")
+      toast.error(mode === "edit" ? "Cập nhật thất bại" : "Tạo combo thất bại")
     } finally {
       setLoading(false)
     }
@@ -123,14 +134,14 @@ export function ComboForm({
           <Field label="Tên combo" required>
             <input
               type="text"
-              value={data.title || ""}
-              onChange={(e) => update("title", e.target.value)}
+              value={data.name || ""}
+              onChange={(e) => update("name", e.target.value)}
               placeholder="VD: Combo Đà Nẵng - Hội An 3N2Đ"
               className="form-input"
             />
           </Field>
 
-          <div className="grid sm:grid-cols-3 gap-4">
+          <div className="grid sm:grid-cols-2 gap-4">
             <Field label="Điểm đến" required>
               <select
                 value={data.destination || ""}
@@ -142,65 +153,63 @@ export function ComboForm({
                 ))}
               </select>
             </Field>
-            <Field label="Số ngày" required icon={Calendar}>
+            <Field label="Số ngày" icon={Calendar}>
               <input
                 type="number"
                 min={1}
-                value={data.days || 1}
-                onChange={(e) => update("days", Number(e.target.value))}
-                className="form-input"
-              />
-            </Field>
-            <Field label="Số đêm" icon={Calendar}>
-              <input
-                type="number"
-                min={0}
-                value={data.nights || 0}
-                onChange={(e) => update("nights", Number(e.target.value))}
+                value={data.duration_days ?? 1}
+                onChange={(e) => update("duration_days", Number(e.target.value))}
                 className="form-input"
               />
             </Field>
           </div>
 
-          <Field label="Mô tả ngắn">
-            <textarea
-              value={data.description || ""}
-              onChange={(e) => update("description", e.target.value)}
-              placeholder="Giới thiệu combo, điểm nổi bật, phù hợp với ai..."
-              rows={4}
-              className="form-input resize-none"
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Nhà cung cấp" icon={Building2}>
+              <input
+                type="text"
+                value={data.provider || ""}
+                onChange={(e) => update("provider", e.target.value)}
+                placeholder="VD: Vietravel"
+                className="form-input"
+              />
+            </Field>
+            <Field label="Link đặt chỗ" icon={LinkIcon}>
+              <input
+                type="url"
+                value={data.book_url || ""}
+                onChange={(e) => update("book_url", e.target.value)}
+                placeholder="https://..."
+                className="form-input"
+              />
+            </Field>
+          </div>
+
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={!!data.requires_overnight}
+              onChange={(e) => update("requires_overnight", e.target.checked)}
+              className="w-4 h-4 accent-[#3d5a3d]"
             />
-          </Field>
+            <span className="inline-flex items-center gap-1.5 text-sm text-[#1a1a1a]">
+              <Moon className="w-3.5 h-3.5 text-[#8b8378]" />
+              Cần lưu trú qua đêm
+            </span>
+          </label>
         </Section>
 
-        <Section title="Giá & ưu đãi" icon={DollarSign}>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Giá bán (VNĐ)" required>
-              <input
-                type="number"
-                min={0}
-                value={data.price || 0}
-                onChange={(e) => update("price", Number(e.target.value))}
-                placeholder="3500000"
-                className="form-input"
-              />
-            </Field>
-            <Field label="Giá gốc (VNĐ)">
-              <input
-                type="number"
-                min={0}
-                value={data.originalPrice || 0}
-                onChange={(e) => update("originalPrice", Number(e.target.value))}
-                placeholder="4200000"
-                className="form-input"
-              />
-            </Field>
-          </div>
-          {!!(data.originalPrice && data.price && data.originalPrice > data.price) && (
-            <div className="px-3 py-2 bg-[#3d5a3d]/5 border border-[#3d5a3d]/20 rounded-lg text-sm text-[#3d5a3d]">
-              Giảm {Math.round((1 - (data.price || 0) / (data.originalPrice || 1)) * 100)}%
-            </div>
-          )}
+        <Section title="Giá" icon={DollarSign}>
+          <Field label="Giá / người (VNĐ)">
+            <input
+              type="number"
+              min={0}
+              value={data.price_per_person ?? 0}
+              onChange={(e) => update("price_per_person", Number(e.target.value))}
+              placeholder="3500000"
+              className="form-input"
+            />
+          </Field>
         </Section>
 
         <Section title="Chi tiết" icon={ListChecks}>
@@ -216,15 +225,15 @@ export function ComboForm({
             />
           </Field>
 
-          <Field label="Không bao gồm">
+          <Field label="Ưu đãi / quyền lợi">
             <ListEditor
-              items={data.excludes || []}
-              onRemove={(t) => removeFrom("excludes", t)}
-              inputValue={excludeInput}
-              setInputValue={setExcludeInput}
-              onAdd={() => addTo("excludes", excludeInput, () => setExcludeInput(""))}
-              placeholder="VD: Chi phí cá nhân"
-              accent="red"
+              items={data.benefits || []}
+              onRemove={(t) => removeFrom("benefits", t)}
+              inputValue={benefitInput}
+              setInputValue={setBenefitInput}
+              onAdd={() => addTo("benefits", benefitInput, () => setBenefitInput(""))}
+              placeholder="VD: Miễn phí đưa đón sân bay"
+              accent="amber"
             />
           </Field>
         </Section>
@@ -233,11 +242,11 @@ export function ComboForm({
       <div className="space-y-6">
         <Section title="Ảnh bìa" icon={ImageIcon}>
           <div className="aspect-[16/9] bg-[#f5f0e8] border-2 border-dashed border-[#e8e2d9] rounded-xl overflow-hidden relative">
-            {data.image ? (
+            {data.cover_image ? (
               <>
-                <Image src={data.image} alt="Preview" fill className="object-cover" />
+                <Image src={data.cover_image} alt="Preview" fill className="object-cover" />
                 <button
-                  onClick={() => update("image", "")}
+                  onClick={() => update("cover_image", "")}
                   className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full hover:bg-black/80"
                 >
                   <X className="w-4 h-4" />
@@ -252,40 +261,22 @@ export function ComboForm({
           </div>
           <input
             type="url"
-            value={data.image || ""}
-            onChange={(e) => update("image", e.target.value)}
+            value={data.cover_image || ""}
+            onChange={(e) => update("cover_image", e.target.value)}
             placeholder="URL ảnh..."
             className="form-input mt-3"
           />
         </Section>
 
-        <Section title="Xuất bản">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-[#6b6b6b]">Trạng thái</span>
-              <span className="font-medium text-[#1a1a1a]">
-                {data.status === "published" ? "Đã xuất bản" : "Bản nháp"}
-              </span>
-            </div>
-            <div className="pt-3 border-t border-[#e8e2d9] space-y-2">
-              <button
-                onClick={() => handleSave("draft")}
-                disabled={loading}
-                className="w-full py-2.5 border border-[#e8e2d9] rounded-lg text-sm text-[#1a1a1a] hover:bg-[#f5f0e8] inline-flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Lưu nháp
-              </button>
-              <button
-                onClick={() => handleSave("published")}
-                disabled={loading}
-                className="w-full py-2.5 bg-[#1a1a1a] text-white rounded-lg text-sm font-medium hover:bg-[#3d5a3d] inline-flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
-                {mode === "edit" ? "Cập nhật" : "Xuất bản"}
-              </button>
-            </div>
-          </div>
+        <Section title="Lưu">
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="w-full py-2.5 bg-[#1a1a1a] text-white rounded-lg text-sm font-medium hover:bg-[#3d5a3d] inline-flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : mode === "edit" ? <Save className="w-4 h-4" /> : <Package className="w-4 h-4" />}
+            {mode === "edit" ? "Cập nhật combo" : "Tạo combo"}
+          </button>
         </Section>
       </div>
 
@@ -301,12 +292,8 @@ export function ComboForm({
           outline: none;
           transition: border-color 0.15s;
         }
-        .form-input:focus {
-          border-color: #3d5a3d;
-        }
-        .form-input::placeholder {
-          color: #8b8378;
-        }
+        .form-input:focus { border-color: #3d5a3d; }
+        .form-input::placeholder { color: #8b8378; }
       `}</style>
     </div>
   )
@@ -370,11 +357,11 @@ function ListEditor({
   setInputValue: (v: string) => void
   onAdd: () => void
   placeholder: string
-  accent: "green" | "red"
+  accent: "green" | "amber"
 }) {
   const styles = accent === "green"
     ? "bg-[#3d5a3d]/10 text-[#3d5a3d]"
-    : "bg-[#c94a4a]/10 text-[#c94a4a]"
+    : "bg-[#d4a853]/15 text-[#8b6f47]"
   return (
     <>
       {items.length > 0 && (

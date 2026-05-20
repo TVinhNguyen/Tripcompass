@@ -43,9 +43,7 @@ export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = f
   const catStyle = CATEGORY_STYLES[place.category] || CATEGORY_STYLES.ATTRACTION
   const catLabel = CATEGORY_LABELS[place.category] || place.category
   const location  = place.area || place.destination
-  const hours = place.open_time && place.close_time
-    ? `${place.open_time} – ${place.close_time}`
-    : place.open_time || null
+  const hours = place.hours || null
 
   const toggleSave = async (e: React.MouseEvent) => {
     e.preventDefault()

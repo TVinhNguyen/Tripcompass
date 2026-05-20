@@ -12,7 +12,10 @@ import { apiFetch } from "@/lib/api"
 import type { PlaceCategory } from "@/lib/types"
 
 // ---------------------------------------------------------------------------
-// Form data shape — matches API Place fields
+// Form data shape — mirrors backend services.CreatePlaceInput / UpdatePlaceInput
+// Backend persists a single free-text `hours` column; we keep a single input
+// here so the UI cannot silently drop user data on save (previous two-input
+// open_time/close_time pair was discarded by the DTO).
 // ---------------------------------------------------------------------------
 export type PlaceFormData = {
   name?: string
@@ -22,8 +25,7 @@ export type PlaceFormData = {
   address?: string
   description?: string
   base_price?: number
-  open_time?: string
-  close_time?: string
+  hours?: string
   phone?: string
   website?: string
   cover_image?: string
@@ -61,8 +63,7 @@ export function PlaceForm({
     address:     "",
     description: "",
     base_price:  0,
-    open_time:   "",
-    close_time:  "",
+    hours:       "",
     phone:       "",
     website:     "",
     cover_image: "",
@@ -90,7 +91,7 @@ export function PlaceForm({
     setLoading(true)
     try {
       if (mode === "edit" && placeId) {
-        await apiFetch(`/places/${placeId}`, { method: "PUT", body: data })
+        await apiFetch(`/places/${placeId}`, { method: "PATCH", body: data })
         toast.success("Đã cập nhật địa điểm")
       } else {
         await apiFetch("/places", { method: "POST", body: data })
@@ -201,21 +202,12 @@ export function PlaceForm({
                 className="form-input"
               />
             </Field>
-            <Field label="Giờ mở cửa" icon={Clock}>
+            <Field label="Giờ hoạt động" icon={Clock}>
               <input
                 type="text"
-                value={data.open_time || ""}
-                onChange={(e) => update("open_time", e.target.value)}
-                placeholder="VD: 08:00"
-                className="form-input"
-              />
-            </Field>
-            <Field label="Giờ đóng cửa" icon={Clock}>
-              <input
-                type="text"
-                value={data.close_time || ""}
-                onChange={(e) => update("close_time", e.target.value)}
-                placeholder="VD: 22:00"
+                value={data.hours || ""}
+                onChange={(e) => update("hours", e.target.value)}
+                placeholder="VD: 08:00–22:00"
                 className="form-input"
               />
             </Field>
