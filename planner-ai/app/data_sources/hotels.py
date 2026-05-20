@@ -1,7 +1,7 @@
 """
 data_sources/hotels.py — SerpAPI Google Hotels.
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import httpx
 from loguru import logger
@@ -17,6 +17,23 @@ PRICE_RANGES = {
 USD_TO_VND = 25_000
 
 
+def _validate_dates(checkin: str, checkout: str) -> str | None:
+    """Return an error message if dates are invalid, else None. Catches the
+    most common LLM failure mode (hallucinated year) before burning a SerpAPI
+    call — Google Hotels rejects past dates with an unhelpful 400."""
+    today = date.today()
+    try:
+        ci = date.fromisoformat(checkin)
+        co = date.fromisoformat(checkout)
+    except (TypeError, ValueError):
+        return f"Sai định dạng ngày, cần YYYY-MM-DD (nhận checkin={checkin!r}, checkout={checkout!r})."
+    if ci < today:
+        return f"check_in_date {checkin} nằm trong quá khứ. Hôm nay là {today.isoformat()} — dùng ngày từ hôm nay trở đi."
+    if co < ci:
+        return f"check_out_date {checkout} phải >= check_in_date {checkin}."
+    return None
+
+
 async def search_hotels_data(
     destination: str,
     checkin: str,
@@ -29,6 +46,11 @@ async def search_hotels_data(
         return {"success": False, "error": "SERPAPI_KEY not set", "hotels": []}
     if not config.ENABLE_HOTEL_SEARCH:
         return {"success": False, "error": "Hotel search disabled", "hotels": []}
+
+    err = _validate_dates(checkin, checkout)
+    if err:
+        logger.warning(f"[search_hotels] rejected: {err}")
+        return {"success": False, "error": err, "hotels": []}
 
     lo, hi = PRICE_RANGES.get(budget_tier, PRICE_RANGES["standard"])
     from app.services.http_retry import transient_retry
