@@ -69,7 +69,8 @@ function NotificationsBridge() {
 }
 
 // ---------------------------------------------------------------------------
-// RequireAdmin — additionally checks user.role === "admin"
+// RequireAdmin — additionally checks user.is_admin === true
+// is_admin is derived server-side from ADMIN_EMAILS and surfaced on /auth/me.
 // ---------------------------------------------------------------------------
 
 type RequireAdminProps = {
@@ -86,12 +87,12 @@ export function RequireAdmin({ children, fallback = null }: RequireAdminProps) {
     if (!loading) {
       if (!user) {
         router.replace(`/auth/login?redirect=${encodeURIComponent(pathname)}`);
-      } else if (user.role !== "admin") {
+      } else if (!user.is_admin) {
         router.replace("/");
       }
     }
   }, [loading, user, pathname, router]);
 
-  if (loading || !user || user.role !== "admin") return <>{fallback}</>;
+  if (loading || !user || !user.is_admin) return <>{fallback}</>;
   return <>{children}</>;
 }

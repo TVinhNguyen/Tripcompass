@@ -240,10 +240,10 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                       <span>({place.review_count?.toLocaleString()} đánh giá)</span>
                     </span>
                   )}
-                  {(place.open_time || place.hours) && (
+                  {place.hours && (
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
-                      {place.hours || `${place.open_time} – ${place.close_time}`}
+                      {place.hours}
                     </span>
                   )}
                   {place.recommended_duration && (
@@ -314,7 +314,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                     {[
                       { label: "Địa chỉ đầy đủ", value: place.address, icon: MapPin },
                       { label: "Khu vực", value: place.area, icon: MapPin },
-                      { label: "Giờ mở cửa", value: place.hours || (place.open_time ? `${place.open_time} – ${place.close_time}` : null), icon: Clock },
+                      { label: "Giờ mở cửa", value: place.hours || null, icon: Clock },
                       { label: "Thời gian tham quan", value: formatDuration(place.recommended_duration), icon: Timer },
                       { label: "Thời điểm tốt nhất", value: place.best_time_of_day ? BEST_TIME_LABELS[place.best_time_of_day] : null, icon: Sun },
                       { label: "Điện thoại", value: place.phone, icon: Phone, href: place.phone ? `tel:${place.phone}` : undefined },
@@ -419,10 +419,10 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                       <span className="truncate">{place.website.replace(/^https?:\/\//, "")}</span>
                     </a>
                   )}
-                  {(place.hours || place.open_time) && (
+                  {place.hours && (
                     <div className="flex items-center gap-3 text-sm text-[#1a1a1a]">
                       <Clock className="w-4 h-4 text-[#8b8378] shrink-0" />
-                      <span>{place.hours || `${place.open_time} – ${place.close_time}`}</span>
+                      <span>{place.hours}</span>
                     </div>
                   )}
                   <a href={mapsUrl} target="_blank" rel="noopener noreferrer"

@@ -18,6 +18,11 @@ type User struct {
 	VerifyToken           *string    `gorm:"column:verify_token" json:"-"`
 	VerifyTokenExpiresAt  *time.Time `gorm:"column:verify_token_expires_at" json:"-"` // C6: token expiry
 	CreatedAt             time.Time  `json:"created_at"`
+
+	// IsAdmin is derived from ADMIN_EMAILS at response time — not a column.
+	// gorm:"-" keeps it out of all SQL; populated by AuthService.markAdmin
+	// before serializing the user back to clients.
+	IsAdmin bool `gorm:"-" json:"is_admin"`
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {

@@ -5,7 +5,7 @@ from loguru import logger
 from langgraph.prebuilt import create_react_agent
 from app.config import get_llm
 from app.tools import ALL_TOOLS
-from app.prompts.agent import SYSTEM_PROMPT
+from app.prompts.agent import build_system_prompt
 
 _agent = None
 
@@ -14,10 +14,14 @@ def get_chat_agent():
     """Return the ReAct agent instance (built once, reused forever)."""
     global _agent
     if _agent is None:
+        tool_names = [t.name for t in ALL_TOOLS]
+        # Match the prompt to the actually-registered toolset so the model
+        # never reads instructions for a tool it cannot call.
+        prompt = build_system_prompt(include_web_search="web_search" in tool_names)
         _agent = create_react_agent(
             model=get_llm(),
             tools=ALL_TOOLS,
-            prompt=SYSTEM_PROMPT,
+            prompt=prompt,
         )
-        logger.info(f"[agent] Ready — {len(ALL_TOOLS)} tools: {[t.name for t in ALL_TOOLS]}")
+        logger.info(f"[agent] Ready — {len(ALL_TOOLS)} tools: {tool_names}")
     return _agent

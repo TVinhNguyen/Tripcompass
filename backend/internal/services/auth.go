@@ -35,9 +35,19 @@ type AuthService struct {
 	// OAuth config
 	googleClientID    string
 	facebookAppSecret string
+	// Admin allowlist (lowercased), precomputed from ADMIN_EMAILS at construction.
+	// Used by markAdmin to stamp is_admin on returned User objects so the frontend
+	// can gate the admin UI off the same source of truth as RequireAdminEmail.
+	adminEmails map[string]bool
 }
 
-func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc *EmailService, googleClientID, facebookAppSecret string) *AuthService {
+func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc *EmailService, googleClientID, facebookAppSecret, adminEmails string) *AuthService {
+	allow := map[string]bool{}
+	for _, e := range strings.Split(adminEmails, ",") {
+		if v := strings.TrimSpace(strings.ToLower(e)); v != "" {
+			allow[v] = true
+		}
+	}
 	return &AuthService{
 		db:                db,
 		jwtSecret:         jwtSecret,
@@ -45,7 +55,18 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc 
 		email:             emailSvc,
 		googleClientID:    googleClientID,
 		facebookAppSecret: facebookAppSecret,
+		adminEmails:       allow,
 	}
+}
+
+// markAdmin stamps IsAdmin on a User pointer based on the precomputed allowlist.
+// Called on every code path that returns a User to the client so the frontend
+// admin gate sees the same answer as the backend middleware.
+func (s *AuthService) markAdmin(u *models.User) {
+	if u == nil {
+		return
+	}
+	u.IsAdmin = s.adminEmails[strings.ToLower(u.Email)]
 }
 
 // WithCollaboratorService injects the collaborator service so Register can
@@ -167,6 +188,7 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 		return nil, err
 	}
 
+	s.markAdmin(&user)
 	return &AuthResponse{Token: token, User: user}, nil
 }
 
@@ -200,6 +222,7 @@ func (s *AuthService) Login(input LoginInput) (*AuthResponse, error) {
 		return nil, err
 	}
 
+	s.markAdmin(&user)
 	return &AuthResponse{Token: token, User: user}, nil
 }
 
@@ -440,6 +463,7 @@ func (s *AuthService) findOrCreateSocialUser(email, name, avatarURL, provider, p
 	if err != nil {
 		return nil, err
 	}
+	s.markAdmin(&user)
 	return &AuthResponse{Token: token, User: user}, nil
 }
 
@@ -452,6 +476,7 @@ func (s *AuthService) GetByID(id string) (*models.User, error) {
 	if err := s.db.First(&user, "id = ?", id).Error; err != nil {
 		return nil, errors.New("user not found")
 	}
+	s.markAdmin(&user)
 	return &user, nil
 }
 

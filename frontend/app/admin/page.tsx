@@ -1,5 +1,4 @@
 "use client"
-import { RequireAdmin } from "@/components/require-auth"
 
 import Link from "next/link"
 import Image from "next/image"
@@ -94,8 +93,7 @@ export default function AdminDashboardPage() {
     { label: "AI Requests", value: adminStats ? nf(adminStats.ai_requests_week)  : "—", delta: "", icon: Sparkles, accent: "bg-[#8b6f47]" },
   ]
   return (
-    <RequireAdmin>
-      <AdminShell
+    <AdminShell
       title="Tổng quan"
       description="Chào mừng quay lại, đây là những gì đang diễn ra trên TripCompass"
       action={
@@ -268,6 +266,5 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     </AdminShell>
-    </RequireAdmin>
   )
 }

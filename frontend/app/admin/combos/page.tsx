@@ -1,15 +1,15 @@
 "use client"
-import { RequireAdmin } from "@/components/require-auth"
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Plus, Search, MoreVertical, Edit2, Trash2, Eye, Package, Calendar, DollarSign, Loader2 } from "lucide-react"
+import { Plus, Search, MoreVertical, Edit2, Trash2, Eye, Package, MapPin, DollarSign, Moon, Loader2 } from "lucide-react"
 import { AdminShell } from "@/components/admin/admin-shell"
 import { apiFetch } from "@/lib/api"
 import type { Combo, PaginatedList } from "@/lib/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { formatVND } from "@/lib/format"
 
 export default function AdminCombosPage() {
   const [search, setSearch] = useState("")
@@ -44,19 +44,24 @@ export default function AdminCombosPage() {
   }
 
   const filtered = search
-    ? combos.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()))
+    ? combos.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
     : combos
 
+  // Stats derived from fields actually present in backend models.Combo. Avg
+  // price omits combos with null/zero price_per_person so the denominator
+  // reflects the priced sample, not the loaded slice.
+  const priced = combos.filter((c) => (c.price_per_person ?? 0) > 0)
   const stats = {
     total: combos.length,
-    published: combos.filter((c) => c.status === "PUBLISHED").length,
-    totalSold: combos.reduce((s, c) => s + (c.clone_count ?? 0), 0),
-    revenue: combos.reduce((s, c) => s + ((c.clone_count ?? 0) * (c.total_cost ?? 0)), 0),
+    destinations: new Set(combos.map((c) => c.destination)).size,
+    overnight: combos.filter((c) => c.requires_overnight).length,
+    avgPrice: priced.length
+      ? Math.round(priced.reduce((s, c) => s + (c.price_per_person ?? 0), 0) / priced.length)
+      : 0,
   }
 
   return (
-    <RequireAdmin>
-      <AdminShell
+    <AdminShell
       title="Combo du lịch"
       description={`Quản lý ${combos.length} gói combo`}
       action={
@@ -69,17 +74,19 @@ export default function AdminCombosPage() {
         </Link>
       }
     >
-      {/* Stats */}
+      {/* Stats — only fields actually persisted in the backend Combo model */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           { label: "Tổng combo", value: stats.total, icon: Package, accent: "bg-[#3d5a3d]" },
-          { label: "Đã xuất bản", value: stats.published, icon: Eye, accent: "bg-[#c4785a]" },
-          { label: "Lượt dùng", value: stats.totalSold, icon: Calendar, accent: "bg-[#d4a853]" },
+          { label: "Điểm đến", value: stats.destinations, icon: MapPin, accent: "bg-[#c4785a]" },
+          { label: "Cần qua đêm", value: stats.overnight, icon: Moon, accent: "bg-[#d4a853]" },
           {
-            label: "Doanh thu (VNĐ)",
-            value: stats.revenue >= 1e9
-              ? `${(stats.revenue / 1e9).toFixed(1)}B`
-              : `${(stats.revenue / 1e6).toFixed(0)}M`,
+            label: "Giá TB / người",
+            value: stats.avgPrice
+              ? stats.avgPrice >= 1e6
+                ? `${(stats.avgPrice / 1e6).toFixed(1)}M`
+                : `${Math.round(stats.avgPrice / 1000)}K`
+              : "—",
             icon: DollarSign,
             accent: "bg-[#8b6f47]",
           },
@@ -122,16 +129,15 @@ export default function AdminCombosPage() {
               <div className="relative aspect-[16/9] bg-[#e8e2d9]">
                 <Image
                   src={c.cover_image || "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=400"}
-                  alt={c.title} fill className="object-cover"
+                  alt={c.name} fill className="object-cover"
                 />
-                <div className="absolute top-3 left-3">
-                  <span className={cn(
-                    "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium backdrop-blur-md",
-                    c.status === "PUBLISHED" ? "bg-[#3d5a3d]/90 text-white" : "bg-[#d4a853]/90 text-[#1a1a1a]",
-                  )}>
-                    {c.status === "PUBLISHED" ? "Đã xuất bản" : "Bản nháp"}
-                  </span>
-                </div>
+                {c.provider && (
+                  <div className="absolute top-3 left-3">
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium backdrop-blur-md bg-white/90 text-[#1a1a1a]">
+                      {c.provider}
+                    </span>
+                  </div>
+                )}
                 <div className="absolute top-3 right-3">
                   <button
                     onClick={() => setMenuOpen(menuOpen === c.id ? null : c.id)}
@@ -161,20 +167,28 @@ export default function AdminCombosPage() {
                 </div>
               </div>
               <div className="p-4">
-                <h3 className="font-medium text-[#1a1a1a] line-clamp-2 mb-2">{c.title}</h3>
+                <h3 className="font-medium text-[#1a1a1a] line-clamp-2 mb-2">{c.name}</h3>
                 <div className="flex items-center gap-3 text-xs text-[#6b6b6b] mb-3">
                   <span>{c.destination}</span>
-                  <span>·</span>
-                  <span>{c.num_days} ngày</span>
-                  <span>·</span>
-                  <span>{c.clone_count ?? 0} lượt dùng</span>
+                  {c.duration_days != null && (
+                    <>
+                      <span>·</span>
+                      <span>{c.duration_days} ngày</span>
+                    </>
+                  )}
+                  {c.requires_overnight && (
+                    <>
+                      <span>·</span>
+                      <span className="inline-flex items-center gap-1"><Moon className="w-3 h-3" />qua đêm</span>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center justify-between pt-3 border-t border-[#e8e2d9]">
                   <div>
                     <div className="font-mono tabular-nums text-base font-semibold text-[#1a1a1a]">
-                      {c.total_cost ? `${(c.total_cost / 1000).toFixed(0)}K` : "—"}
+                      {c.price_per_person ? formatVND(c.price_per_person) : "—"}
                     </div>
-                    <div className="text-[10px] tracking-[0.18em] uppercase text-[#8b8378] mt-0.5">VNĐ / người</div>
+                    <div className="text-[10px] tracking-[0.18em] uppercase text-[#8b8378] mt-0.5">/ người</div>
                   </div>
                   <Link
                     href={`/combos/${c.id}/edit`}
@@ -195,6 +209,5 @@ export default function AdminCombosPage() {
         </div>
       )}
     </AdminShell>
-    </RequireAdmin>
   )
 }

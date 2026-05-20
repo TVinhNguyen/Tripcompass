@@ -27,7 +27,7 @@ func NewAuthHandler(db *gorm.DB, cfg *config.Config, pub ws.Publisher) *AuthHand
 	if pub != nil {
 		collabSvc = collabSvc.WithPublisher(pub)
 	}
-	authSvc := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpireHours, emailSvc, cfg.GoogleClientID, cfg.FacebookAppSecret).
+	authSvc := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpireHours, emailSvc, cfg.GoogleClientID, cfg.FacebookAppSecret, cfg.AdminEmails).
 		WithCollaboratorService(collabSvc)
 
 	// Cookie attributes are decided once at startup so handlers don't have
