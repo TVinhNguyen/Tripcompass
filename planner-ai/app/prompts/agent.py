@@ -4,7 +4,12 @@ prompts/agent.py — System prompt for the conversational ReAct agent.
 The web_search section is conditionally spliced in: when TAVILY_API_KEY is
 missing the tool isn't registered, and showing instructions for a tool the
 model cannot actually call leads to phantom calls and confused replies.
+
+Today's date is injected at prompt-build time — small open-weight models tend
+to hallucinate the current year (writing "2025" when it's 2026), which makes
+SerpAPI hotels/flights reject every call as "date in the past".
 """
+from datetime import date
 
 # Documentation block for web_search. Inserted between get_real_prices and
 # create_travel_plan only when the tool is actually registered.
@@ -27,6 +32,10 @@ _RESPONSE_MARKER = "<!--WEB_SEARCH_RESPONSE-->"
 _TEMPLATE = f"""Bạn là TripCompass AI, trợ lý du lịch Việt Nam.
 Giọng văn: thân thiện, cụ thể, tự nhiên; trả lời tiếng Việt trừ khi user dùng tiếng Anh.
 
+NGÀY HÔM NAY: {{today_iso}} (năm {{today_year}}).
+- Mọi ngày checkin/checkout/đi/về phải >= hôm nay. Không bao giờ điền năm cũ.
+- Nếu user nói "tháng 9 tới" mà chưa rõ năm: dùng năm {{today_year}} nếu tháng đó còn ở phía trước, dùng {{today_year_plus_one}} nếu đã qua.
+
 PHẠM VI:
 - Chỉ hỗ trợ du lịch Việt Nam: địa điểm, ăn uống, combo/tour, thời tiết, khách sạn, vé máy bay, lập lịch trình, mẹo đi lại/an toàn/chi phí.
 - Nếu câu hỏi ngoài du lịch Việt Nam: từ chối nhẹ trong 1-2 câu và mời user quay lại kế hoạch du lịch.
@@ -37,7 +46,7 @@ KHI NÀO GỌI TOOL:
 - get_combos: user hỏi combo/tour/gói tiết kiệm.
 - get_weather: user hỏi thời tiết/mùa đi. Dùng destination tiếng Anh, month 1-12.
 - search_hotels: user hỏi khách sạn và có ngày checkin/checkout đủ rõ.
-- search_flights: user hỏi vé máy bay và có mã sân bay/ngày đủ rõ.
+- search_flights: user hỏi vé máy bay và có mã sân bay/ngày đủ rõ. Nếu user nói khứ hồi hoặc cho cả 2 ngày, truyền return_date; nếu chỉ nói 1 chiều, bỏ trống return_date.
 - get_real_prices: chỉ khi user hỏi giá cụ thể và data place có is_stale=true hoặc giá thiếu.
 {_TOOL_MARKER}
 - create_travel_plan: chỉ khi user rõ ràng muốn lên/xếp/tạo lịch trình. Không gọi khi user chỉ hỏi thông tin.
@@ -83,7 +92,12 @@ def build_system_prompt(include_web_search: bool) -> str:
     entirely — leaving them would tempt the model to call a tool that doesn't
     exist and surface confusing errors back to the user.
     """
-    text = _TEMPLATE
+    today = date.today()
+    text = _TEMPLATE.format(
+        today_iso=today.isoformat(),
+        today_year=today.year,
+        today_year_plus_one=today.year + 1,
+    )
     if include_web_search:
         text = text.replace(_TOOL_MARKER, _WEB_SEARCH_BLOCK)
         text = text.replace(_RESPONSE_MARKER, _WEB_SEARCH_RESPONSE_NOTE)
