@@ -50,10 +50,12 @@ func TestAuthService_Register(t *testing.T) {
 			FullName: "Duplicate",
 		}
 		resp, err := svc.Register(input)
-		assert.NoError(t, err)                   // no error — prevents enumeration
-		require.NotNil(t, resp)                  // returns empty response, not nil
-		assert.Empty(t, resp.Token)              // no token leaked
-		assert.Empty(t, resp.User.Email)         // no user data leaked
+		assert.NoError(t, err)        // no error — prevents enumeration
+		require.NotNil(t, resp)       // returns empty response, not nil
+		assert.Empty(t, resp.Token)   // no token leaked
+		// resp.User is *session.Session — nil on the dup-email path so the
+		// frontend can't read the existing account's name/email back.
+		assert.Nil(t, resp.User)
 	})
 }
 
