@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -109,6 +110,17 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
+	// Reject suspended accounts — stateless JWT can outlive a suspension
+	// otherwise. Same gate as the HTTP middleware.
+	if err := middleware.AssertUserActive(h.db, userIDStr); err != nil {
+		if errors.Is(err, middleware.ErrUserSuspended) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "account suspended"})
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+		}
+		return
+	}
+
 	// Resolve role: OWNER / EDITOR / VIEWER. Doubles as the access check
 	// (returns ErrForbidden if the user is none of those).
 	role, err := services.GetCollaboratorRole(h.db, itineraryID, userIDStr)
@@ -152,6 +164,14 @@ func (h *WSHandler) HandleUserWebSocket(c *gin.Context) {
 	userIDStr, err := middleware.ParseJWT(h.jwtSecret, tokenStr)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+		return
+	}
+	if err := middleware.AssertUserActive(h.db, userIDStr); err != nil {
+		if errors.Is(err, middleware.ErrUserSuspended) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "account suspended"})
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+		}
 		return
 	}
 	fullName, err := h.userSvc.GetFullName(userIDStr)

@@ -337,6 +337,49 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// Per-user role/status for the admin UI. Mirrors
+			// database/migrations/0004_user_role_status.sql so a fresh deploy
+			// that skips the static SQL file gets the same shape.
+			//
+			// Idempotent (ADD COLUMN IF NOT EXISTS / DROP CONSTRAINT IF EXISTS)
+			// so it co-exists with environments where 0004.sql was already
+			// applied manually.
+			ID: "202605200013_user_role_status",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`ALTER TABLE schema_travel.users
+						ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user';`,
+					`ALTER TABLE schema_travel.users
+						ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active';`,
+					`ALTER TABLE schema_travel.users
+						DROP CONSTRAINT IF EXISTS users_role_check;`,
+					`ALTER TABLE schema_travel.users
+						ADD CONSTRAINT users_role_check CHECK (role IN ('user', 'editor', 'admin'));`,
+					`ALTER TABLE schema_travel.users
+						DROP CONSTRAINT IF EXISTS users_status_check;`,
+					`ALTER TABLE schema_travel.users
+						ADD CONSTRAINT users_status_check CHECK (status IN ('active', 'suspended'));`,
+					`CREATE INDEX IF NOT EXISTS idx_users_role   ON schema_travel.users (role);`,
+					`CREATE INDEX IF NOT EXISTS idx_users_status ON schema_travel.users (status);`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				_ = tx.Exec(`DROP INDEX IF EXISTS schema_travel.idx_users_status;`).Error
+				_ = tx.Exec(`DROP INDEX IF EXISTS schema_travel.idx_users_role;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP CONSTRAINT IF EXISTS users_status_check;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP CONSTRAINT IF EXISTS users_role_check;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP COLUMN IF EXISTS status;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP COLUMN IF EXISTS role;`).Error
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()

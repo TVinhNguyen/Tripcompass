@@ -10,6 +10,7 @@ from langchain_core.tools import tool
 from loguru import logger
 from app import config
 from app.services.http_retry import transient_retry
+from app.services.http_safe import redact
 
 
 def _validate_flight_dates(outbound: str, return_date: Optional[str]) -> Optional[str]:
@@ -74,9 +75,13 @@ async def search_flights(
 
     try:
         data = await _fetch()
+    except httpx.HTTPStatusError as e:
+        # Don't echo URL — it carries the SerpAPI key.
+        logger.error(f"[search_flights] upstream {e.response.status_code}")
+        return json.dumps({"success": False, "error": f"upstream returned {e.response.status_code}", "flights": []})
     except Exception as e:
-        logger.error(f"[search_flights] Error: {e}")
-        return json.dumps({"success": False, "error": str(e), "flights": []})
+        logger.error(f"[search_flights] Error: {redact(str(e))}")
+        return json.dumps({"success": False, "error": "upstream call failed", "flights": []})
 
     best = data.get("best_flights", []) or data.get("other_flights", [])
     flights = [

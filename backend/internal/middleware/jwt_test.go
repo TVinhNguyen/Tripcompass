@@ -49,7 +49,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 	token := createToken(t, testSecret, claims)
 
 	c, _ := createTestRequest("Bearer " + token)
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.False(t, c.IsAborted())
@@ -60,7 +60,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 
 func TestJWTAuth_MissingHeader(t *testing.T) {
 	c, w := createTestRequest("")
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())
@@ -70,7 +70,7 @@ func TestJWTAuth_MissingHeader(t *testing.T) {
 
 func TestJWTAuth_InvalidBearerFormat(t *testing.T) {
 	c, w := createTestRequest("Token abc123")
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())
@@ -80,7 +80,7 @@ func TestJWTAuth_InvalidBearerFormat(t *testing.T) {
 
 func TestJWTAuth_BearerWithoutToken(t *testing.T) {
 	c, w := createTestRequest("Bearer ")
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())
@@ -96,7 +96,7 @@ func TestJWTAuth_ExpiredToken(t *testing.T) {
 	token := createToken(t, testSecret, claims)
 
 	c, w := createTestRequest("Bearer " + token)
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())
@@ -114,7 +114,7 @@ func TestJWTAuth_WrongSecret(t *testing.T) {
 	token := createToken(t, "wrong-secret", claims)
 
 	c, w := createTestRequest("Bearer " + token)
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())
@@ -135,7 +135,7 @@ func TestJWTAuth_NonHMACAlgorithm(t *testing.T) {
 	tokenStr, _ := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
 
 	c, w := createTestRequest("Bearer " + tokenStr)
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())
@@ -151,7 +151,7 @@ func TestJWTAuth_MissingSubClaim(t *testing.T) {
 	token := createToken(t, testSecret, claims)
 
 	c, w := createTestRequest("Bearer " + token)
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())
@@ -168,7 +168,7 @@ func TestJWTAuth_EmptySubClaim(t *testing.T) {
 	token := createToken(t, testSecret, claims)
 
 	c, w := createTestRequest("Bearer " + token)
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())
@@ -185,7 +185,7 @@ func TestJWTAuth_SubClaimWrongType(t *testing.T) {
 	token := createToken(t, testSecret, claims)
 
 	c, w := createTestRequest("Bearer " + token)
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())
@@ -195,7 +195,7 @@ func TestJWTAuth_SubClaimWrongType(t *testing.T) {
 
 func TestJWTAuth_MalformedToken(t *testing.T) {
 	c, w := createTestRequest("Bearer not.a.valid.jwt.token")
-	handler := JWTAuth(testSecret)
+	handler := JWTAuth(nil, testSecret)
 	handler(c)
 
 	assert.True(t, c.IsAborted())

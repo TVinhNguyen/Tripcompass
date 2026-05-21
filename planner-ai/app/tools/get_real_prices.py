@@ -9,6 +9,7 @@ from langchain_core.tools import tool
 from loguru import logger
 from app import config
 from app.services.http_retry import transient_retry
+from app.services.http_safe import redact
 
 
 def _parse_vnd(text: str) -> int | None:
@@ -80,9 +81,12 @@ async def get_real_prices(
 
     try:
         data = await _fetch()
+    except httpx.HTTPStatusError as e:
+        logger.error(f"[get_real_prices] upstream {e.response.status_code}")
+        return json.dumps({"success": False, "error": f"upstream returned {e.response.status_code}", "price_updates": []})
     except Exception as e:
-        logger.error(f"[get_real_prices] Error: {e}")
-        return json.dumps({"success": False, "error": str(e), "price_updates": []})
+        logger.error(f"[get_real_prices] Error: {redact(str(e))}")
+        return json.dumps({"success": False, "error": "upstream call failed", "price_updates": []})
 
     price_vnd = _parse_vnd(data.get("answer_box", {}).get("answer", ""))
 

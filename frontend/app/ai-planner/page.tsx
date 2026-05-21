@@ -1,89 +1,56 @@
 "use client"
 
-import type React from "react"
+// /ai-planner — pure presentation. Data flow + SSE lives in
+// _hooks/use-ai-chat.ts; MessageBubble in _components/.
 
-import { useState, useRef, useEffect, useCallback, Suspense } from "react"
-import { flushSync } from "react-dom"
+import type React from "react"
+import { useEffect, useRef, useState, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles, Send, Plus, Trash2, Loader2, MessageSquare,
-  Compass,
-  AlertCircle, RefreshCw, LayoutGrid,
+  Compass, LayoutGrid,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RequireAuth } from "@/components/require-auth"
 import { cn } from "@/lib/utils"
-import { apiFetch } from "@/lib/api"
-import { streamChat } from "@/lib/stream-chat"
-import { getToolLabel, CHAT_SUGGESTIONS } from "@/lib/tool-labels"
-import { PlanPreviewCard } from "@/components/plan-preview-card"
-import { ChatMarkdown } from "@/components/chat-markdown"
+import { CHAT_SUGGESTIONS } from "@/lib/tool-labels"
 import { PlacePicker } from "@/components/place-picker"
-import type { SessionInfo, GenerateResponse } from "@/lib/types"
-import { toast } from "sonner"
+import { useAiChat } from "./_hooks/use-ai-chat"
+import { MessageBubble } from "./_components/message-bubble"
 
-// ---------------------------------------------------------------------------
-// Local message type (enriched for UI streaming)
-// ---------------------------------------------------------------------------
-interface UiMessage {
-  id: string
-  role: "user" | "assistant"
-  content: string          // accumulated text
-  toolCalls?: string[]
-  plan?: GenerateResponse | null
-  createdAt: Date
-  streaming?: boolean      // true while SSE tokens arriving
-  error?: boolean
-}
-
-// ---------------------------------------------------------------------------
-// Main page
-// ---------------------------------------------------------------------------
 function AIPlannerContent() {
   const searchParams = useSearchParams()
   const initialQuery = searchParams.get("q") || ""
-  const [sessions, setSessions] = useState<SessionInfo[]>([])
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<UiMessage[]>([])
-  const [input, setInput] = useState(initialQuery)
-  const [streaming, setStreaming] = useState(false)
-  const [toolRunning, setToolRunning] = useState<string | null>(null)
+
+  const {
+    sessions, sessionId, messages, input, streaming, toolRunning,
+    setInput, loadSession, deleteSession, startNewChat, sendMessage, stopStreaming,
+  } = useAiChat(initialQuery)
+
+  // ---- Responsive sidebar ----
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerDest, setPickerDest] = useState("Việt Nam")
-
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const abortRef = useRef<AbortController | null>(null)
-
-  // ---- Fetch sessions on mount ----
-  useEffect(() => {
-    apiFetch<SessionInfo[]>("/ai-chat/sessions")
-      .then((data) => setSessions(Array.isArray(data) ? data : []))
-      .catch(() => {})
-  }, [])
-
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)")
-    const syncSidebar = () => {
+    const sync = () => {
       setIsDesktop(media.matches)
       setSidebarOpen(media.matches)
     }
-
-    syncSidebar()
-    media.addEventListener("change", syncSidebar)
-    return () => media.removeEventListener("change", syncSidebar)
+    sync()
+    media.addEventListener("change", sync)
+    return () => media.removeEventListener("change", sync)
   }, [])
 
-  // ---- Scroll to bottom on new messages ----
+  // ---- Auto-scroll to latest message ----
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
   // ---- Auto-resize textarea ----
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
@@ -91,146 +58,9 @@ function AIPlannerContent() {
     }
   }, [input])
 
-  // ---- Load history for a session ----
-  const loadSession = async (sid: string) => {
-    try {
-      const { messages: hist } = await apiFetch<{
-        messages: { role: "user" | "assistant"; content: string; tool_calls?: string[]; plan?: GenerateResponse | null; created_at: string }[]
-        session_id: string
-      }>(`/ai-chat/sessions/${sid}/history`)
-      setSessionId(sid)
-      setMessages(
-        (hist || []).map((m, i) => ({
-          id: `hist-${i}`,
-          role: m.role,
-          content: m.content,
-          toolCalls: m.tool_calls,
-          plan: m.plan,
-          createdAt: new Date(m.created_at),
-        }))
-      )
-      if (!isDesktop) setSidebarOpen(false)
-    } catch {
-      toast.error("Không thể tải lịch sử trò chuyện")
-    }
-  }
-
-  // ---- Delete session ----
-  const deleteSession = async (sid: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setSessions((prev) => prev.filter((s) => s.session_id !== sid))
-    if (sessionId === sid) { setSessionId(null); setMessages([]) }
-    try {
-      await apiFetch(`/ai-chat/sessions/${sid}`, { method: "DELETE" })
-    } catch {
-      toast.error("Không thể xoá phiên trò chuyện")
-    }
-  }
-
-  // ---- New chat ----
-  const handleNewChat = () => { setSessionId(null); setMessages([]) }
-
-  // ---- Send message ----
-  const handleSend = useCallback(async (text?: string) => {
-    const content = (text ?? input).trim()
-    if (!content || streaming) return
-    setInput("")
-
-    // Cancel any in-flight stream
-    abortRef.current?.abort()
-    abortRef.current = new AbortController()
-
-    const userMsgId = `u-${Date.now()}`
-    const aiMsgId   = `a-${Date.now()}`
-
-    setMessages((prev) => [
-      ...prev,
-      { id: userMsgId, role: "user", content, createdAt: new Date() },
-      { id: aiMsgId,   role: "assistant", content: "", streaming: true, createdAt: new Date() },
-    ])
-    setStreaming(true)
-    setToolRunning(null)
-
-    await streamChat(sessionId, content, {
-      signal: abortRef.current.signal,
-
-      onToolStart(tool, label) {
-        const lbl = label ?? getToolLabel(tool).vi
-        setToolRunning(lbl)
-      },
-
-      onThinking() {
-        // Heartbeat from planner-ai while the LLM is silent (typically inside
-        // a <think> block on reasoning models). Show a generic indicator so
-        // the chat doesn't feel stuck — overwritten by tool_start / token.
-        setToolRunning((prev) => prev ?? "AI đang suy nghĩ...")
-      },
-
-      onToken(token) {
-        // flushSync defeats React 18 automatic batching so each token paints
-        // on its own frame. Otherwise multiple SSE events arriving in the same
-        // network read get coalesced into one render and the user sees text
-        // appear in chunks instead of streaming.
-        flushSync(() => {
-          setMessages((prev) =>
-            prev.map((m) => m.id === aiMsgId ? { ...m, content: m.content + token } : m)
-          )
-        })
-        // First real token → drop the thinking placeholder.
-        setToolRunning((prev) => (prev === "AI đang suy nghĩ..." ? null : prev))
-      },
-
-      onDone(newSessionId, fullText, plan, toolCalls) {
-        const displayText = fullText.trim() || (
-          plan
-            ? "Mình đã tạo được lịch trình nháp. Bạn có thể xem nhanh bên dưới và lưu lại để chỉnh sửa chi tiết."
-            : fullText
-        )
-        // Persist session ID from first response
-        setSessionId((prev) => {
-          const sid = newSessionId ?? prev
-          if (newSessionId && newSessionId !== prev) {
-            // Add to sidebar
-            setSessions((s) => [
-              { session_id: newSessionId, message_count: 2, destination: undefined },
-              ...s.filter((x) => x.session_id !== newSessionId),
-            ])
-          }
-          return sid
-        })
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === aiMsgId
-              ? m.error && !displayText && !plan
-                ? { ...m, streaming: false }
-                : {
-                    ...m,
-                    content: displayText || "AI đã kết thúc phản hồi nhưng không trả về nội dung. Vui lòng thử lại.",
-                    plan: plan ?? null,
-                    toolCalls: toolCalls ?? [],
-                    streaming: false,
-                    error: m.error && !plan,
-                  }
-              : m
-          )
-        )
-        setStreaming(false)
-        setToolRunning(null)
-      },
-
-      onError(msg) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === aiMsgId ? { ...m, content: msg, error: true, streaming: false } : m
-          )
-        )
-        setStreaming(false)
-        setToolRunning(null)
-      },
-    })
-  }, [input, sessionId, streaming])
-
-  // ---- Open place picker (detect destination from session list) ----
+  // ---- Place picker (destination derived from active session) ----
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerDest, setPickerDest] = useState("Việt Nam")
   const handleOpenPicker = () => {
     const dest =
       sessions.find((s) => s.session_id === sessionId)?.destination ??
@@ -240,14 +70,26 @@ function AIPlannerContent() {
     setPickerOpen(true)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend() }
+  // ---- Session row: load + close sidebar on mobile ----
+  const handleLoadSession = (sid: string) => {
+    loadSession(sid)
+    if (!isDesktop) setSidebarOpen(false)
   }
 
-  // ---- Render ----
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
+
+  const handleRetry = () => {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user")
+    if (lastUser) sendMessage(lastUser.content)
+  }
+
   return (
     <div className="h-dvh flex bg-[#f5f0e8] overflow-hidden">
-
       {sidebarOpen && !isDesktop && (
         <button
           type="button"
@@ -265,7 +107,6 @@ function AIPlannerContent() {
             transition={{ type: "tween", duration: 0.2 }}
             className="fixed lg:relative z-30 w-[min(20rem,calc(100vw-2rem))] lg:w-72 h-full bg-[#1a1a1a] border-r border-white/10 flex flex-col shadow-2xl lg:shadow-none"
           >
-            {/* Logo */}
             <div className="px-5 py-5 border-b border-white/10">
               <Link href="/" className="flex items-center gap-2 mb-5">
                 <div className="w-8 h-8 rounded-full bg-[#d4a853] flex items-center justify-center">
@@ -273,13 +114,12 @@ function AIPlannerContent() {
                 </div>
                 <span className="font-serif text-lg font-bold text-white">TripCompass</span>
               </Link>
-              <Button onClick={handleNewChat} className="w-full bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a1a] h-10 font-medium">
+              <Button onClick={startNewChat} className="w-full bg-[#d4a853] hover:bg-[#c49843] text-[#1a1a1a] h-10 font-medium">
                 <Plus className="w-4 h-4 mr-2" />
                 Cuộc trò chuyện mới
               </Button>
             </div>
 
-            {/* Sessions */}
             <div className="flex-1 overflow-y-auto px-2 py-3">
               <div className="text-xs text-white/40 px-3 py-2 uppercase tracking-wider">Lịch sử</div>
               {sessions.length === 0 ? (
@@ -289,11 +129,11 @@ function AIPlannerContent() {
                   key={s.session_id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => loadSession(s.session_id)}
+                  onClick={() => handleLoadSession(s.session_id)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault()
-                      loadSession(s.session_id)
+                      handleLoadSession(s.session_id)
                     }
                   }}
                   className={cn(
@@ -315,7 +155,7 @@ function AIPlannerContent() {
                       )}
                     </div>
                     <button
-                      onClick={(e) => deleteSession(s.session_id, e)}
+                      onClick={(e) => { e.stopPropagation(); deleteSession(s.session_id) }}
                       className="opacity-0 group-hover:opacity-100 p-1 text-white/50 hover:text-red-400"
                       aria-label="Xoá phiên"
                     >
@@ -326,7 +166,6 @@ function AIPlannerContent() {
               ))}
             </div>
 
-            {/* Back */}
             <Link href="/" className="px-5 py-4 border-t border-white/10 text-sm text-white/60 hover:text-white flex items-center gap-2">
               ← Quay về trang chủ
             </Link>
@@ -336,8 +175,6 @@ function AIPlannerContent() {
 
       {/* ===== Main ===== */}
       <main className="flex-1 flex flex-col min-w-0">
-
-        {/* Header */}
         <header className="bg-white border-b border-[#e8e2d9] px-3 sm:px-4 py-3 flex items-center justify-between gap-3 shrink-0">
           <div className="flex min-w-0 items-center gap-3">
             <button
@@ -354,8 +191,7 @@ function AIPlannerContent() {
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <Button
-              variant="outline"
-              size="sm"
+              variant="outline" size="sm"
               onClick={handleOpenPicker}
               className="border-[#e8e2d9] text-[#1a1a1a] h-9 bg-transparent gap-1.5"
             >
@@ -371,7 +207,7 @@ function AIPlannerContent() {
           </div>
         </header>
 
-        {/* Tool chip (floating above messages when streaming) */}
+        {/* Tool chip while streaming */}
         {toolRunning && (
           <div className="flex justify-center pt-3 shrink-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#e8e2d9] bg-white/80 px-3.5 py-1.5 text-sm text-[#6b6b6b] shadow-sm">
@@ -399,7 +235,7 @@ function AIPlannerContent() {
                   {CHAT_SUGGESTIONS.map((s) => (
                     <button
                       key={s}
-                      onClick={() => handleSend(s)}
+                      onClick={() => sendMessage(s)}
                       className="group rounded-xl border border-[#e8e2d9] bg-white p-4 text-left text-sm leading-6 text-[#1a1a1a] transition-all hover:border-[#3d5a3d] hover:shadow-md"
                     >
                       {s}
@@ -411,15 +247,7 @@ function AIPlannerContent() {
           ) : (
             <div className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-6">
               {messages.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  onRetry={() => {
-                    // Find last user message and resend
-                    const lastUser = [...messages].reverse().find((m) => m.role === "user")
-                    if (lastUser) handleSend(lastUser.content)
-                  }}
-                />
+                <MessageBubble key={msg.id} message={msg} onRetry={handleRetry} />
               ))}
               <div ref={messagesEndRef} />
             </div>
@@ -443,7 +271,7 @@ function AIPlannerContent() {
               <div className="absolute right-2 bottom-2 flex items-center gap-1">
                 {streaming ? (
                   <button
-                    onClick={() => { abortRef.current?.abort(); setStreaming(false); setToolRunning(null) }}
+                    onClick={stopStreaming}
                     className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
                     title="Dừng"
                     aria-label="Dừng stream"
@@ -453,7 +281,7 @@ function AIPlannerContent() {
                 ) : (
                   <button
                     id="chat-send"
-                    onClick={() => handleSend()}
+                    onClick={() => sendMessage()}
                     disabled={!input.trim() || streaming}
                     className="p-2 bg-[#1a1a1a] hover:bg-[#3d5a3d] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                     aria-label="Gửi tin nhắn"
@@ -475,83 +303,13 @@ function AIPlannerContent() {
         <PlacePicker
           destination={pickerDest}
           onClose={() => setPickerOpen(false)}
-          onSend={(msg) => handleSend(msg)}
+          onSend={(msg) => sendMessage(msg)}
         />
       )}
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// MessageBubble
-// ---------------------------------------------------------------------------
-interface MessageBubbleProps {
-  message: UiMessage
-  onRetry: () => void
-}
-
-function MessageBubble({ message, onRetry }: MessageBubbleProps) {
-  const isUser = message.role === "user"
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
-    >
-      <div className={cn("min-w-0", isUser ? "max-w-[82%] sm:max-w-[72%]" : "w-full")}>
-        {/* Tool badges */}
-        {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="mb-2 text-xs text-[#8b8378]">
-            <span>Đã dùng: </span>
-            {message.toolCalls.map((tc, index) => {
-              const lbl = getToolLabel(tc)
-              return (
-                <span key={`${tc}-${index}`}>
-                  {index > 0 ? ", " : ""}
-                  {lbl.vi.replace(/^Đang\s+/i, "").replace(/\.\.\.$/, "")}
-                </span>
-              )
-            })}
-          </div>
-        )}
-        {/* Bubble */}
-        {(message.content || message.streaming || message.error) && (
-          <div className={cn(
-            "max-w-full overflow-hidden break-words [overflow-wrap:anywhere]",
-            isUser
-              ? "inline-block rounded-2xl rounded-tr-md bg-[#3d5a3d] px-4 py-2.5 text-[15px] leading-6 text-white whitespace-pre-wrap"
-              : "w-full px-0 py-1 text-[15px] leading-7 text-[#1a1a1a] sm:text-base",
-            message.error && "rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700",
-          )}>
-            {message.error && <AlertCircle className="w-4 h-4 inline mr-1" />}
-            {isUser ? message.content : <ChatMarkdown content={message.content} />}
-            {message.streaming && !message.content && (
-              <span className="inline-flex gap-1 ml-1">
-                <span className="w-1.5 h-1.5 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-1.5 h-1.5 bg-[#3d5a3d]/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-              </span>
-            )}
-          </div>
-        )}
-        {/* Error retry */}
-        {message.error && (
-          <button onClick={onRetry} className="mt-2 flex items-center gap-1 text-xs text-[#6b6b6b] hover:text-[#3d5a3d]">
-            <RefreshCw className="w-3 h-3" /> Thử lại
-          </button>
-        )}
-        {/* Plan preview card (extracted component) */}
-        {!isUser && message.plan && (
-          <PlanPreviewCard plan={message.plan} />
-        )}
-      </div>
-    </motion.div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Default export — wrap with RequireAuth
-// ---------------------------------------------------------------------------
 export default function AIPlannerPage() {
   return (
     <RequireAuth>

@@ -7,6 +7,7 @@ import httpx
 from loguru import logger
 
 from app import config
+from app.services.http_safe import redact
 
 PRICE_RANGES = {
     "survival": (0, 200_000),
@@ -73,9 +74,14 @@ async def search_hotels_data(
 
     try:
         data = await _fetch()
+    except httpx.HTTPStatusError as e:
+        # Never echo the request URL — it carries ?api_key=. Log the status
+        # only; the model sees a generic message and can retry differently.
+        logger.error(f"[search_hotels] upstream {e.response.status_code}")
+        return {"success": False, "error": f"upstream returned {e.response.status_code}", "hotels": []}
     except Exception as e:
-        logger.error(f"[search_hotels] Error: {e}")
-        return {"success": False, "error": str(e), "hotels": []}
+        logger.error(f"[search_hotels] Error: {redact(str(e))}")
+        return {"success": False, "error": "upstream call failed", "hotels": []}
 
     hotels = []
     for p in data.get("properties", []):

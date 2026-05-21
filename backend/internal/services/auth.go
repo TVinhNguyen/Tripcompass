@@ -59,15 +59,19 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc 
 	}
 }
 
-// markAdmin stamps IsAdmin on a User pointer based on the precomputed allowlist.
-// Called on every code path that returns a User to the client so the frontend
-// admin gate sees the same answer as the backend middleware.
+// markAdmin stamps IsAdmin on a User pointer. Two sources of truth:
+//   1. users.role == 'admin' (DB column, manageable via /admin/users UI)
+//   2. ADMIN_EMAILS env allowlist (env-level, survives DB-only changes)
+// Either one promotes — so demoting requires removing BOTH. This keeps the
+// env-config admin path working without DB writes (bootstrap, ops) while
+// allowing in-app promotion.
 func (s *AuthService) markAdmin(u *models.User) {
 	if u == nil {
 		return
 	}
-	u.IsAdmin = s.adminEmails[strings.ToLower(u.Email)]
+	u.IsAdmin = u.Role == models.UserRoleAdmin || s.adminEmails[strings.ToLower(u.Email)]
 }
+
 
 // WithCollaboratorService injects the collaborator service so Register can
 // claim any pending-by-email invites that match the new user's address.
@@ -215,6 +219,13 @@ func (s *AuthService) Login(input LoginInput) (*AuthResponse, error) {
 	if !user.IsVerified {
 		// Return a specific sentinel so the handler can give a helpful (but not PII-leaking) message
 		return nil, fmt.Errorf("%w: email not verified", apperror.ErrUnauthorized)
+	}
+
+	if user.Status == models.UserStatusSuspended {
+		// Admin-suspended accounts must not be able to mint a new session.
+		// Existing cookies are also rejected by JWTAuth on the protected
+		// path, so revocation is effective on the next backend hit.
+		return nil, fmt.Errorf("%w: account suspended", apperror.ErrUnauthorized)
 	}
 
 	token, err := s.generateToken(user.ID, user.Email)
