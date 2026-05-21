@@ -7,6 +7,19 @@ import (
 	"gorm.io/gorm"
 )
 
+// User roles persisted in users.role. The string values match the CHECK
+// constraint in migration 0004.
+const (
+	UserRoleUser   = "user"
+	UserRoleEditor = "editor"
+	UserRoleAdmin  = "admin"
+)
+
+const (
+	UserStatusActive    = "active"
+	UserStatusSuspended = "suspended"
+)
+
 type User struct {
 	ID                    uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
 	Email                 string     `gorm:"uniqueIndex;not null" json:"email"`
@@ -17,9 +30,11 @@ type User struct {
 	IsVerified            bool       `gorm:"column:is_verified;not null;default:false" json:"is_verified"`
 	VerifyToken           *string    `gorm:"column:verify_token" json:"-"`
 	VerifyTokenExpiresAt  *time.Time `gorm:"column:verify_token_expires_at" json:"-"` // C6: token expiry
+	Role                  string     `gorm:"column:role;not null;default:user" json:"role"`
+	Status                string     `gorm:"column:status;not null;default:active" json:"status"`
 	CreatedAt             time.Time  `json:"created_at"`
 
-	// IsAdmin is derived from ADMIN_EMAILS at response time — not a column.
+	// IsAdmin is derived (role == 'admin' OR email in ADMIN_EMAILS allowlist).
 	// gorm:"-" keeps it out of all SQL; populated by AuthService.markAdmin
 	// before serializing the user back to clients.
 	IsAdmin bool `gorm:"-" json:"is_admin"`

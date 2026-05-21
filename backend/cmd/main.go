@@ -35,6 +35,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// NOTE: No ADMIN_EMAILS → users.role backfill on startup. The middleware
+	// already OR-checks env allowlist AND DB role at request time, so env
+	// admins work without a DB write. A previous version backfilled on boot
+	// but that made env-admin promotions "sticky": removing an email from
+	// ADMIN_EMAILS later didn't revoke access because role='admin' stayed
+	// in the DB. With no backfill, the two paths stay genuinely independent.
+
 	rdb, err := database.ConnectRedis(cfg)
 	if err != nil {
 		slog.Error("redis connection failed", "addr", cfg.RedisAddr, "err", err)

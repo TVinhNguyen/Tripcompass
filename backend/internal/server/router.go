@@ -64,6 +64,9 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 	aiChatHandler := handlers.NewAIChatHandler(db, cfg.PlannerAIURL)
 	wsHandler := handlers.NewWSHandler(db, hub, cfg.JWTSecret, cfg.AllowedOrigins)
 	collabHandler := handlers.NewCollaboratorHandler(db, cfg, wsPublisher)
+	adminStatsHandler := handlers.NewAdminStatsHandler(db)
+	adminActivityHandler := handlers.NewAdminActivityHandler(db)
+	adminUserHandler := handlers.NewAdminUserHandler(db)
 
 	// ── Health check — public ─────────────────────────────────────────────────
 	r.GET("/health", func(c *gin.Context) {
@@ -104,7 +107,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 
 		// Protected routes (JWT required) ────────────────────────────────────
 		protected := api.Group("/")
-		protected.Use(middleware.JWTAuth(cfg.JWTSecret))
+		protected.Use(middleware.JWTAuth(db, cfg.JWTSecret))
 		{
 			protected.GET("/auth/me", authHandler.Me)
 
@@ -144,7 +147,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 			// mutate places/combos/knowledge-base. Gated by admin-email
 			// allowlist on top of JWT. Paths kept under their original prefix
 			// so the existing admin frontend doesn't need to switch base URL.
-			adminGate := middleware.RequireAdminEmail(cfg.AdminEmails)
+			adminGate := middleware.RequireAdmin(db, cfg.AdminEmails)
 			protected.POST("/places", adminGate, placeHandler.Create)
 			protected.PATCH("/places/:id", adminGate, placeHandler.Update)
 			protected.DELETE("/places/:id", adminGate, placeHandler.Delete)
@@ -158,9 +161,15 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 
 		// Admin routes (JWT + email allowlist) ───────────────────────────────
 		admin := api.Group("/admin")
-		admin.Use(middleware.JWTAuth(cfg.JWTSecret), middleware.RequireAdminEmail(cfg.AdminEmails))
+		admin.Use(middleware.JWTAuth(db, cfg.JWTSecret), middleware.RequireAdmin(db, cfg.AdminEmails))
 		{
 			admin.DELETE("/planner/cache", plannerHandler.FlushCache)
+
+			admin.GET("/stats", adminStatsHandler.Stats)
+			admin.GET("/activity", adminActivityHandler.Recent)
+			admin.GET("/users", adminUserHandler.List)
+			admin.PATCH("/users/:id/role", adminUserHandler.UpdateRole)
+			admin.PATCH("/users/:id/status", adminUserHandler.UpdateStatus)
 		}
 	}
 
