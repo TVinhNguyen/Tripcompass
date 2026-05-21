@@ -9,6 +9,7 @@ import (
 	"tripcompass-backend/internal/config"
 	"tripcompass-backend/internal/handlers"
 	"tripcompass-backend/internal/middleware"
+	"tripcompass-backend/internal/session"
 	"tripcompass-backend/internal/viewcounter"
 	"tripcompass-backend/internal/ws"
 
@@ -19,7 +20,7 @@ import (
 
 // NewRouter constructs the gin engine with all middleware and routes registered.
 // It does not start the HTTP server — that is the responsibility of main.go.
-func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, vc *viewcounter.Counter) *gin.Engine {
+func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, vc *viewcounter.Counter, sessions *session.Resolver) *gin.Engine {
 	r := gin.Default()
 
 	// ── CORS ───────────────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 
 	// ── Handlers ───────────────────────────────────────────────────────────────
 	wsPublisher := ws.NewPublisher(hub)
-	authHandler := handlers.NewAuthHandler(db, cfg, wsPublisher)
+	authHandler := handlers.NewAuthHandler(db, cfg, wsPublisher, sessions)
 	userHandler := handlers.NewUserHandler(db)
 	itineraryHandler := handlers.NewItineraryHandler(db, vc, wsPublisher) // H10: buffered view counter
 	activityHandler := handlers.NewActivityHandler(db, wsPublisher)
@@ -62,7 +63,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 	seedHandler := handlers.NewSeedHandler(db)
 	plannerHandler := handlers.NewPlannerHandler(db, rdb, cfg)
 	aiChatHandler := handlers.NewAIChatHandler(db, cfg.PlannerAIURL)
-	wsHandler := handlers.NewWSHandler(db, hub, cfg.JWTSecret, cfg.AllowedOrigins)
+	wsHandler := handlers.NewWSHandler(db, hub, sessions, cfg.AllowedOrigins)
 	collabHandler := handlers.NewCollaboratorHandler(db, cfg, wsPublisher)
 	adminStatsHandler := handlers.NewAdminStatsHandler(db)
 	adminActivityHandler := handlers.NewAdminActivityHandler(db)
@@ -83,6 +84,11 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 		auth.POST("/login", middleware.RateLimitRedis(rdb, 10, 60), authHandler.Login)
 		auth.POST("/verify", middleware.RateLimitRedis(rdb, 20, 60), authHandler.VerifyEmail)
 		auth.POST("/resend-verification", middleware.RateLimitRedis(rdb, 3, 300), authHandler.ResendVerification)
+		// Password reset: 3 forgot-password requests per 5 minutes (matches verification
+		// resend) — slow enough to discourage email-spamming, lax enough for honest mistypes.
+		// reset-password itself is tighter (10/min) because the token already gates abuse.
+		auth.POST("/forgot-password", middleware.RateLimitRedis(rdb, 3, 300), authHandler.ForgotPassword)
+		auth.POST("/reset-password", middleware.RateLimitRedis(rdb, 10, 60), authHandler.ResetPassword)
 		auth.POST("/google", middleware.RateLimitRedis(rdb, 10, 60), authHandler.GoogleLogin)
 		auth.POST("/facebook", middleware.RateLimitRedis(rdb, 10, 60), authHandler.FacebookLogin)
 		auth.POST("/logout", authHandler.Logout)
@@ -107,7 +113,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 
 		// Protected routes (JWT required) ────────────────────────────────────
 		protected := api.Group("/")
-		protected.Use(middleware.JWTAuth(db, cfg.JWTSecret))
+		protected.Use(middleware.JWTAuth(sessions))
 		{
 			protected.GET("/auth/me", authHandler.Me)
 
@@ -147,7 +153,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 			// mutate places/combos/knowledge-base. Gated by admin-email
 			// allowlist on top of JWT. Paths kept under their original prefix
 			// so the existing admin frontend doesn't need to switch base URL.
-			adminGate := middleware.RequireAdmin(db, cfg.AdminEmails)
+			adminGate := middleware.RequireAdmin()
 			protected.POST("/places", adminGate, placeHandler.Create)
 			protected.PATCH("/places/:id", adminGate, placeHandler.Update)
 			protected.DELETE("/places/:id", adminGate, placeHandler.Delete)
@@ -161,7 +167,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 
 		// Admin routes (JWT + email allowlist) ───────────────────────────────
 		admin := api.Group("/admin")
-		admin.Use(middleware.JWTAuth(db, cfg.JWTSecret), middleware.RequireAdmin(db, cfg.AdminEmails))
+		admin.Use(middleware.JWTAuth(sessions), middleware.RequireAdmin())
 		{
 			admin.DELETE("/planner/cache", plannerHandler.FlushCache)
 

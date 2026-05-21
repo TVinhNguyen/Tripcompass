@@ -11,6 +11,7 @@ import (
 	"tripcompass-backend/internal/config"
 	"tripcompass-backend/internal/database"
 	"tripcompass-backend/internal/server"
+	"tripcompass-backend/internal/session"
 	"tripcompass-backend/internal/viewcounter"
 	"tripcompass-backend/internal/ws"
 )
@@ -67,7 +68,11 @@ func main() {
 	vc := viewcounter.New(rdb, db)
 	vc.StartFlusher(flusherCtx)
 
-	r := server.NewRouter(db, rdb, hub, cfg, vc)
+	// Single Session resolver — owns the "who is logged in" rules so HTTP
+	// middleware and WS handshakes share the same admin/suspension logic.
+	sessions := session.New(db, cfg.JWTSecret, cfg.AdminEmails)
+
+	r := server.NewRouter(db, rdb, hub, cfg, vc, sessions)
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)

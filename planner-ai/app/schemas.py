@@ -22,18 +22,25 @@ class StreamChatRequest(BaseModel):
 
 
 class StreamEvent(BaseModel):
-    """One SSE event payload. Serialized as JSON in 'data:' field."""
-    type: Literal["tool_start", "token", "done", "error"]
+    """One SSE event payload. Serialized as JSON in 'data:' field.
+
+    `thinking` is a heartbeat the pump emits during silent gaps so the FE
+    can keep an indicator alive. It was missing from the previous Literal
+    even though pump.py actually emits it — that was a real schema drift
+    flagged in the C4 audit.
+    """
+    type: Literal["thinking", "tool_start", "token", "done", "error"]
     # tool_start
     tool:    Optional[str] = None
     label:   Optional[str] = None
     # token
     content: Optional[str] = None
-    # done
+    # done — populated only on the final event of a turn
     session_id: Optional[str] = None
     tool_calls: Optional[list[str]] = None
     plan:       Optional[dict] = None
     full_text:  Optional[str] = None
+    stream_dropped: Optional[bool] = None
     # error
     message: Optional[str] = None
 

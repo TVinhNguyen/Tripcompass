@@ -9,13 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 	"tripcompass-backend/internal/apperror"
+	"tripcompass-backend/internal/session"
 )
 
 const testJWTSecret = "test-secret-key"
 
 func TestAuthService_Register(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuthService(db, testJWTSecret, 72, nil, "", "", "")
+	svc := NewAuthService(db, testJWTSecret, 72, nil, "", "", session.New(db, testJWTSecret, ""))
 
 	t.Run("success", func(t *testing.T) {
 		input := RegisterInput{
@@ -58,7 +59,7 @@ func TestAuthService_Register(t *testing.T) {
 
 func TestAuthService_Login(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuthService(db, testJWTSecret, 72, nil, "", "", "")
+	svc := NewAuthService(db, testJWTSecret, 72, nil, "", "", session.New(db, testJWTSecret, ""))
 	user := createTestUser(t, db)
 	// Mark user as verified so login works
 	db.Exec("UPDATE users SET is_verified = true WHERE id = ?", user.ID)
@@ -125,7 +126,7 @@ func TestAuthService_Login(t *testing.T) {
 
 func TestAuthService_GenerateToken(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuthService(db, testJWTSecret, 72, nil, "", "", "")
+	svc := NewAuthService(db, testJWTSecret, 72, nil, "", "", session.New(db, testJWTSecret, ""))
 	user := createTestUser(t, db)
 
 	t.Run("token contains correct sub claim", func(t *testing.T) {

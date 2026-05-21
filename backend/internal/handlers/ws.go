@@ -1,12 +1,11 @@
 package handlers
 
 import (
-	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
-	"tripcompass-backend/internal/middleware"
 	"tripcompass-backend/internal/services"
+	"tripcompass-backend/internal/session"
 	"tripcompass-backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
@@ -19,12 +18,14 @@ type WSHandler struct {
 	itinerarySvc   *services.ItineraryService
 	userSvc        *services.UserService
 	hub            *ws.Hub
-	jwtSecret      string
+	sessions       *session.Resolver
 	allowedOrigins []string
 }
 
-// NewWSHandler injects service layer dependencies instead of raw DB (M1: no direct DB access from handler).
-func NewWSHandler(db *gorm.DB, hub *ws.Hub, jwtSecret, allowedOrigins string) *WSHandler {
+// NewWSHandler injects the session resolver so the WS handshake applies the
+// same active+admin rules as HTTP middleware — eliminates the previous
+// duplication of JWT parse + DB status lookup per handshake.
+func NewWSHandler(db *gorm.DB, hub *ws.Hub, sessions *session.Resolver, allowedOrigins string) *WSHandler {
 	origins := strings.Split(allowedOrigins, ",")
 	// B5: filter empty entries — ALLOWED_ORIGINS="" would otherwise produce [""]
 	// which matches a browser tool sending no Origin header, bypassing the check.
@@ -42,7 +43,7 @@ func NewWSHandler(db *gorm.DB, hub *ws.Hub, jwtSecret, allowedOrigins string) *W
 		itinerarySvc:   services.NewItineraryService(db),
 		userSvc:        services.NewUserService(db),
 		hub:            hub,
-		jwtSecret:      jwtSecret,
+		sessions:       sessions,
 		allowedOrigins: filtered,
 	}
 }
@@ -103,23 +104,14 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// Parse JWT using shared helper (same logic as JWTAuth middleware)
-	userIDStr, err := middleware.ParseJWT(h.jwtSecret, tokenStr)
+	// Single seam for "who is this and are they still allowed in" — same
+	// rules as the HTTP middleware.
+	sess, err := h.sessions.FromToken(tokenStr)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+		c.JSON(session.HTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
-
-	// Reject suspended accounts — stateless JWT can outlive a suspension
-	// otherwise. Same gate as the HTTP middleware.
-	if err := middleware.AssertUserActive(h.db, userIDStr); err != nil {
-		if errors.Is(err, middleware.ErrUserSuspended) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "account suspended"})
-		} else {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
-		}
-		return
-	}
+	userIDStr := sess.UserID
 
 	// Resolve role: OWNER / EDITOR / VIEWER. Doubles as the access check
 	// (returns ErrForbidden if the user is none of those).
@@ -161,19 +153,12 @@ func (h *WSHandler) HandleUserWebSocket(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing credentials"})
 		return
 	}
-	userIDStr, err := middleware.ParseJWT(h.jwtSecret, tokenStr)
+	sess, err := h.sessions.FromToken(tokenStr)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+		c.JSON(session.HTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
-	if err := middleware.AssertUserActive(h.db, userIDStr); err != nil {
-		if errors.Is(err, middleware.ErrUserSuspended) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "account suspended"})
-		} else {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
-		}
-		return
-	}
+	userIDStr := sess.UserID
 	fullName, err := h.userSvc.GetFullName(userIDStr)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})

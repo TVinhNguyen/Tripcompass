@@ -151,12 +151,25 @@ func (w *Worker) DrainOnce(ctx context.Context) error {
 	})
 }
 
+// safeDispatch returns nil iff the publisher signalled `acked=true`. A
+// non-nil return causes the caller to bump retry_count and keep the row
+// for the next tick. Panics are converted to errors so a single poison
+// event doesn't kill the batch.
 func safeDispatch(pub Publisher, r *OutboxRow) (err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			err = fmt.Errorf("panic during dispatch: %v", rec)
 		}
 	}()
-	pub.PublishEvent(r.RoomID, r.EventType, json.RawMessage(r.Payload))
+	acked, perr := pub.PublishEvent(r.RoomID, r.EventType, json.RawMessage(r.Payload))
+	if perr != nil {
+		return perr
+	}
+	if !acked {
+		// Defensive: a well-behaved Publisher always pairs acked=false with
+		// a non-nil error, but treat the case explicitly so future
+		// implementations can't silently break the contract.
+		return fmt.Errorf("publisher returned acked=false without error")
+	}
 	return nil
 }

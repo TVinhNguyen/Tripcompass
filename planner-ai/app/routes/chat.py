@@ -135,16 +135,15 @@ async def chat_stream(req: StreamChatRequest):
         tools_used = []
         plan_data  = None
 
-        async for chunk in stream_chat_response(get_chat_agent(), messages, session_id):
-            if '"type": "done"' in chunk or '"type":"done"' in chunk:
-                try:
-                    payload    = json.loads(chunk.removeprefix("data: ").strip())
-                    full_text  = payload.get("full_text", "")
-                    tools_used = payload.get("tool_calls", [])
-                    plan_data  = payload.get("plan")
-                except Exception:
-                    pass
-            yield chunk
+        # stream_chat_response yields typed turn events. The terminal "done"
+        # event carries the aggregated result — no more substring-matching
+        # SSE bytes to find it.
+        async for event in stream_chat_response(get_chat_agent(), messages, session_id):
+            if event.get("type") == "done":
+                full_text  = event.get("full_text", "")
+                tools_used = event.get("tool_calls", [])
+                plan_data  = event.get("plan")
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
         await save_history(session_id, history + [
             build_user_message(req.message),

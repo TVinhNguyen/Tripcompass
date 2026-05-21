@@ -17,8 +17,11 @@ import (
 // import cycle: ws → services for GetCollaboratorRole). Any implementation
 // that emits an event to a user channel satisfies it. internal/ws's
 // hubPublisher implements this directly.
+//
+// PublishToUser returns (acked, err) for parity with ws.Publisher — callers
+// that publish outside a Tx log the ack signal but don't block on it.
 type WSPublisher interface {
-	PublishToUser(userID, eventType string, payload any)
+	PublishToUser(userID, eventType string, payload any) (acked bool, err error)
 	PublishToUserInTx(tx *gorm.DB, userID, eventType string, payload any) error
 }
 
@@ -223,7 +226,13 @@ func (s *CollaboratorService) LinkPendingInvites(tx *gorm.DB, userID uuid.UUID, 
 				slog.Warn("outbox enqueue (invite link) failed", "user_id", uidStr, "err", err)
 			}
 		} else {
-			s.pub.PublishToUser(uidStr, "collaborator.invited", payload)
+			// Direct path: log if the broadcast didn't ack. This is the
+			// best-effort flow — invite link link-pending claim runs outside
+			// any Tx, so we can't enqueue. A non-ack here means a future
+			// invite-status reconciliation pass would still resolve it.
+			if _, perr := s.pub.PublishToUser(uidStr, "collaborator.invited", payload); perr != nil {
+				slog.Warn("invite link publish not acked", "user_id", uidStr, "err", perr)
+			}
 		}
 	}
 	return res.RowsAffected, nil

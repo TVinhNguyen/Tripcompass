@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"time"
 	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
+	"tripcompass-backend/internal/session"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -35,19 +37,13 @@ type AuthService struct {
 	// OAuth config
 	googleClientID    string
 	facebookAppSecret string
-	// Admin allowlist (lowercased), precomputed from ADMIN_EMAILS at construction.
-	// Used by markAdmin to stamp is_admin on returned User objects so the frontend
-	// can gate the admin UI off the same source of truth as RequireAdminEmail.
-	adminEmails map[string]bool
+	// Session projector — the single place that knows the
+	// verified+suspended+admin rules. Login and social paths both call it,
+	// which closed the previous "social login skipped suspended check" bug.
+	sessions *session.Resolver
 }
 
-func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc *EmailService, googleClientID, facebookAppSecret, adminEmails string) *AuthService {
-	allow := map[string]bool{}
-	for _, e := range strings.Split(adminEmails, ",") {
-		if v := strings.TrimSpace(strings.ToLower(e)); v != "" {
-			allow[v] = true
-		}
-	}
+func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc *EmailService, googleClientID, facebookAppSecret string, sessions *session.Resolver) *AuthService {
 	return &AuthService{
 		db:                db,
 		jwtSecret:         jwtSecret,
@@ -55,23 +51,9 @@ func NewAuthService(db *gorm.DB, jwtSecret string, jwtExpireHours int, emailSvc 
 		email:             emailSvc,
 		googleClientID:    googleClientID,
 		facebookAppSecret: facebookAppSecret,
-		adminEmails:       allow,
+		sessions:          sessions,
 	}
 }
-
-// markAdmin stamps IsAdmin on a User pointer. Two sources of truth:
-//   1. users.role == 'admin' (DB column, manageable via /admin/users UI)
-//   2. ADMIN_EMAILS env allowlist (env-level, survives DB-only changes)
-// Either one promotes — so demoting requires removing BOTH. This keeps the
-// env-config admin path working without DB writes (bootstrap, ops) while
-// allowing in-app promotion.
-func (s *AuthService) markAdmin(u *models.User) {
-	if u == nil {
-		return
-	}
-	u.IsAdmin = u.Role == models.UserRoleAdmin || s.adminEmails[strings.ToLower(u.Email)]
-}
-
 
 // WithCollaboratorService injects the collaborator service so Register can
 // claim any pending-by-email invites that match the new user's address.
@@ -97,8 +79,8 @@ type LoginInput struct {
 }
 
 type AuthResponse struct {
-	Token string      `json:"token"`
-	User  models.User `json:"user"`
+	Token string           `json:"token"`
+	User  *session.Session `json:"user"`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -187,13 +169,7 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 		}()
 	}
 
-	token, err := s.generateToken(user.ID, user.Email)
-	if err != nil {
-		return nil, err
-	}
-
-	s.markAdmin(&user)
-	return &AuthResponse{Token: token, User: user}, nil
+	return s.issue(&user)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -216,25 +192,36 @@ func (s *AuthService) Login(input LoginInput) (*AuthResponse, error) {
 		return nil, apperror.ErrUnauthorized
 	}
 
+	// Local-password login requires a verified email. Social login skips
+	// this — Google/Facebook already verified the address out-of-band.
 	if !user.IsVerified {
-		// Return a specific sentinel so the handler can give a helpful (but not PII-leaking) message
 		return nil, fmt.Errorf("%w: email not verified", apperror.ErrUnauthorized)
 	}
+	return s.issue(&user)
+}
 
-	if user.Status == models.UserStatusSuspended {
-		// Admin-suspended accounts must not be able to mint a new session.
-		// Existing cookies are also rejected by JWTAuth on the protected
-		// path, so revocation is effective on the next backend hit.
-		return nil, fmt.Errorf("%w: account suspended", apperror.ErrUnauthorized)
+// issue projects the user into a Session (applying the suspension rule
+// owned by the resolver) and mints a JWT. Returns an ErrUnauthorized wrap
+// so handlers map to 401/403 uniformly.
+//
+// This is the seam that closed the "social login skipped suspended check"
+// bug — every code path that wants to hand out a token funnels here.
+// Verification (if applicable) is the caller's responsibility — Login
+// applies it; Register intentionally skips it because it returns a
+// preliminary AuthResponse for the still-unverified account.
+func (s *AuthService) issue(u *models.User) (*AuthResponse, error) {
+	sess, err := s.sessions.FromUser(u)
+	if err != nil {
+		if err == session.ErrUserSuspended {
+			return nil, fmt.Errorf("%w: account suspended", apperror.ErrUnauthorized)
+		}
+		return nil, apperror.ErrUnauthorized
 	}
-
-	token, err := s.generateToken(user.ID, user.Email)
+	token, err := s.generateToken(u.ID, u.Email)
 	if err != nil {
 		return nil, err
 	}
-
-	s.markAdmin(&user)
-	return &AuthResponse{Token: token, User: user}, nil
+	return &AuthResponse{Token: token, User: sess}, nil
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -299,6 +286,120 @@ func (s *AuthService) ResendVerification(email string) error {
 		_ = s.email.SendVerificationEmail(user.Email, user.FullName, newToken)
 	}
 
+	return nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Password Reset
+// ─────────────────────────────────────────────────────────────────────────────
+
+// resetTokenTTL is short by design — links e-mailed to an inbox shouldn't
+// stay live for days. The frontend tells the user "valid for 1 hour".
+const resetTokenTTL = 1 * time.Hour
+
+// generateResetToken returns a URL-safe 64-character hex token (32 random
+// bytes). Reset tokens are never typed by humans, so we prefer entropy over
+// readability — opposite of the 6-digit verify OTP.
+func generateResetToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+// RequestPasswordReset issues a one-shot reset link for the given email and
+// sends it via EmailService. Always returns nil to the caller — leaking
+// whether an email exists would let attackers enumerate accounts.
+//
+// Works for OAuth-only accounts too: a Google-signup user can request a
+// reset to set a password and gain a second login path. We don't change
+// `provider` — the social link remains valid.
+func (s *AuthService) RequestPasswordReset(email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return nil
+	}
+	var user models.User
+	if err := s.db.Where("LOWER(email) = ?", email).First(&user).Error; err != nil {
+		// Generic success — don't reveal whether the email is registered.
+		return nil
+	}
+	if !user.IsVerified {
+		// Unverified accounts must finish verification first; otherwise an
+		// attacker who registered the address could lock out the real owner.
+		slog.Info("reset requested for unverified account", "email", email)
+		return nil
+	}
+	if user.Status == models.UserStatusSuspended {
+		slog.Info("reset requested for suspended account", "email", email)
+		return nil
+	}
+
+	token, err := generateResetToken()
+	if err != nil {
+		return fmt.Errorf("failed to generate reset token: %w", err)
+	}
+	expiry := time.Now().Add(resetTokenTTL)
+
+	if err := s.db.Model(&user).Updates(map[string]interface{}{
+		"reset_token":            token,
+		"reset_token_expires_at": expiry,
+	}).Error; err != nil {
+		return fmt.Errorf("failed to persist reset token: %w", err)
+	}
+
+	if s.email != nil {
+		// Fire-and-forget like the verification path — caller already paid
+		// the rate-limit cost; a slow SMTP shouldn't block the response.
+		emailSvc := s.email
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Warn("[email] panic sending password reset", "err", r)
+				}
+			}()
+			if err := emailSvc.SendPasswordResetEmail(user.Email, user.FullName, token); err != nil {
+				slog.Warn("failed to send password reset email", "email", user.Email, "err", err)
+			}
+		}()
+	}
+	return nil
+}
+
+// ResetPassword consumes a one-shot reset token, sets the new password, and
+// clears the token. The user can immediately log in with the new password.
+// For OAuth-only accounts this is also the path to set a first-time password
+// — provider is left alone so existing social login keeps working.
+func (s *AuthService) ResetPassword(token, newPassword string) error {
+	if token == "" {
+		return fmt.Errorf("%w: token is required", apperror.ErrInvalidInput)
+	}
+	if len(newPassword) < 6 {
+		return fmt.Errorf("%w: password must be at least 6 characters", apperror.ErrInvalidInput)
+	}
+
+	var user models.User
+	if err := s.db.Where("reset_token = ?", token).First(&user).Error; err != nil {
+		return fmt.Errorf("%w: invalid or expired reset link", apperror.ErrInvalidInput)
+	}
+	if user.ResetTokenExpiresAt == nil || time.Now().After(*user.ResetTokenExpiresAt) {
+		return fmt.Errorf("%w: reset link has expired — please request a new one", apperror.ErrInvalidInput)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+	hashStr := string(hash)
+
+	if err := s.db.Model(&user).Updates(map[string]interface{}{
+		"password_hash":          &hashStr,
+		"reset_token":            nil,
+		"reset_token_expires_at": nil,
+	}).Error; err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
 	return nil
 }
 
@@ -470,12 +571,10 @@ func (s *AuthService) findOrCreateSocialUser(email, name, avatarURL, provider, p
 		return nil, fmt.Errorf("failed to lookup user: %w", err)
 	}
 
-	token, err := s.generateToken(user.ID, user.Email)
-	if err != nil {
-		return nil, err
-	}
-	s.markAdmin(&user)
-	return &AuthResponse{Token: token, User: user}, nil
+	// Funnel through issue() so the suspended check applies to social paths
+	// too — this was the bug class the reviewer flagged (local Login had
+	// the gate, Google/Facebook minted a token even for suspended accounts).
+	return s.issue(&user)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -487,7 +586,6 @@ func (s *AuthService) GetByID(id string) (*models.User, error) {
 	if err := s.db.First(&user, "id = ?", id).Error; err != nil {
 		return nil, errors.New("user not found")
 	}
-	s.markAdmin(&user)
 	return &user, nil
 }
 
