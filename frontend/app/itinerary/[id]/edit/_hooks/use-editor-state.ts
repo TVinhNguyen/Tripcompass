@@ -102,7 +102,13 @@ export function useEditorState(id: string) {
     if (!itinerary || title === itinerary.title) return
     if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current)
     titleDebounceRef.current = setTimeout(() => {
-      apiFetch(`/itineraries/${id}`, { method: "PATCH", body: { title } }).catch(() => {})
+      apiFetch<Itinerary>(`/itineraries/${id}`, { method: "PATCH", body: { title } })
+        .then((updated) => {
+          setItinerary((prev) => prev ? { ...prev, ...updated, activities: prev.activities } : updated)
+        })
+        .catch(() => {
+          toast.error("Không thể lưu tên lịch trình")
+        })
     }, 800)
     return () => {
       if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current)
@@ -142,7 +148,8 @@ export function useEditorState(id: string) {
     if (!itinerary || saving) return
     setSaving(true)
     try {
-      await apiFetch(`/itineraries/${id}`, { method: "PATCH", body: { title } })
+      const updated = await apiFetch<Itinerary>(`/itineraries/${id}`, { method: "PATCH", body: { title } })
+      setItinerary((prev) => prev ? { ...prev, ...updated, activities: prev.activities } : updated)
       toast.success("Đã lưu lịch trình")
     } catch {
       toast.error("Lưu thất bại")

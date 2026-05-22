@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Heart, MapPin, Star, Clock } from "lucide-react"
 import { motion } from "framer-motion"
 import { type Place, type PlaceCategory } from "@/lib/types"
@@ -14,6 +14,7 @@ interface PlaceCardProps {
   index?: number
   variant?: "grid" | "list"
   initialSaved?: boolean
+  onSavedChange?: (place: Place, saved: boolean) => void
 }
 
 const CATEGORY_STYLES: Record<PlaceCategory, string> = {
@@ -35,9 +36,13 @@ function formatVnd(n: number | null | undefined): string {
   return `${n}₫`
 }
 
-export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = false }: PlaceCardProps) {
+export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = false, onSavedChange }: PlaceCardProps) {
   const [saved, setSaved] = useState(initialSaved)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setSaved(initialSaved)
+  }, [initialSaved])
 
   const cover = place.cover_image || "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800"
   const catStyle = CATEGORY_STYLES[place.category] || CATEGORY_STYLES.ATTRACTION
@@ -51,6 +56,7 @@ export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = f
     setSaving(true)
     const next = !saved
     setSaved(next)
+    onSavedChange?.(place, next)
     try {
       if (next) {
         await apiFetch(`/user/saved-places`, { method: "POST", body: { place_id: place.id } })
@@ -59,6 +65,7 @@ export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = f
       }
     } catch {
       setSaved(!next) // rollback
+      onSavedChange?.(place, !next)
     } finally {
       setSaving(false)
     }

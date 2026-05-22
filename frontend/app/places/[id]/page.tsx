@@ -14,9 +14,10 @@ import { Footer } from "@/components/footer"
 import { PlaceCard } from "@/components/place-card"
 import { Button } from "@/components/ui/button"
 import { apiFetch } from "@/lib/api"
-import type { Place, PaginatedList } from "@/lib/types"
+import type { Activity, Itinerary, Place, PaginatedList } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { useSavedPlaces } from "@/hooks/use-saved-places"
 
 const CATEGORY_LABELS: Record<string, string> = {
   ATTRACTION: "Tham quan",
@@ -52,10 +53,16 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
   const [place, setPlace] = useState<Place | null>(null)
   const [related, setRelated] = useState<Place[]>([])
   const [loading, setLoading] = useState(true)
-  const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<"desc" | "reviews" | "info">("desc")
   const [imgIdx, setImgIdx] = useState(0)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [itineraries, setItineraries] = useState<Itinerary[]>([])
+  const [loadingItineraries, setLoadingItineraries] = useState(false)
+  const [selectedItineraryId, setSelectedItineraryId] = useState("")
+  const [addingToItinerary, setAddingToItinerary] = useState(false)
+  const { savedIds, setPlaceSaved } = useSavedPlaces()
+  const saved = place ? savedIds.has(place.id) : false
 
   useEffect(() => {
     apiFetch<Place>(`/places/${id}`)
@@ -74,7 +81,7 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
     if (!place || saving) return
     setSaving(true)
     const next = !saved
-    setSaved(next)
+    setPlaceSaved(place.id, next, place)
     try {
       if (next) {
         await apiFetch("/user/saved-places", { method: "POST", body: { place_id: place.id } })
@@ -84,10 +91,83 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
         toast.success("Đã bỏ lưu")
       }
     } catch {
-      setSaved(!next)
+      setPlaceSaved(place.id, !next, place)
       toast.error("Thao tác thất bại")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const openItineraryPicker = async () => {
+    if (!place) return
+    if (pickerOpen) {
+      setPickerOpen(false)
+      return
+    }
+
+    setPickerOpen(true)
+    if (itineraries.length > 0 || loadingItineraries) return
+
+    setLoadingItineraries(true)
+    try {
+      const { data } = await apiFetch<{ data: Itinerary[] }>("/itineraries")
+      const list = data ?? []
+      setItineraries(list)
+      setSelectedItineraryId(list[0]?.id ?? "")
+    } catch {
+      setPickerOpen(false)
+      toast.error("Không thể tải lịch trình của bạn.")
+    } finally {
+      setLoadingItineraries(false)
+    }
+  }
+
+  const addToItinerary = async () => {
+    if (!place || !selectedItineraryId || addingToItinerary) return
+
+    const selected = itineraries.find((it) => it.id === selectedItineraryId)
+    if (!selected) {
+      toast.error("Vui lòng chọn lịch trình.")
+      return
+    }
+
+    const dayOneActivities = selected.activities?.filter((activity) => activity.day_number === 1) ?? []
+    const orderIndex = dayOneActivities.reduce((max, activity) => Math.max(max, activity.order_index), -1) + 1
+
+    setAddingToItinerary(true)
+    try {
+      const created = await apiFetch<Activity>("/activities", {
+        method: "POST",
+        body: {
+          itinerary_id: selected.id,
+          place_id: place.id,
+          day_number: 1,
+          order_index: orderIndex,
+          title: place.name,
+          category: place.category,
+          estimated_cost: place.base_price ?? 0,
+          lat: place.latitude,
+          lng: place.longitude,
+          image_url: place.cover_image || undefined,
+          notes: place.address ? `Địa chỉ: ${place.address}` : undefined,
+        },
+      })
+      setItineraries((prev) => prev.map((it) => {
+        if (it.id !== selected.id) return it
+        return {
+          ...it,
+          activities: [
+            ...(it.activities ?? []),
+            { ...created, place },
+          ],
+        }
+      }))
+      setPickerOpen(false)
+      toast.success(`Đã thêm vào "${selected.title}"`)
+    } catch {
+      toast.error("Không thể thêm địa điểm vào lịch trình.")
+    } finally {
+      setAddingToItinerary(false)
     }
   }
 
@@ -388,9 +468,50 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
                     <p className="text-xs text-[#3d5a3d] mb-5">Không mất phí vào cửa</p>
                   )}
 
-                  <Button className="w-full bg-[#1a1a1a] hover:bg-[#3d5a3d] text-white h-11 mb-2">
+                  <Button onClick={openItineraryPicker} className="w-full bg-[#1a1a1a] hover:bg-[#3d5a3d] text-white h-11 mb-2">
                     <Plus className="w-4 h-4 mr-2" /> Thêm vào lịch trình
                   </Button>
+                  {pickerOpen && (
+                    <div className="mb-3 pt-3 border-t border-[#e8e2d9] space-y-3">
+                      {loadingItineraries ? (
+                        <div className="flex items-center gap-2 text-sm text-[#6b6b6b]">
+                          <Loader2 className="w-4 h-4 animate-spin text-[#3d5a3d]" />
+                          Đang tải lịch trình...
+                        </div>
+                      ) : itineraries.length === 0 ? (
+                        <div className="space-y-3">
+                          <p className="text-sm text-[#6b6b6b]">Bạn chưa có lịch trình để thêm địa điểm này.</p>
+                          <Link href="/itinerary/new">
+                            <Button variant="outline" className="w-full border-[#e8e2d9] bg-transparent">
+                              Tạo lịch trình mới
+                            </Button>
+                          </Link>
+                        </div>
+                      ) : (
+                        <>
+                          <select
+                            value={selectedItineraryId}
+                            onChange={(event) => setSelectedItineraryId(event.target.value)}
+                            className="w-full rounded-lg border border-[#e8e2d9] bg-[#f5f0e8] px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:border-[#3d5a3d]"
+                          >
+                            {itineraries.map((itinerary) => (
+                              <option key={itinerary.id} value={itinerary.id}>
+                                {itinerary.title}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            onClick={addToItinerary}
+                            disabled={addingToItinerary || !selectedItineraryId}
+                            className="w-full bg-[#3d5a3d] hover:bg-[#2f472f] text-white"
+                          >
+                            {addingToItinerary ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                            Thêm vào ngày 1
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <Button onClick={toggleSave} disabled={saving} variant="outline"
                       className={cn("h-10 border-[#e8e2d9]", saved ? "bg-[#c4785a]/10 border-[#c4785a] text-[#c4785a]" : "text-[#1a1a1a]")}>
@@ -474,7 +595,13 @@ export default function PlaceDetailPage({ params }: { params: Promise<{ id: stri
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {related.map((p, i) => (
-                  <PlaceCard key={p.id} place={p} index={i} />
+                  <PlaceCard
+                    key={p.id}
+                    place={p}
+                    index={i}
+                    initialSaved={savedIds.has(p.id)}
+                    onSavedChange={(nextPlace, nextSaved) => setPlaceSaved(nextPlace.id, nextSaved, nextPlace)}
+                  />
                 ))}
               </div>
             </div>

@@ -13,6 +13,7 @@ import { apiFetch } from "@/lib/api"
 import PlacesMapDynamic from "@/components/places-map-dynamic"
 import type { DestinationStat, Place, PlaceCategory, PaginatedList } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { useSavedPlaces } from "@/hooks/use-saved-places"
 
 const CATEGORIES: { id: PlaceCategory | "all"; label: string }[] = [
   { id: "all",        label: "Tất cả" },
@@ -36,6 +37,7 @@ export default function PlacesPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const { savedIds, setPlaceSaved } = useSavedPlaces()
   const limit = viewMode === "map" ? 100 : 18
   const pageCount = Math.max(1, Math.ceil(total / limit))
 
@@ -329,7 +331,14 @@ export default function PlacesPage() {
                     )}
                   >
                     {places.map((place, i) => (
-                      <PlaceCard key={place.id} place={place} index={i} variant={viewMode} />
+                      <PlaceCard
+                        key={place.id}
+                        place={place}
+                        index={i}
+                        variant={viewMode}
+                        initialSaved={savedIds.has(place.id)}
+                        onSavedChange={(nextPlace, saved) => setPlaceSaved(nextPlace.id, saved, nextPlace)}
+                      />
                     ))}
                   </div>
                   {pageCount > 1 && (

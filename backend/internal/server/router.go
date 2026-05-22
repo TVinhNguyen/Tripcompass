@@ -101,7 +101,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 		api.GET("/combos", comboHandler.List)
 		api.GET("/combos/:id", comboHandler.Get)
 
-		api.GET("/itineraries/:id/public", itineraryHandler.GetPublic)
+		api.GET("/itineraries/:id/public", middleware.OptionalJWTAuth(sessions), itineraryHandler.GetPublic)
 
 		api.GET("/knowledge-base/lookup", lookupHandler.Lookup)
 		api.POST("/planner/generate", middleware.RateLimitRedis(rdb, 30, 60), plannerHandler.Generate)

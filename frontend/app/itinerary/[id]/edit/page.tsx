@@ -200,10 +200,13 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
             <span className="hidden sm:inline">AI</span>
           </button>
 
-          <button className="hidden sm:flex h-9 px-3 rounded-md hover:bg-white/10 text-[#f5f0e8]/80 hover:text-[#f5f0e8] text-sm items-center gap-1.5 transition">
+          <Link
+            href={`/itinerary/${id}`}
+            className="hidden sm:flex h-9 px-3 rounded-md hover:bg-white/10 text-[#f5f0e8]/80 hover:text-[#f5f0e8] text-sm items-center gap-1.5 transition"
+          >
             <Eye className="w-4 h-4" />
             <span>Xem trước</span>
-          </button>
+          </Link>
 
           <Button
             size="sm"

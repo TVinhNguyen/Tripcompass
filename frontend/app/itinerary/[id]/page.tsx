@@ -78,6 +78,10 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
   }
 
   const handleShare = () => {
+    if (!itinerary || itinerary.status !== "PUBLISHED") {
+      toast.error("Chỉ có thể chia sẻ lịch trình đã xuất bản")
+      return
+    }
     const url = `${window.location.origin}/itinerary/${id}/public`
     navigator.clipboard.writeText(url)
     toast.success("Đã sao chép link chia sẻ")
@@ -111,6 +115,7 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
   // who need to edit can deep-link to /edit directly (invitation flow) and
   // anyone else uses the Clone button to fork the itinerary.
   const isOwner = !!user && user.id === itinerary.owner_id
+  const canShare = itinerary.status === "PUBLISHED"
 
   const activities: Activity[] = itinerary.activities ?? []
   const days = [...new Set(activities.map((a) => a.day_number))].sort((a, b) => a - b)
@@ -186,9 +191,11 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
               </div>
 
               <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={handleShare} className="h-10 px-3 border-[#e8e2d9] bg-transparent text-[#1a1a1a]">
-                  <Share2 className="w-4 h-4 mr-2" />Chia sẻ
-                </Button>
+                {canShare && (
+                  <Button variant="outline" onClick={handleShare} className="h-10 px-3 border-[#e8e2d9] bg-transparent text-[#1a1a1a]">
+                    <Share2 className="w-4 h-4 mr-2" />Chia sẻ
+                  </Button>
+                )}
                 <Button variant="outline" onClick={handleClone} className="h-10 px-3 border-[#e8e2d9] bg-transparent text-[#1a1a1a]">
                   <Copy className="w-4 h-4 mr-2" />Nhân bản
                 </Button>
