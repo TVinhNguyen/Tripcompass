@@ -87,7 +87,10 @@ func channelKey(roomID string) string {
 
 // Publish wraps data with the hub's instanceID and publishes to Redis.
 // The subscriber on the same instance will skip this message to avoid duplicates.
-func (ps *RedisPubSub) Publish(ctx context.Context, roomID string, data []byte) {
+// Publish returns nil when Redis acknowledged the message. Callers (Publisher
+// and the outbox worker) treat a non-nil return as "broadcast not acked
+// cross-instance" — the outbox will retry rather than mark dispatched.
+func (ps *RedisPubSub) Publish(ctx context.Context, roomID string, data []byte) error {
 	envelope := pubEnvelope{
 		InstanceID: ps.hub.instanceID,
 		Data:       json.RawMessage(data),
@@ -95,11 +98,13 @@ func (ps *RedisPubSub) Publish(ctx context.Context, roomID string, data []byte) 
 	payload, err := json.Marshal(envelope)
 	if err != nil {
 		slog.Warn("pubsub: marshal error", "room", roomID, "err", err)
-		return
+		return err
 	}
 	if err := ps.rdb.Publish(ctx, channelKey(roomID), payload).Err(); err != nil {
 		slog.Warn("pubsub: publish error", "room", roomID, "err", err)
+		return err
 	}
+	return nil
 }
 
 // SubscribeRoom subscribe vào Redis channel cho 1 room với per-room context.

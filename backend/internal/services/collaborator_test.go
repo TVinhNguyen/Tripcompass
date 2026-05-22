@@ -25,10 +25,11 @@ type stubCall struct {
 	EventType string
 }
 
-func (p *stubPub) PublishToUser(userID, eventType string, _ any) {
+func (p *stubPub) PublishToUser(userID, eventType string, _ any) (bool, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.direct = append(p.direct, stubCall{UserID: userID, EventType: eventType})
+	return true, nil
 }
 
 func (p *stubPub) PublishToUserInTx(_ *gorm.DB, userID, eventType string, _ any) error {

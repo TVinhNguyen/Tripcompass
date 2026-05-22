@@ -380,6 +380,36 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// Password-reset tokens. Mirrors database/migrations/0005_password_reset_token.sql
+			// so a fresh deploy that skips the static SQL file gets the same shape.
+			// 64-char hex (32 random bytes) doesn't share verify_token's column —
+			// keeps verification OTP and reset link rotation independent.
+			ID: "202605200014_password_reset_token",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`ALTER TABLE schema_travel.users
+						ADD COLUMN IF NOT EXISTS reset_token VARCHAR(128);`,
+					`ALTER TABLE schema_travel.users
+						ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP WITH TIME ZONE;`,
+					`CREATE INDEX IF NOT EXISTS idx_users_reset_token
+						ON schema_travel.users (reset_token)
+						WHERE reset_token IS NOT NULL;`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				_ = tx.Exec(`DROP INDEX IF EXISTS schema_travel.idx_users_reset_token;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP COLUMN IF EXISTS reset_token_expires_at;`).Error
+				_ = tx.Exec(`ALTER TABLE schema_travel.users DROP COLUMN IF EXISTS reset_token;`).Error
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()

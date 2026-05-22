@@ -1,21 +1,29 @@
 """
-streaming/pump.py — SSE producer-consumer loop for chat agent responses.
+streaming/pump.py — Producer-consumer loop for one chat agent turn.
 
-Streams Server-Sent Events so the frontend can show "typing" in real-time:
-  event: thinking    → LLM is processing (heartbeat)
-  event: tool_start  → "🔍 Đang tìm địa điểm..."
-  event: token       → each LLM token as it's generated
-  event: done        → final metadata (session_id, tool_calls, plan)
-  event: error       → error message
+Yields structured turn events (typed `dict` matching schemas.StreamEvent):
+  thinking    → LLM is processing (heartbeat — emitted on idle gaps)
+  tool_start  → a tool call started: {tool, label}
+  token       → an LLM token chunk: {content}
+  error       → mid-stream error: {message}
+  done        → terminal event (always the last yield) carrying the
+                aggregated turn result: {session_id, tool_calls, plan,
+                full_text, stream_dropped}
+
+The caller (routes/chat.py) frames each event as SSE; non-HTTP callers
+(tests, future webhook adapter) consume the events directly. Previously
+this function yielded pre-formatted SSE strings and the route parsed the
+final `done` chunk by substring-matching '"type": "done"' — fragile and
+made the contract invisible from the schema.
 """
 import asyncio
 import json
 import time
-from typing import AsyncGenerator
+from typing import AsyncIterator
 
 from loguru import logger
 
-from app.streaming.helpers import _sse, _content_to_text, _message_content, _has_tool_calls
+from app.streaming.helpers import _content_to_text, _message_content, _has_tool_calls
 from app.streaming.think_stripper import _ThinkStripper, _strip_thinking
 from app.streaming.json_stripper import _JsonStripper
 from app.streaming.response_shape import _to_generate_response, _extract_plan
@@ -26,10 +34,9 @@ async def stream_chat_response(
     agent,
     messages: list,
     session_id: str,
-) -> AsyncGenerator[str, None]:
-    """Stream agent response as SSE events.
-
-    Yields SSE-formatted strings: "data: {...}\\n\\n"
+) -> AsyncIterator[dict]:
+    """Stream agent response as structured turn events (dict). Caller frames
+    them as SSE if needed.
 
     JSON suppression: two live layers + one post-hoc safety net.
       L1: chunks carrying tool_call_chunks have their content dropped — the
@@ -76,7 +83,7 @@ async def stream_chat_response(
 
     # Initial "thinking" indicator so the FE shows activity immediately —
     # the LLM's first token can be 5-30s away on a fresh container.
-    yield _sse({"type": "thinking"})
+    yield ({"type": "thinking"})
 
     try:
         while True:
@@ -86,7 +93,7 @@ async def stream_chat_response(
                 )
             except asyncio.TimeoutError:
                 # Idle gap — keep the SSE connection warm and the UI animated.
-                yield _sse({"type": "thinking"})
+                yield ({"type": "thinking"})
                 continue
 
             if tag is SENTINEL_DONE:
@@ -114,7 +121,7 @@ async def stream_chat_response(
                     "create_travel_plan": "📋 Đang lên lịch trình...",
                 }
                 label = labels.get(tool_name, f"⚙️ Đang xử lý {tool_name}...")
-                yield _sse({"type": "tool_start", "tool": tool_name, "label": label})
+                yield ({"type": "tool_start", "tool": tool_name, "label": label})
 
             # ── Tool end: extract plan from output ─────────────────────
             elif kind == "on_tool_end":
@@ -161,7 +168,7 @@ async def stream_chat_response(
                     # L2: drop top-level {...} blocks for non-native tool calling.
                     clean_token = json_stripper.feed(clean_token)
                     if clean_token:
-                        yield _sse({"type": "token", "content": clean_token})
+                        yield ({"type": "token", "content": clean_token})
 
             # Some OpenAI-compatible gateways accept stream=true but buffer the
             # whole answer and only emit on_chat_model_end. That is not true
@@ -184,7 +191,7 @@ async def stream_chat_response(
                     clean_token = think_stripper.feed(content)
                     clean_token = json_stripper.feed(clean_token)
                     if clean_token:
-                        yield _sse({"type": "token", "content": clean_token})
+                        yield ({"type": "token", "content": clean_token})
 
             if fast_finish_after_plan:
                 logger.info("[stream] Fast-finished after create_travel_plan")
@@ -199,13 +206,13 @@ async def stream_chat_response(
         if is_stream_drop:
             stream_dropped = True
             logger.warning(f"[stream] Upstream LLM dropped the stream: {msg}")
-            yield _sse({
+            yield ({
                 "type": "error",
                 "message": "Nhà cung cấp LLM ngắt kết nối giữa chừng. Lịch trình (nếu có) vẫn được giữ lại bên dưới.",
             })
         else:
             logger.error(f"[stream] Error: {e}")
-            yield _sse({"type": "error", "message": msg})
+            yield ({"type": "error", "message": msg})
     finally:
         producer.cancel()
         try:
@@ -234,7 +241,7 @@ async def stream_chat_response(
         trailing = json_stripper.feed(trailing)
     json_stripper.flush()
     if trailing:
-        yield _sse({"type": "token", "content": trailing})
+        yield ({"type": "token", "content": trailing})
 
     # ── Clean full_text ─────────────────────────────────────────────────
     # Always strip <think>...</think> reasoning leaks. Only strip JSON dumps
@@ -257,7 +264,7 @@ async def stream_chat_response(
         clean_text = _deterministic_summary(plan_data, stream_dropped)
 
     # ── Final event ────────────────────────────────────────────────────
-    yield _sse({
+    yield ({
         "type":       "done",
         "session_id": session_id,
         "tool_calls": tools_used,

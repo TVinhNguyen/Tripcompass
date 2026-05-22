@@ -2,7 +2,7 @@ package ws
 
 import (
 	"encoding/json"
-	"log/slog"
+	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -19,11 +19,16 @@ import (
 //     the same Tx also failed. The Worker drains the outbox asynchronously,
 //     trading a few-hundred-ms latency for at-least-once delivery.
 //
-// Used by HTTP handlers after a successful mutation, so collaborative editing
-// no longer depends on the client looping the event back through WebSocket.
+// The synchronous methods return (acked, err). "Acked" means:
+//   - Local hub broadcast succeeded, AND
+//   - If Redis is configured, Redis PUBLISH succeeded.
+//
+// The outbox worker uses this signal to decide whether to mark a row as
+// dispatched or to retry — without it (the previous API was fire-and-forget)
+// a Redis outage would silently lose events to other instances.
 type Publisher interface {
-	PublishEvent(roomID, eventType string, payload any)
-	PublishToUser(userID, eventType string, payload any)
+	PublishEvent(roomID, eventType string, payload any) (acked bool, err error)
+	PublishToUser(userID, eventType string, payload any) (acked bool, err error)
 
 	PublishInTx(tx *gorm.DB, roomID, eventType string, payload any) error
 	PublishToUserInTx(tx *gorm.DB, userID, eventType string, payload any) error
@@ -39,14 +44,19 @@ type hubPublisher struct {
 	hub *Hub
 }
 
-func (p *hubPublisher) publish(roomID, eventType string, payload any) {
+// publish performs both the local broadcast and the Redis fan-out, returning
+// acked=true only when every configured path succeeded. A nil Redis pubsub
+// (test wiring, or single-instance deploys) is treated as "not configured"
+// and doesn't gate the ack.
+func (p *hubPublisher) publish(roomID, eventType string, payload any) (bool, error) {
 	if p.hub == nil || roomID == "" {
-		return
+		// Nothing to publish to; treat as ack so the outbox doesn't loop on
+		// rows aimed at an unconfigured destination.
+		return true, nil
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		slog.Warn("ws publish: marshal payload", "event", eventType, "err", err)
-		return
+		return false, fmt.Errorf("marshal payload: %w", err)
 	}
 	msg := Message{
 		Type:    eventType,
@@ -55,24 +65,31 @@ func (p *hubPublisher) publish(roomID, eventType string, payload any) {
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {
-		slog.Warn("ws publish: marshal envelope", "event", eventType, "err", err)
-		return
+		return false, fmt.Errorf("marshal envelope: %w", err)
 	}
+
+	// Local broadcast is in-memory; failures here would indicate a hub bug,
+	// not a transient condition. Hub.BroadcastToRoom doesn't return an error.
 	p.hub.BroadcastToRoom(roomID, data, nil)
+
+	// Cross-instance: only ack if Redis is configured AND publish succeeded.
 	if p.hub.redisPubSub != nil {
-		p.hub.redisPubSub.Publish(p.hub.redisPubSub.ctx, roomID, data)
+		if err := p.hub.redisPubSub.Publish(p.hub.redisPubSub.ctx, roomID, data); err != nil {
+			return false, fmt.Errorf("redis publish: %w", err)
+		}
 	}
+	return true, nil
 }
 
-func (p *hubPublisher) PublishEvent(roomID, eventType string, payload any) {
-	p.publish(roomID, eventType, payload)
+func (p *hubPublisher) PublishEvent(roomID, eventType string, payload any) (bool, error) {
+	return p.publish(roomID, eventType, payload)
 }
 
-func (p *hubPublisher) PublishToUser(userID, eventType string, payload any) {
+func (p *hubPublisher) PublishToUser(userID, eventType string, payload any) (bool, error) {
 	if userID == "" {
-		return
+		return true, nil
 	}
-	p.publish(UserRoomPrefix+userID, eventType, payload)
+	return p.publish(UserRoomPrefix+userID, eventType, payload)
 }
 
 // PublishInTx writes the event into the outbox table so it commits atomically

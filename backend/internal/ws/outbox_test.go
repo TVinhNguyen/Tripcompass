@@ -53,7 +53,10 @@ func envOr(key, fallback string) string {
 }
 
 // fakePub records every PublishEvent call so tests can assert what was
-// dispatched. Behaviour can be flipped to fail via failNext.
+// dispatched. Behaviour can be flipped to fail via failNext (returns
+// acked=false + error — the real failure mode of the production Publisher
+// when Redis publish errors) or panicNow (covers safeDispatch's panic
+// recovery path).
 type fakePub struct {
 	mu       sync.Mutex
 	calls    []fakeCall
@@ -67,7 +70,7 @@ type fakeCall struct {
 	Payload   string
 }
 
-func (f *fakePub) PublishEvent(roomID, eventType string, payload any) {
+func (f *fakePub) PublishEvent(roomID, eventType string, payload any) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.panicNow {
@@ -76,16 +79,16 @@ func (f *fakePub) PublishEvent(roomID, eventType string, payload any) {
 	}
 	if f.failNext > 0 {
 		f.failNext--
-		// We can't return an error from PublishEvent; instead we panic so
-		// safeDispatch's recover triggers retry handling, mirroring the
-		// real production failure mode.
-		panic(errors.New("synthetic dispatch failure"))
+		return false, errors.New("synthetic dispatch failure")
 	}
 	body, _ := json.Marshal(payload)
 	f.calls = append(f.calls, fakeCall{RoomID: roomID, EventType: eventType, Payload: string(body)})
+	return true, nil
 }
 
-func (f *fakePub) PublishToUser(_ string, _ string, _ any) {}
+func (f *fakePub) PublishToUser(_ string, _ string, _ any) (bool, error) {
+	return true, nil
+}
 func (f *fakePub) PublishInTx(_ *gorm.DB, _, _ string, _ any) error {
 	return nil
 }
