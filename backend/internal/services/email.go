@@ -86,7 +86,7 @@ func (s *EmailService) SendDuplicateRegistrationNotice(toEmail, fullName string)
 // SendPasswordResetEmail sends a password reset link.
 func (s *EmailService) SendPasswordResetEmail(toEmail, fullName, token string) error {
 	if !s.IsConfigured() {
-		fmt.Printf("[EMAIL] Password reset link for %s: %s/reset-password?token=%s\n",
+		fmt.Printf("[EMAIL] Password reset link for %s: %s/auth/reset-password?token=%s\n",
 			toEmail, s.cfg.FrontendURL, token)
 		return nil
 	}
@@ -95,7 +95,7 @@ func (s *EmailService) SendPasswordResetEmail(toEmail, fullName, token string) e
 	if frontendURL == "" {
 		frontendURL = "http://localhost:3000"
 	}
-	resetLink := fmt.Sprintf("%s/reset-password?token=%s", frontendURL, token)
+	resetLink := fmt.Sprintf("%s/auth/reset-password?token=%s", frontendURL, token)
 
 	subject := "Đặt lại mật khẩu TripCompass"
 	textBody, htmlBody := passwordResetEmailBody(fullName, resetLink)
