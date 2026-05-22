@@ -37,8 +37,8 @@ export function TrendingSection() {
   const hasLiveItineraries = itineraries.length > 0;
 
   useEffect(() => {
-    apiFetch<PaginatedList<Itinerary>>("/itineraries", {
-      query: { status: "PUBLISHED", limit: 6, page: 1 },
+    apiFetch<PaginatedList<Itinerary>>("/explore", {
+      query: { sort: "popular", limit: 6, page: 1 },
       auth: false,
     })
       .then(({ data }) => setItineraries(data || []))
@@ -69,11 +69,11 @@ export function TrendingSection() {
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-semibold text-[#1a1a1a] mb-4 leading-tight tracking-tight">
               Lịch trình
-              <span className="text-[#c4785a]"> được yêu thích</span>
+              <span className="text-[#c4785a]"> được xem nhiều</span>
             </h2>
             <p className="text-[#6b6b6b] text-base lg:text-lg leading-relaxed">
               {hasLiveItineraries
-                ? "Những hành trình được cộng đồng đánh giá cao và chia sẻ nhiều nhất trong tuần qua."
+                ? "Những hành trình công khai có nhiều lượt xem nhất từ cộng đồng."
                 : "Một vài gợi ý để bạn bắt đầu nhanh khi chưa có lịch trình cộng đồng mới."}
             </p>
           </div>

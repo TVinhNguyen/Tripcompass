@@ -4,36 +4,35 @@ import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Camera, Mail, Phone, Calendar, Edit3, Loader2, Lock, Shield, Heart, Map } from "lucide-react"
+import { Mail, Calendar, Edit3, Loader2, Lock, Shield, Heart, Map } from "lucide-react"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { RequireAuth } from "@/components/require-auth"
 import { useAuth } from "@/hooks/use-auth"
+import { useSavedPlaces } from "@/hooks/use-saved-places"
 import { apiFetch, ApiError } from "@/lib/api"
-import type { User, Place } from "@/lib/types"
+import type { User } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
 type Tab = "profile" | "itineraries" | "saved" | "security"
 
 function ProfileContent() {
-  const { user: authUser } = useAuth()
+  const { user: authUser, refresh: refreshAuth } = useAuth()
+  const { savedPlaces, loading: loadingSavedPlaces } = useSavedPlaces()
   const [tab, setTab] = useState<Tab>("profile")
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     fullName: authUser?.full_name || "",
-    bio: "",
-    phone: "",
     email: authUser?.email || "",
   })
 
   // ---- Remote data ----
   const [profile, setProfile] = useState<User | null>(null)
   const [itineraries, setItineraries] = useState<{ id: string; title: string; destination: string; start_date: string; end_date: string; cover_image_url?: string; status: string; view_count: number }[]>([])
-  const [savedPlaces, setSavedPlaces] = useState<Place[]>([])
-  const [loadingData, setLoadingData] = useState(false)
+  const [loadingItineraries, setLoadingItineraries] = useState(true)
 
   // ---- Change-password state ----
   const [oldPassword, setOldPassword] = useState("")
@@ -46,38 +45,35 @@ function ProfileContent() {
     apiFetch<{ user: User }>("/user/profile")
       .then(({ user }) => {
         setProfile(user)
-        setForm({ fullName: user.full_name, bio: user.bio || "", phone: user.phone || "", email: user.email })
+        setForm({ fullName: user.full_name, email: user.email })
       })
       .catch(() => {})
   }, [])
 
-  // Load tab-specific data lazily
+  // Load counts up front so the profile header is accurate immediately.
   useEffect(() => {
-    if (tab === "itineraries" && itineraries.length === 0) {
-      setLoadingData(true)
-      apiFetch<{ data: typeof itineraries }>("/itineraries")
-        .then(({ data }) => setItineraries(data))
-        .catch(() => {})
-        .finally(() => setLoadingData(false))
-    }
-    if (tab === "saved" && savedPlaces.length === 0) {
-      setLoadingData(true)
-      apiFetch<{ data: Place[] }>("/user/saved-places")
-        .then(({ data }) => setSavedPlaces(data))
-        .catch(() => {})
-        .finally(() => setLoadingData(false))
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab])
+    setLoadingItineraries(true)
+    apiFetch<{ data: typeof itineraries }>("/itineraries")
+      .then(({ data }) => setItineraries(data ?? []))
+      .catch(() => setItineraries([]))
+      .finally(() => setLoadingItineraries(false))
+  }, [])
 
   const handleSave = async () => {
+    const fullName = form.fullName.trim()
+    if (!fullName) {
+      toast.error("Họ và tên không được để trống.")
+      return
+    }
     setSaving(true)
     try {
       const { user } = await apiFetch<{ user: User }>("/user/profile", {
         method: "PATCH",
-        body: { full_name: form.fullName, bio: form.bio, phone: form.phone },
+        body: { full_name: fullName },
       })
       setProfile(user)
+      setForm({ fullName: user.full_name, email: user.email })
+      await refreshAuth()
       setEditing(false)
       toast.success("Cập nhật hồ sơ thành công")
     } catch {
@@ -85,6 +81,15 @@ function ProfileContent() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleCancelEdit = () => {
+    const current = profile ?? authUser
+    setForm({
+      fullName: current?.full_name || "",
+      email: current?.email || "",
+    })
+    setEditing(false)
   }
 
   const handleChangePassword = async () => {
@@ -131,9 +136,6 @@ function ProfileContent() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <button className="absolute bottom-1 right-1 w-9 h-9 rounded-full bg-[#d4a853] hover:bg-[#c49843] flex items-center justify-center shadow-lg">
-                <Camera className="w-4 h-4 text-[#1a1a1a]" />
-              </button>
             </div>
             <div className="flex-1 min-w-0 pb-2">
               <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-white mb-1 tracking-tight leading-tight">{form.fullName}</h1>
@@ -193,8 +195,6 @@ function ProfileContent() {
 
               <div className="bg-white border border-[#e8e2d9] rounded-2xl p-6 space-y-5">
                 <Field label="Họ và tên" editing={editing} value={form.fullName} onChange={(v) => setForm({ ...form, fullName: v })} />
-                <Field label="Giới thiệu bản thân" editing={editing} value={form.bio} onChange={(v) => setForm({ ...form, bio: v })} textarea />
-                <Field label="Số điện thoại" editing={editing} value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} icon={Phone} />
                 <Field label="Email" editing={false} value={form.email} onChange={() => {}} icon={Mail} />
 
                 {editing && (
@@ -202,7 +202,7 @@ function ProfileContent() {
                     <Button onClick={handleSave} disabled={saving} className="bg-[#1a1a1a] hover:bg-[#3d5a3d] text-white">
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Lưu thay đổi"}
                     </Button>
-                    <Button onClick={() => setEditing(false)} variant="outline" className="border-[#e8e2d9] bg-transparent">
+                    <Button onClick={handleCancelEdit} variant="outline" className="border-[#e8e2d9] bg-transparent">
                       Huỷ
                     </Button>
                   </div>
@@ -219,7 +219,7 @@ function ProfileContent() {
                   <Button className="bg-[#1a1a1a] hover:bg-[#3d5a3d] text-white">Tạo lịch trình mới</Button>
                 </Link>
               </div>
-              {loadingData ? (
+              {loadingItineraries ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="w-8 h-8 animate-spin text-[#3d5a3d]" />
                 </div>
@@ -251,7 +251,7 @@ function ProfileContent() {
           {tab === "saved" && (
             <div>
               <h2 className="text-xl font-semibold text-[#1a1a1a] mb-6 tracking-tight">Địa điểm đã lưu</h2>
-              {loadingData ? (
+              {loadingSavedPlaces ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="w-8 h-8 animate-spin text-[#3d5a3d]" />
                 </div>
@@ -285,9 +285,9 @@ function ProfileContent() {
               <h2 className="text-xl font-semibold text-[#1a1a1a] mb-6 tracking-tight">Bảo mật</h2>
               <div className="bg-white border border-[#e8e2d9] rounded-2xl p-6 space-y-4">
                 <h3 className="font-medium text-[#1a1a1a] flex items-center gap-2"><Lock className="w-4 h-4" /> Đổi mật khẩu</h3>
-                <Field label="Mật khẩu cũ" editing value={oldPassword} onChange={setOldPassword} />
-                <Field label="Mật khẩu mới" editing value={newPassword} onChange={setNewPassword} />
-                <Field label="Xác nhận mật khẩu mới" editing value={confirmPassword} onChange={setConfirmPassword} />
+                <Field label="Mật khẩu cũ" editing value={oldPassword} onChange={setOldPassword} type="password" />
+                <Field label="Mật khẩu mới" editing value={newPassword} onChange={setNewPassword} type="password" />
+                <Field label="Xác nhận mật khẩu mới" editing value={confirmPassword} onChange={setConfirmPassword} type="password" />
                 <Button onClick={handleChangePassword} disabled={changingPass} className="bg-[#1a1a1a] hover:bg-[#3d5a3d] text-white">
                   {changingPass ? <Loader2 className="w-4 h-4 animate-spin" /> : "Đổi mật khẩu"}
                 </Button>
@@ -316,6 +316,7 @@ function Field({
   onChange,
   editing,
   textarea,
+  type = "text",
   icon: Icon,
 }: {
   label: string
@@ -323,6 +324,7 @@ function Field({
   onChange: (v: string) => void
   editing: boolean
   textarea?: boolean
+  type?: string
   icon?: React.ComponentType<{ className?: string }>
 }) {
   return (
@@ -338,7 +340,7 @@ function Field({
           />
         ) : (
           <input
-            type="text"
+            type={type}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className="w-full px-4 py-3 bg-[#f5f0e8] border border-[#e8e2d9] rounded-lg text-[#1a1a1a] focus:outline-none focus:border-[#3d5a3d]"

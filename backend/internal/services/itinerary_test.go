@@ -330,18 +330,36 @@ func TestItineraryService_Clone(t *testing.T) {
 
 	t.Run("clone published by non-owner", func(t *testing.T) {
 		it := createTestItinerary(t, db, owner.ID)
-		_ = createTestActivity(t, db, it.ID)
+		lat := 16.061
+		lng := 108.227
+		place := models.Place{
+			ID:          uuid.New(),
+			Destination: "Đà Nẵng",
+			Category:    models.CategoryAttraction,
+			Name:        "Cầu Rồng",
+			Latitude:    &lat,
+			Longitude:   &lng,
+		}
+		require.NoError(t, db.Create(&place).Error)
+		act := createTestActivity(t, db, it.ID)
+		act.PlaceID = &place.ID
+		require.NoError(t, db.Save(&act).Error)
 		db.Model(&it).Update("status", "PUBLISHED")
 
 		clone, err := svc.Clone(it.ID.String(), requester.ID.String())
 		require.NoError(t, err)
 		assert.NotEqual(t, it.ID, clone.ID)
 		assert.Equal(t, requester.ID, clone.OwnerID)
-		assert.Contains(t, clone.Title, "(clone)")
+		assert.Contains(t, clone.Title, "Bản sao của")
 		assert.Equal(t, it.Destination, clone.Destination)
 		assert.Equal(t, "DRAFT", clone.Status)
 		assert.Equal(t, it.ID, *clone.ClonedFromID)
-		assert.Len(t, clone.Activities, 1)
+		require.Len(t, clone.Activities, 1)
+		assert.Equal(t, place.ID, *clone.Activities[0].PlaceID)
+		require.NotNil(t, clone.Activities[0].Lat)
+		require.NotNil(t, clone.Activities[0].Lng)
+		assert.Equal(t, lat, *clone.Activities[0].Lat)
+		assert.Equal(t, lng, *clone.Activities[0].Lng)
 
 		// Verify clone_count incremented on original
 		var original models.Itinerary

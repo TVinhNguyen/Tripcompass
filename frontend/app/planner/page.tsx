@@ -17,7 +17,6 @@ import {
   List,
   Calendar,
   Eye,
-  Heart,
   MoreVertical,
   Edit3,
   Trash2,
@@ -293,7 +292,7 @@ function PlannerContent() {
                     </Link>
                     <div className="flex items-center gap-4 text-sm text-[#8b8378] mb-4">
                       <div className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" /><span>{it.view_count.toLocaleString("vi-VN")}</span></div>
-                      <div className="flex items-center gap-1"><Heart className="w-3.5 h-3.5 text-[#c4785a]" /><span>{it.clone_count}</span></div>
+                      <div className="flex items-center gap-1"><Copy className="w-3.5 h-3.5 text-[#c4785a]" /><span>{it.clone_count}</span></div>
                     </div>
                     <div className="flex items-center gap-2 mt-auto">
                       <Button asChild size="sm" variant="outline" className="flex-1 border-[#e8e2d9] text-[#1a1a1a] hover:bg-[#f5f0e8] hover:border-[#3d5a3d]">

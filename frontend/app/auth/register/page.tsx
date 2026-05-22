@@ -178,11 +178,11 @@ export default function RegisterPage() {
           />
           <label htmlFor="terms" className="text-sm text-[#6b6b6b]">
             Tôi đồng ý với{" "}
-            <Link href="#" className="text-[#3d5a3d] hover:underline">
+            <Link href="/terms" className="text-[#3d5a3d] hover:underline">
               Điều khoản sử dụng
             </Link>{" "}
             và{" "}
-            <Link href="#" className="text-[#3d5a3d] hover:underline">
+            <Link href="/privacy" className="text-[#3d5a3d] hover:underline">
               Chính sách bảo mật
             </Link>
           </label>

@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { Heart, Eye, Calendar, MapPin, ArrowUpRight } from "lucide-react";
+import { Copy, Eye, Calendar, MapPin, ArrowUpRight, Star } from "lucide-react";
 import { type Itinerary } from "@/lib/types";
 
 interface ItineraryCardProps {
@@ -11,6 +11,12 @@ interface ItineraryCardProps {
   index?: number;
   variant?: "default" | "compact";
 }
+
+const BUDGET_LABELS: Record<string, string> = {
+  BUDGET: "Tiết kiệm",
+  MODERATE: "Vừa phải",
+  LUXURY: "Sang trọng",
+};
 
 // Compute days from start/end date, fallback to 1
 function numDays(it: Itinerary): number {
@@ -23,6 +29,8 @@ function numDays(it: Itinerary): number {
 export function ItineraryCard({ itinerary, index = 0, variant = "default" }: ItineraryCardProps) {
   const cover = itinerary.cover_image_url || "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800";
   const days  = numDays(itinerary);
+  const href = itinerary.status === "PUBLISHED" ? `/itinerary/${itinerary.id}/public` : `/itinerary/${itinerary.id}`;
+  const hasRating = (itinerary.rating ?? 0) > 0;
 
   if (variant === "compact") {
     return (
@@ -32,7 +40,7 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
         transition={{ duration: 0.4, delay: index * 0.08 }}
         viewport={{ once: true }}
       >
-        <Link href={`/itinerary/${itinerary.id}`} className="block h-full">
+        <Link href={href} className="block h-full">
           <article className="group relative bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 h-full flex flex-col">
             <div className="relative aspect-[4/3] overflow-hidden">
               <Image
@@ -65,9 +73,15 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
                   <span>{itinerary.view_count?.toLocaleString("vi-VN") ?? 0}</span>
                 </div>
                 <div className="flex items-center gap-1 text-xs text-[#8b8378] shrink-0">
-                  <Heart className="w-3.5 h-3.5 text-[#c4785a]" />
-                  <span>{itinerary.rating?.toFixed(1) ?? "—"}</span>
+                  <Copy className="w-3.5 h-3.5 text-[#c4785a]" />
+                  <span>{itinerary.clone_count?.toLocaleString("vi-VN") ?? 0}</span>
                 </div>
+                {hasRating && (
+                  <div className="flex items-center gap-1 text-xs text-[#8b8378] shrink-0">
+                    <Star className="w-3.5 h-3.5 fill-[#d4a853] text-[#d4a853]" />
+                    <span>{itinerary.rating.toFixed(1)}</span>
+                  </div>
+                )}
               </div>
             </div>
           </article>
@@ -83,7 +97,7 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
       transition={{ duration: 0.5, delay: index * 0.08 }}
       viewport={{ once: true }}
     >
-      <Link href={`/itinerary/${itinerary.id}`} className="block h-full">
+      <Link href={href} className="block h-full">
         <article className="group relative bg-card border border-border rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full flex flex-col">
           <div className="relative aspect-[16/10] overflow-hidden">
             <Image
@@ -134,7 +148,7 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
             <div className="flex items-center justify-between mt-auto pt-4 border-t border-[#e8e2d9]">
               {/* Budget badge */}
               <span className="text-xs font-medium text-[#6b6b6b] bg-[#f5f0e8] px-2.5 py-1 rounded-full">
-                {itinerary.budget_category}
+                {BUDGET_LABELS[itinerary.budget_category] ?? itinerary.budget_category}
               </span>
 
               <div className="flex items-center gap-3 text-[#6b6b6b] text-sm shrink-0">
@@ -143,9 +157,15 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
                   <span>{itinerary.view_count?.toLocaleString("vi-VN") ?? 0}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Heart className="w-4 h-4 text-[#c4785a]" />
-                  <span className="font-medium">{itinerary.rating?.toFixed(1) ?? "—"}</span>
+                  <Copy className="w-4 h-4 text-[#c4785a]" />
+                  <span className="font-medium">{itinerary.clone_count?.toLocaleString("vi-VN") ?? 0}</span>
                 </div>
+                {hasRating && (
+                  <div className="flex items-center gap-1">
+                    <Star className="w-4 h-4 fill-[#d4a853] text-[#d4a853]" />
+                    <span className="font-medium">{itinerary.rating.toFixed(1)}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

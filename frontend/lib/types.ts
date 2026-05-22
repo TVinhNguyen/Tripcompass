@@ -12,8 +12,6 @@ export type User = {
   email: string;
   full_name: string;
   avatar_url?: string;
-  bio?: string;
-  phone?: string;
   is_admin?: boolean;
   status?: "UNVERIFIED" | "ACTIVE" | "BANNED";
   created_at: string;

@@ -257,7 +257,7 @@ func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, err
 	clonedFrom := original.ID
 	clone := models.Itinerary{
 		OwnerID:        uid,
-		Title:          original.Title + " (clone)",
+		Title:          "Bản sao của " + original.Title,
 		Destination:    original.Destination,
 		Budget:         original.Budget,
 		StartDate:      original.StartDate,
@@ -276,14 +276,23 @@ func (s *ItineraryService) Clone(id, requesterID string) (*models.Itinerary, err
 		}
 		newActs := make([]models.Activity, 0, len(original.Activities))
 		for _, act := range original.Activities {
+			lat := act.Lat
+			if lat == nil && act.Place != nil {
+				lat = act.Place.Latitude
+			}
+			lng := act.Lng
+			if lng == nil && act.Place != nil {
+				lng = act.Place.Longitude
+			}
 			newActs = append(newActs, models.Activity{
 				ItineraryID:   clone.ID,
+				PlaceID:       act.PlaceID,
 				DayNumber:     act.DayNumber,
 				OrderIndex:    act.OrderIndex,
 				Title:         act.Title,
 				Category:      act.Category,
-				Lat:           act.Lat,
-				Lng:           act.Lng,
+				Lat:           lat,
+				Lng:           lng,
 				EstimatedCost: act.EstimatedCost,
 				StartTime:     act.StartTime,
 				EndTime:       act.EndTime,
@@ -352,9 +361,13 @@ func (s *ItineraryService) GetPublic(ctx context.Context, id, viewerKey string) 
 	// H10: buffered view increment — Redis INCR, flushed to DB every 30s by StartFlusher.
 	// Falls back to direct DB write if Redis/vc is unavailable.
 	if s.vc != nil {
-		s.vc.RecordView(ctx, it.ID.String(), viewerKey)
+		if s.vc.RecordView(ctx, it.ID.String(), viewerKey) {
+			it.ViewCount++
+		}
 	} else {
-		s.db.Model(&it).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+		if err := s.db.Model(&it).UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error; err == nil {
+			it.ViewCount++
+		}
 	}
 	return &it, nil
 }
@@ -431,9 +444,9 @@ func (s *ItineraryService) Explore(filter ExploreFilter) ([]models.Itinerary, in
 // (places page reads /places/destinations), so this only handles legacy/URL-shared
 // slug params like ?destination=da-nang.
 var (
-	destinationAliasMu      sync.RWMutex
-	destinationAliasMap     map[string]string
-	destinationAliasLoadAt  time.Time
+	destinationAliasMu     sync.RWMutex
+	destinationAliasMap    map[string]string
+	destinationAliasLoadAt time.Time
 )
 
 const aliasCacheTTL = 10 * time.Minute

@@ -42,10 +42,10 @@ func New(rdb *redis.Client, db *gorm.DB) *Counter {
 //
 // Fast path: Redis SET NX → INCR. Fallback: direct DB UPDATE without dedupe
 // (the in-memory degraded mode trades dedupe for "still works without Redis").
-func (c *Counter) RecordView(ctx context.Context, itineraryID, viewerKey string) {
+// Returns true when this request was counted, false when dedupe skipped it.
+func (c *Counter) RecordView(ctx context.Context, itineraryID, viewerKey string) bool {
 	if c.rdb == nil {
-		c.directIncrement(itineraryID)
-		return
+		return c.directIncrement(itineraryID)
 	}
 	if viewerKey != "" {
 		dk := dedupePrefix + itineraryID + ":" + viewerKey
@@ -53,19 +53,20 @@ func (c *Counter) RecordView(ctx context.Context, itineraryID, viewerKey string)
 		if err != nil {
 			slog.Warn("viewcounter: redis SETNX failed, counting view anyway", "id", itineraryID, "err", err)
 		} else if !ok {
-			return // already counted within window
+			return false // already counted within window
 		}
 	}
 	key := keyPrefix + itineraryID
 	if err := c.rdb.Incr(ctx, key).Err(); err != nil {
 		slog.Warn("viewcounter: redis INCR failed, falling back to direct write", "id", itineraryID, "err", err)
-		c.directIncrement(itineraryID)
+		return c.directIncrement(itineraryID)
 	}
+	return true
 }
 
 // directIncrement writes +1 directly to DB (fallback / no-Redis mode).
-func (c *Counter) directIncrement(id string) {
-	c.db.Exec(`UPDATE itineraries SET view_count = view_count + 1 WHERE id = ?`, id)
+func (c *Counter) directIncrement(id string) bool {
+	return c.db.Exec(`UPDATE itineraries SET view_count = view_count + 1 WHERE id = ?`, id).Error == nil
 }
 
 // StartFlusher runs a background goroutine that periodically flushes Redis counters to DB.

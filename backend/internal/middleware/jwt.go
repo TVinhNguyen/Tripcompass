@@ -37,6 +37,22 @@ func JWTAuth(resolver *session.Resolver) gin.HandlerFunc {
 	}
 }
 
+// OptionalJWTAuth resolves a session when a valid token is present, but never
+// rejects anonymous public requests. This lets public endpoints personalize or
+// dedupe by user ID while still remaining readable without login.
+func OptionalJWTAuth(resolver *session.Resolver) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if resolver == nil {
+			c.Next()
+			return
+		}
+		if s, err := resolver.FromRequest(c); err == nil {
+			c.Set(UserIDKey, s.UserID)
+		}
+		c.Next()
+	}
+}
+
 // RequireAdmin gates a route on session.IsAdmin. Must run after JWTAuth so
 // the session is already on the context. Returns 403 for non-admin sessions
 // (vs. 401 from JWTAuth for unauthenticated).

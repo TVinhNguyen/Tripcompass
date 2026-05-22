@@ -9,7 +9,6 @@ import {
   ArrowUpRight,
   Activity,
   Sparkles,
-  Eye,
   Plus,
 } from "lucide-react"
 import { AdminShell } from "@/components/admin/admin-shell"
@@ -81,10 +80,6 @@ export default function AdminDashboardPage() {
       description="Chào mừng quay lại, đây là những gì đang diễn ra trên TripCompass"
       action={
         <div className="flex gap-2">
-          <button className="px-4 py-2 bg-white border border-[#e8e2d9] rounded-lg text-sm font-medium text-[#1a1a1a] hover:bg-[#f5f0e8] inline-flex items-center gap-2">
-            <Eye className="w-4 h-4" />
-            Xem báo cáo
-          </button>
           <Link
             href="/admin/places"
             className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg text-sm font-medium hover:bg-[#3d5a3d] inline-flex items-center gap-2"
@@ -140,10 +135,7 @@ export default function AdminDashboardPage() {
               <h3 className="text-base font-semibold text-[#1a1a1a] tracking-tight">Hoạt động gần đây</h3>
               <p className="text-xs text-[#8b8378]">Cập nhật real-time</p>
             </div>
-            <Link href="#" className="text-xs text-[#3d5a3d] hover:underline inline-flex items-center gap-1">
-              Xem tất cả
-              <ArrowUpRight className="w-3 h-3" />
-            </Link>
+            <span className="text-xs text-[#8b8378]">5 mục mới nhất</span>
           </div>
           <div className="divide-y divide-[#e8e2d9]">
             {recentActivity.map((a, i) => (
