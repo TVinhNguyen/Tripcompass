@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatVND } from "@/lib/format";
-import type { Activity } from "../_lib/types";
+import { isEmptyDaySentinel, type Activity } from "../_lib/types";
 import { dayColor } from "../_lib/constants";
 import { SortableActivityCard } from "./sortable-activity-card";
 
@@ -22,6 +22,7 @@ export function DroppableDay({
   activities,
   onRemoveActivity,
   onEditActivity,
+  onAddActivity,
   onHoverActivity,
   activeMapId,
 }: {
@@ -29,12 +30,15 @@ export function DroppableDay({
   activities: Activity[];
   onRemoveActivity: (id: string) => void;
   onEditActivity: (a: Activity) => void;
+  // Triggered when user clicks the "+ Thêm" button under a day's activity
+  // list. Caller opens the edit modal in create-mode with day prefilled.
+  onAddActivity: (day: number) => void;
   onHoverActivity?: (id: string | null) => void;
   activeMapId?: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day-${day}` });
   // Filter out empty-day sentinel placeholders from visible render
-  const realActivities = activities.filter((a) => !a.id.startsWith("__empty-day-"));
+  const realActivities = activities.filter((a) => !isEmptyDaySentinel(a));
   const dayCost  = realActivities.reduce((s, a) => s + (a.cost || 0), 0);
   const color    = dayColor(day);
 
@@ -89,16 +93,30 @@ export function DroppableDay({
         </SortableContext>
 
         {realActivities.length === 0 && (
-          <div className="h-full min-h-[140px] flex items-center justify-center text-center py-8">
-            <div>
-              <div className="w-10 h-10 mx-auto mb-2 rounded-md border border-dashed border-[#d4cfc5] flex items-center justify-center">
-                <Plus className="w-4 h-4 text-[#b8b1a6]" />
-              </div>
-              <p className="text-[11px] text-[#8b8378] font-mono tracking-wider uppercase">
-                Kéo thả
-              </p>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => onAddActivity(day)}
+            data-tour={day === 1 ? "editor-add-activity" : undefined}
+            className="w-full min-h-[140px] flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[#d4cfc5] text-[#8b8378] transition-colors hover:border-[#3d5a3d] hover:text-[#3d5a3d]"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="text-[11px] font-mono tracking-wider uppercase">Thêm hoạt động</span>
+          </button>
+        )}
+
+        {/* Inline "+ Thêm" button at the tail of a non-empty day. Primary
+            discoverable add path — drag-drop from the template pool is still
+            available but no longer the only option. */}
+        {realActivities.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onAddActivity(day)}
+            data-tour={day === 1 ? "editor-add-activity" : undefined}
+            className="mt-1 w-full flex items-center justify-center gap-1.5 py-2 text-xs text-[#6b6b6b] rounded-md border border-dashed border-[#d4cfc5] transition-colors hover:border-[#3d5a3d] hover:text-[#3d5a3d] hover:bg-[#3d5a3d]/5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Thêm hoạt động
+          </button>
         )}
       </div>
     </div>
