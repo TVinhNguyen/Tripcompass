@@ -19,6 +19,7 @@ const navItems = [
   { href: "/planner", label: "Lịch trình của tôi" },
   { href: "/combos", label: "Combo" },
   { href: "/blog", label: "Cẩm nang" },
+  { href: "/help", label: "Hướng dẫn" },
 ]
 
 export function Navigation() {
@@ -147,6 +148,10 @@ export function Navigation() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  // data-tour anchor for the onboarding tour — only the help
+                  // link needs one today, but keying by href keeps it stable
+                  // even if labels change.
+                  data-tour={item.href === "/help" ? "nav-help" : undefined}
                   className={cn(
                     "relative px-4 py-2 text-sm transition-colors rounded-full",
                     active ? "text-[#d4a853] bg-white/5" : "text-white/80 hover:text-white hover:bg-white/5",
