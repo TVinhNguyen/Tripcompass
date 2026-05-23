@@ -29,10 +29,11 @@ export function CollaboratorsPanel({
   itineraryId: string;
 }) {
   const [email, setEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"EDITOR" | "VIEWER">("EDITOR");
   const [inviting, setInviting] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<"idle" | "sent" | "error">("idle");
 
-  const inviteEditor = async () => {
+  const sendInvite = async () => {
     const trimmed = email.trim();
     if (!trimmed || inviting) return;
     setInviting(true);
@@ -41,7 +42,7 @@ export function CollaboratorsPanel({
     try {
       await apiFetch(`/itineraries/${itineraryId}/collaborators`, {
         method: "POST",
-        body: { email: trimmed, role: "EDITOR" },
+        body: { email: trimmed, role: inviteRole },
       });
       setEmail("");
       setInviteStatus("sent");
@@ -124,7 +125,40 @@ export function CollaboratorsPanel({
         </div>
 
         <div className="p-3 border-t border-[#e8e2d9] bg-[#f5f0e8]">
-          <div className="text-[10px] font-mono tracking-[0.24em] uppercase text-[#8b8378]">Invite editor</div>
+          <div className="text-[10px] font-mono tracking-[0.24em] uppercase text-[#8b8378]">Mời cộng tác</div>
+
+          {/* Role picker — segmented control. EDITOR is the default since
+              most invites want collaborative edit; VIEWER for read-only share
+              within the platform (different from public link). */}
+          <div className="mt-2 inline-flex rounded-md border border-[#e0d9cc] bg-white p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setInviteRole("EDITOR")}
+              className={
+                "inline-flex items-center gap-1 rounded px-2.5 py-1 transition-colors " +
+                (inviteRole === "EDITOR"
+                  ? "bg-[#3d5a3d] text-white"
+                  : "text-[#6b6b6b] hover:text-[#1a1a1a]")
+              }
+            >
+              <Pencil className="w-3 h-3" />
+              Biên tập
+            </button>
+            <button
+              type="button"
+              onClick={() => setInviteRole("VIEWER")}
+              className={
+                "inline-flex items-center gap-1 rounded px-2.5 py-1 transition-colors " +
+                (inviteRole === "VIEWER"
+                  ? "bg-[#3d5a3d] text-white"
+                  : "text-[#6b6b6b] hover:text-[#1a1a1a]")
+              }
+            >
+              <Eye className="w-3 h-3" />
+              Chỉ xem
+            </button>
+          </div>
+
           <div className="flex items-center gap-2 mt-2 min-w-0">
             <div className="min-w-0 flex-1 flex items-center gap-2 px-2.5 py-1.5 bg-white rounded-md border border-[#e0d9cc]">
               <Mail className="w-3.5 h-3.5 text-[#8b8378] shrink-0" />
@@ -137,7 +171,7 @@ export function CollaboratorsPanel({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    inviteEditor();
+                    sendInvite();
                   }
                 }}
                 type="email"
@@ -147,7 +181,7 @@ export function CollaboratorsPanel({
             </div>
             <Button
               size="sm"
-              onClick={inviteEditor}
+              onClick={sendInvite}
               disabled={inviting || !email.trim()}
               className="bg-[#1a1a1a] hover:bg-black text-[#f5f0e8] shrink-0 h-8"
             >
@@ -155,7 +189,9 @@ export function CollaboratorsPanel({
             </Button>
           </div>
           {inviteStatus === "sent" && (
-            <p className="mt-2 text-[11px] text-[#3d5a3d]">Đã gửi lời mời chỉnh sửa.</p>
+            <p className="mt-2 text-[11px] text-[#3d5a3d]">
+              Đã gửi lời mời {inviteRole === "EDITOR" ? "chỉnh sửa" : "chỉ xem"}.
+            </p>
           )}
           {inviteStatus === "error" && (
             <p className="mt-2 text-[11px] text-red-600">Không gửi được lời mời. Kiểm tra email hoặc quyền sở hữu.</p>

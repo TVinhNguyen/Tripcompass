@@ -25,7 +25,13 @@ import {
   Send,
   ArrowRight,
   Loader2,
+  Sparkles,
+  Wand2,
+  X,
+  BookOpen,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { OnboardingTour, type TourStep } from "@/components/onboarding-tour";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,10 +44,64 @@ type StatusFilter = "all" | "DRAFT" | "PUBLISHED";
 
 
 function PlannerContent() {
+  const { user } = useAuth();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Onboarding panel for first-time users — shown when their list is still
+  // empty AND they haven't dismissed it before. Keyed by user.id so a shared
+  // browser (rare for this app) still respects each account.
+  const [showWelcome, setShowWelcome] = useState(false);
+  useEffect(() => {
+    if (!user?.id) return;
+    if (typeof window === "undefined") return;
+    const key = `tripcompass_onboarding_seen_${user.id}`;
+    setShowWelcome(window.localStorage.getItem(key) !== "1");
+  }, [user?.id]);
+
+  const dismissWelcome = useCallback(() => {
+    if (!user?.id || typeof window === "undefined") return;
+    window.localStorage.setItem(`tripcompass_onboarding_seen_${user.id}`, "1");
+    setShowWelcome(false);
+  }, [user?.id]);
+
+  // Replay tour — used by the welcome panel link. Clears both flags so the
+  // spotlight tour runs again immediately. Forces the OnboardingTour
+  // component to remount via a counter key so it re-reads its storage gate.
+  const [tourReplay, setTourReplay] = useState(0);
+  const replayTour = useCallback(() => {
+    if (!user?.id || typeof window === "undefined") return;
+    window.localStorage.removeItem(`tour_planner_${user.id}`);
+    setTourReplay((n) => n + 1);
+  }, [user?.id]);
+
+  // Tour steps for new-user onboarding on /planner. Targets are stable
+  // data-tour anchors on the three CTA cards + the nav "Hướng dẫn" link.
+  const tourSteps: TourStep[] = [
+    {
+      target: '[data-tour="planner-ai-chat"]',
+      title: "Trợ lý AI",
+      body: "Mô tả chuyến đi bằng câu tự nhiên, AI sẽ hỏi lại và lên kế hoạch. Phù hợp khi chưa rõ điểm đến hoặc muốn brainstorm.",
+    },
+    {
+      target: '[data-tour="planner-quick"]',
+      title: "Tạo nhanh",
+      body: "Đã biết điểm đến rồi? Điền form ngắn (ngày, ngân sách, sở thích) và để AI sắp xếp ngay.",
+    },
+    {
+      target: '[data-tour="planner-manual"]',
+      title: "Tự tạo",
+      body: "Bắt đầu từ lịch trình rỗng nếu bạn muốn kiểm soát chi tiết — kéo thả hoạt động theo ý.",
+    },
+    {
+      target: '[data-tour="nav-help"]',
+      title: "Trung tâm hỗ trợ",
+      body: "Khi bí, mở Hướng dẫn để xem cách dùng từng phần. Có thể quay lại tour này bằng nút Xem hướng dẫn từng bước.",
+      preferredPlacement: "bottom",
+    },
+  ];
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -374,31 +434,165 @@ function PlannerContent() {
             </div>
           )}
 
-          {/* Empty State */}
+          {/* Empty State — also surfaces the onboarding choices for new users */}
           {!loading && filtered.length === 0 && (
-            <div className="text-center py-20">
-              <div className="w-20 h-20 mx-auto mb-6 bg-white border border-[#e8e2d9] rounded-full flex items-center justify-center">
-                <FileText className="w-9 h-9 text-[#c4785a]" />
-              </div>
-              <h3 className="text-xl font-semibold text-[#1a1a1a] mb-2 tracking-tight">
-                {statusFilter === "all" ? "Chưa có lịch trình nào" : "Không có lịch trình nào"}
-              </h3>
-              <p className="text-[#6b6b6b] mb-6">
-                {statusFilter === "all" ? "Bắt đầu tạo lịch trình đầu tiên của bạn ngay hôm nay" : "Thử chọn bộ lọc khác"}
-              </p>
-              <Button asChild className="bg-[#c4785a] hover:bg-[#b36a4e] text-white rounded-full">
-                <Link href="/itinerary/new">
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  Tạo lịch trình đầu tiên
-                  <ArrowRight className="w-4 h-4 ml-1.5" />
-                </Link>
-              </Button>
+            <div className="py-12">
+              {/* Filter-empty branch ONLY fires when the user actually has
+                  itineraries but the current filter hides them. A new account
+                  (itineraries.length === 0) still sees onboarding even if
+                  they happen to click a filter chip out of curiosity. */}
+              {itineraries.length > 0 && statusFilter !== "all" ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 mx-auto mb-6 bg-white border border-[#e8e2d9] rounded-full flex items-center justify-center">
+                    <FileText className="w-9 h-9 text-[#c4785a]" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-[#1a1a1a] mb-2 tracking-tight">
+                    Không có lịch trình nào
+                  </h3>
+                  <p className="text-[#6b6b6b]">Thử chọn bộ lọc khác.</p>
+                </div>
+              ) : (
+                <div className="mx-auto max-w-3xl">
+                  {/* Dismissable welcome panel — coach card, not a blocking modal */}
+                  {showWelcome && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="relative mb-8 overflow-hidden rounded-2xl border border-[#3d5a3d]/20 bg-gradient-to-br from-[#3d5a3d] to-[#2d4a2d] p-6 text-white"
+                    >
+                      <button
+                        type="button"
+                        onClick={dismissWelcome}
+                        aria-label="Đóng hướng dẫn"
+                        className="absolute right-3 top-3 rounded-full p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#d4a853] text-[#1a1a1a]">
+                          <Sparkles className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 pr-6">
+                          <h2 className="font-serif text-xl font-semibold tracking-tight">
+                            Chào mừng đến TripCompass
+                          </h2>
+                          <p className="mt-2 text-sm leading-relaxed text-white/80">
+                            Bạn có ba cách bắt đầu chuyến đi đầu tiên. Chọn cái thoải mái nhất —
+                            có thể đổi giữa chừng bất cứ lúc nào.
+                          </p>
+                          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                            <button
+                              type="button"
+                              onClick={replayTour}
+                              className="inline-flex items-center gap-1.5 font-medium text-[#d4a853] transition-colors hover:text-[#c49843]"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" />
+                              Xem hướng dẫn từng bước
+                            </button>
+                            <Link
+                              href="/help/quickstart"
+                              className="inline-flex items-center gap-1.5 font-medium text-white/70 transition-colors hover:text-white"
+                            >
+                              <BookOpen className="h-3.5 w-3.5" />
+                              Đọc bài hướng dẫn
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* 3 CTAs — equal weight, user picks the entry point */}
+                  <div className="text-center">
+                    <h3 className="font-serif text-2xl font-semibold tracking-tight text-[#1a1a1a]">
+                      Tạo lịch trình đầu tiên
+                    </h3>
+                    <p className="mt-2 text-sm text-[#6b6b6b]">
+                      Chọn cách phù hợp với bạn — kết quả đều là một lịch trình có thể chỉnh sửa.
+                    </p>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                    <Link
+                      href="/ai-planner"
+                      data-tour="planner-ai-chat"
+                      className="group flex flex-col rounded-2xl border border-[#e8e2d9] bg-white p-5 transition-all hover:border-[#3d5a3d]/40 hover:shadow-md"
+                    >
+                      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#3d5a3d]/10 text-[#3d5a3d]">
+                        <Sparkles className="h-5 w-5" />
+                      </div>
+                      <h4 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
+                        Trợ lý AI
+                      </h4>
+                      <p className="mt-1 flex-1 text-xs leading-relaxed text-[#6b6b6b]">
+                        Mô tả chuyến đi bằng câu tự nhiên, AI lo phần còn lại.
+                      </p>
+                      <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[#3d5a3d]">
+                        Mở Chat
+                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </Link>
+
+                    <Link
+                      href="/ai-planner/quick"
+                      data-tour="planner-quick"
+                      className="group flex flex-col rounded-2xl border border-[#e8e2d9] bg-white p-5 transition-all hover:border-[#c4785a]/40 hover:shadow-md"
+                    >
+                      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#c4785a]/10 text-[#c4785a]">
+                        <Wand2 className="h-5 w-5" />
+                      </div>
+                      <h4 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
+                        Tạo nhanh
+                      </h4>
+                      <p className="mt-1 flex-1 text-xs leading-relaxed text-[#6b6b6b]">
+                        Điền form ngắn: điểm đến, ngày, ngân sách. AI tự sắp xếp.
+                      </p>
+                      <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[#c4785a]">
+                        Mở form
+                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </Link>
+
+                    <Link
+                      href="/itinerary/new"
+                      data-tour="planner-manual"
+                      className="group flex flex-col rounded-2xl border border-[#e8e2d9] bg-white p-5 transition-all hover:border-[#d4a853]/40 hover:shadow-md"
+                    >
+                      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#d4a853]/15 text-[#8b6f47]">
+                        <Plus className="h-5 w-5" />
+                      </div>
+                      <h4 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
+                        Tự tạo
+                      </h4>
+                      <p className="mt-1 flex-1 text-xs leading-relaxed text-[#6b6b6b]">
+                        Bắt đầu lịch trình rỗng, kéo thả hoạt động theo ý.
+                      </p>
+                      <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[#8b6f47]">
+                        Bắt đầu
+                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
       </section>
 
       <Footer />
+
+      {/* New-user guided tour. Auto-starts once when a logged-in user lands
+          on /planner with no itineraries — replay link in the welcome panel
+          clears the seen flag and remounts via `tourReplay` key. */}
+      {user?.id && (
+        <OnboardingTour
+          key={tourReplay}
+          steps={tourSteps}
+          storageKey={`tour_planner_${user.id}`}
+          enabled={!loading && itineraries.length === 0}
+        />
+      )}
     </main>
   );
 }

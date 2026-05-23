@@ -87,16 +87,22 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
     toast.success("Đã sao chép link chia sẻ")
   }
 
-  const handlePublish = async () => {
+  // Toggle DRAFT ↔ PUBLISHED. Backend accepts both via PATCH /publish so
+  // a single handler covers both directions.
+  const handleTogglePublish = async () => {
+    if (!itinerary) return
+    const next = itinerary.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED"
     try {
       const updated = await apiFetch<Itinerary>(`/itineraries/${id}/publish`, {
         method: "PATCH",
-        body: { status: "PUBLISHED" },
+        body: { status: next },
       })
       setItinerary(updated)
-      toast.success("Đã xuất bản lịch trình!")
+      toast.success(
+        next === "PUBLISHED" ? "Đã xuất bản lịch trình" : "Đã chuyển về bản nháp"
+      )
     } catch {
-      toast.error("Xuất bản thất bại")
+      toast.error(next === "PUBLISHED" ? "Xuất bản thất bại" : "Chuyển về nháp thất bại")
     }
   }
 
@@ -199,10 +205,20 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
                 <Button variant="outline" onClick={handleClone} className="h-10 px-3 border-[#e8e2d9] bg-transparent text-[#1a1a1a]">
                   <Copy className="w-4 h-4 mr-2" />Nhân bản
                 </Button>
-                {isOwner && itinerary.status === "DRAFT" && (
-                  <Button onClick={handlePublish} className="h-10 bg-[#3d5a3d] hover:bg-[#2d4a2d] text-white">
-                    Xuất bản
-                  </Button>
+                {isOwner && (
+                  itinerary.status === "DRAFT" ? (
+                    <Button onClick={handleTogglePublish} className="h-10 bg-[#3d5a3d] hover:bg-[#2d4a2d] text-white">
+                      Xuất bản
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={handleTogglePublish}
+                      className="h-10 px-3 border-[#e8e2d9] bg-transparent text-[#1a1a1a]"
+                    >
+                      Bỏ xuất bản
+                    </Button>
+                  )
                 )}
                 {isOwner && (
                   <Button asChild className="h-10 bg-[#1a1a1a] hover:bg-[#3d5a3d] text-white">

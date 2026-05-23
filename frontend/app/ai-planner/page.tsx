@@ -10,17 +10,19 @@ import { useSearchParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles, Send, Plus, Trash2, Loader2, MessageSquare,
-  Compass, LayoutGrid,
+  Compass, LayoutGrid, Lightbulb, X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RequireAuth } from "@/components/require-auth"
 import { cn } from "@/lib/utils"
 import { CHAT_SUGGESTIONS } from "@/lib/tool-labels"
 import { PlacePicker } from "@/components/place-picker"
+import { useAuth } from "@/hooks/use-auth"
 import { useAiChat } from "./_hooks/use-ai-chat"
 import { MessageBubble } from "./_components/message-bubble"
 
 function AIPlannerContent() {
+  const { user } = useAuth()
   const searchParams = useSearchParams()
   const initialQuery = searchParams.get("q") || ""
 
@@ -28,6 +30,22 @@ function AIPlannerContent() {
     sessions, sessionId, messages, input, streaming, toolRunning,
     setInput, loadSession, deleteSession, startNewChat, sendMessage, stopStreaming,
   } = useAiChat(initialQuery)
+
+  // First-time inline tip just above the input — shown for users who haven't
+  // sent a message yet AND haven't dismissed the tip before. Keyed by user.id
+  // so a shared browser still respects each account.
+  const [showTip, setShowTip] = useState(false)
+  useEffect(() => {
+    if (!user?.id || typeof window === "undefined") return
+    const key = `tripcompass_aiplanner_tip_seen_${user.id}`
+    setShowTip(window.localStorage.getItem(key) !== "1")
+  }, [user?.id])
+
+  const dismissTip = () => {
+    if (!user?.id || typeof window === "undefined") return
+    window.localStorage.setItem(`tripcompass_aiplanner_tip_seen_${user.id}`, "1")
+    setShowTip(false)
+  }
 
   // ---- Responsive sidebar ----
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -257,6 +275,25 @@ function AIPlannerContent() {
         {/* Input */}
         <div className="border-t border-[#e8e2d9] bg-white px-3 sm:px-4 py-3 sm:py-4 shrink-0">
           <div className="max-w-3xl mx-auto">
+            {/* First-time tip — only before the user has sent anything. */}
+            {showTip && messages.length === 0 && (
+              <div className="relative mb-3 flex items-start gap-3 rounded-xl border border-[#d4a853]/30 bg-[#d4a853]/10 px-4 py-2.5 pr-9 text-sm text-[#6b5a2a]">
+                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-[#8b6f47]" />
+                <p className="leading-relaxed">
+                  Mô tả chuyến đi bằng câu tự nhiên — ví dụ: <em>"Đi Đà Nẵng 3 ngày
+                  với 2 người, ngân sách 5 triệu, thích biển và ẩm thực"</em>. Càng cụ
+                  thể, gợi ý càng sát.
+                </p>
+                <button
+                  type="button"
+                  onClick={dismissTip}
+                  aria-label="Đóng gợi ý"
+                  className="absolute right-2 top-2 rounded-full p-1 text-[#8b6f47] transition-colors hover:bg-[#d4a853]/20"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
             <div className="relative bg-[#f5f0e8] border border-[#e8e2d9] rounded-2xl focus-within:border-[#3d5a3d] focus-within:ring-2 focus-within:ring-[#3d5a3d]/10 transition-all">
               <textarea
                 ref={textareaRef}
