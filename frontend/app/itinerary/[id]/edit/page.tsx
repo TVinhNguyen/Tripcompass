@@ -75,7 +75,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
     activities, title, setTitle, itinerary,
     pageLoading, saving, onlineUsers,
     days, totalBudget, totalActivities, getTemplates,
-    handleManualSave, removeActivity, saveActivity,
+    handleManualSave, removeActivity, saveActivity, createActivity,
     handleDragOver, handleDragEnd, addNewDay,
   } = useEditorState(id);
 
@@ -237,10 +237,11 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
             <div className="shrink-0 h-12 px-4 flex items-center gap-4 border-b border-[#e0d9cc] bg-[#fbf8f2]">
               <button
                 onClick={() => setIsPoolOpen(true)}
+                title="Mở thư viện mẫu hoạt động — kéo thả nhanh các loại quen thuộc (ăn sáng, tham quan, di chuyển…)"
                 className="h-8 px-2.5 rounded-md border border-[#e0d9cc] hover:bg-white text-[#1a1a1a] text-xs font-medium flex items-center gap-1.5 transition"
               >
                 <Layers className="w-3.5 h-3.5" />
-                Kho hoạt động
+                Mẫu hoạt động
               </button>
 
               <div className="h-5 w-px bg-[#e0d9cc]" />
@@ -275,6 +276,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                     activities={activities.filter((a) => a.day === day)}
                     onRemoveActivity={removeActivity}
                     onEditActivity={(a) => setEditingActivity(a)}
+                    onAddActivity={(d) => setEditingActivity(blankActivity(d))}
                     onHoverActivity={setHoveredId}
                     activeMapId={hoveredId}
                   />
@@ -451,9 +453,36 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
         onClose={() => setEditingActivity(null)}
         onSave={(updated) => {
           setEditingActivity(null);
-          saveActivity(updated);
+          // Sentinel id "__new-" marks the row as not-yet-persisted, created
+          // by blankActivity() when the "+ Thêm" button opens the modal in
+          // create-mode. Routing on id keeps the modal API symmetric.
+          if (updated.id.startsWith("__new-")) {
+            createActivity(updated);
+          } else {
+            saveActivity(updated);
+          }
         }}
       />
     </div>
   );
+}
+
+// blankActivity returns a placeholder shape the modal can edit. The id
+// prefix `__new-` is the contract between page and useEditorState: any
+// activity saved with this prefix triggers createActivity (POST) instead
+// of saveActivity (PATCH).
+function blankActivity(day: number): Activity {
+  return {
+    id: `__new-${Date.now()}`,
+    day,
+    time: "09:00",
+    title: "",
+    titleEn: "",
+    description: "",
+    descriptionEn: "",
+    type: "activity",
+    location: "",
+    duration: 60,
+    cost: 0,
+  };
 }

@@ -143,7 +143,10 @@ export function FeaturesSection() {
         </div>
 
         {/* Features Grid - Bento Style */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div
+          data-tour="landing-features"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        >
           {features.map((feature, index) => (
             <motion.div
               key={feature.title}

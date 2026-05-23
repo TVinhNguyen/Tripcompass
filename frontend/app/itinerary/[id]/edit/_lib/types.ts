@@ -1,5 +1,14 @@
 import type { GenerateResponse } from "@/lib/types";
 
+// Sentinel id prefix for the placeholder row rendered when the user adds an
+// empty day. The row lets DroppableDay render the day column before any real
+// activity exists, but it is NOT a real activity — exclude it from counts,
+// order_index calculations, and totals.
+export const EMPTY_DAY_PREFIX = "__empty-day-";
+export function isEmptyDaySentinel(a: { id: string }): boolean {
+  return a.id.startsWith(EMPTY_DAY_PREFIX);
+}
+
 // Local Activity shape used by the drag-and-drop editor
 // (Maps from API Activity on load, serialises back on save)
 export type Activity = {

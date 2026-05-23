@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { arrayMove } from "@dnd-kit/sortable"
-import type { Activity, Collaborator } from "./types"
+import { isEmptyDaySentinel, type Activity, type Collaborator } from "./types"
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -70,10 +70,17 @@ export function apply(state: EditorState, action: Action): EditorState {
     case "setActivities":
       return { ...state, activities: action.activities }
 
-    case "addActivity":
+    case "addActivity": {
       // Dedupe on WS echo: backend broadcasts the same event we just POSTed.
       if (state.activities.some((a) => a.id === action.activity.id)) return state
-      return { ...state, activities: [...state.activities, action.activity] }
+      // Adding a real activity to a day evicts the `__empty-day-*` sentinel
+      // for that day — otherwise totalActivities and reorder math stay off
+      // by 1 for the lifetime of the session.
+      const next = state.activities.filter(
+        (a) => !(isEmptyDaySentinel(a) && a.day === action.activity.day),
+      )
+      return { ...state, activities: [...next, action.activity] }
+    }
 
     case "updateActivity":
       return {

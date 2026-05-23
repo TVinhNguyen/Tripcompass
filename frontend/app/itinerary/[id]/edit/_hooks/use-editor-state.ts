@@ -20,7 +20,7 @@ import { apiFetch } from "@/lib/api"
 import type { Itinerary, Activity as ApiActivity, WSEvent } from "@/lib/types"
 import { useItineraryWS } from "@/hooks/use-itinerary-ws"
 
-import type { Activity } from "../_lib/types"
+import { isEmptyDaySentinel, type Activity } from "../_lib/types"
 import { activityTypeToCategory, ACTIVITY_TEMPLATES } from "../_lib/constants"
 import {
   apply,
@@ -195,6 +195,47 @@ export function useEditorState(id: string) {
     }
   }, [])
 
+  // Create activity from scratch (e.g. user clicks "+ Thêm" inside a day).
+  // Same optimistic + POST + replaceTempActivity flow as template-drop, just
+  // without a template payload — caller passes the partial fields the modal
+  // collected. Activity appears at the bottom of the day's list.
+  const createActivity = useCallback(
+    async (newAct: Activity) => {
+      if (!itinerary) return
+      const tempId = newAct.id.startsWith("__new-") ? newAct.id : `__new-${Date.now()}`
+      const optimistic: Activity = { ...newAct, id: tempId }
+      // Count BEFORE dispatch so order_index reflects the new tail. Exclude
+      // the `__empty-day-*` sentinel so the first real activity on a freshly
+      // added day lands at index 0, not 1.
+      const orderIndex = activities.filter(
+        (a) => a.day === optimistic.day && !isEmptyDaySentinel(a),
+      ).length
+      dispatch({ kind: "addActivity", activity: optimistic })
+      try {
+        const created = await apiFetch<ApiActivity>("/activities", {
+          method: "POST",
+          body: {
+            itinerary_id: id,
+            day_number: optimistic.day,
+            title: optimistic.title || "Hoạt động mới",
+            category: activityTypeToCategory(optimistic.type),
+            start_time: optimistic.time,
+            estimated_cost: optimistic.cost,
+            notes: optimistic.description,
+            lat: optimistic.lat,
+            lng: optimistic.lng,
+            order_index: orderIndex,
+          },
+        })
+        dispatch({ kind: "replaceTempActivity", tempId, activity: fromApiActivity(created) })
+      } catch {
+        toast.error("Thêm hoạt động thất bại")
+        dispatch({ kind: "removeActivity", id: tempId })
+      }
+    },
+    [activities, id, itinerary],
+  )
+
   // ── DnD: drag over (cross-day preview) ─────────────────────────────────────
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
@@ -245,7 +286,11 @@ export function useEditorState(id: string) {
         const newActivity: Activity = { ...template, id: tempId, day: targetDay }
         dispatch({ kind: "addActivity", activity: newActivity })
 
-        const orderIndex = snapshot.filter((a) => a.day === targetDay).length
+        // Exclude the empty-day sentinel so the first real activity dropped
+        // into a freshly added day gets order_index = 0.
+        const orderIndex = snapshot.filter(
+          (a) => a.day === targetDay && !isEmptyDaySentinel(a),
+        ).length
         try {
           const created = await apiFetch<ApiActivity>("/activities", {
             method: "POST",
@@ -367,6 +412,7 @@ export function useEditorState(id: string) {
     handleManualSave,
     removeActivity,
     saveActivity,
+    createActivity,
     handleDragOver,
     handleDragEnd,
     addNewDay,
