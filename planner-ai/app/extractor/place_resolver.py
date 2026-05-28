@@ -57,13 +57,13 @@ async def _resolve_one(
     # `%` operator from the index instead of scanning every row.
     if destination:
         sql = """
-            SELECT id::text, name, name_en, category::text,
+            SELECT id::text, name, name_en, category::text, destination,
                    COALESCE(base_price, 0) AS base_price,
                    latitude, longitude, cover_image,
                    priority_score,
                    similarity(schema_travel.f_unaccent(lower(name)),
                               schema_travel.f_unaccent(lower($1))) AS sim
-            FROM places
+            FROM schema_travel.places
             WHERE LOWER(destination) ILIKE '%' || LOWER($2) || '%'
               AND schema_travel.f_unaccent(lower(name)) %
                   schema_travel.f_unaccent(lower($1))
@@ -73,13 +73,13 @@ async def _resolve_one(
         rows = await conn.fetch(sql, name, destination, _LIMIT)
     else:
         sql = """
-            SELECT id::text, name, name_en, category::text,
+            SELECT id::text, name, name_en, category::text, destination,
                    COALESCE(base_price, 0) AS base_price,
                    latitude, longitude, cover_image,
                    priority_score,
                    similarity(schema_travel.f_unaccent(lower(name)),
                               schema_travel.f_unaccent(lower($1))) AS sim
-            FROM places
+            FROM schema_travel.places
             WHERE schema_travel.f_unaccent(lower(name)) %
                   schema_travel.f_unaccent(lower($1))
             ORDER BY sim DESC, priority_score DESC NULLS LAST
@@ -102,6 +102,7 @@ async def _resolve_one(
         "name": top["name"],
         "name_en": top["name_en"],
         "category": top["category"],
+        "destination": top["destination"],
         "base_price": int(top["base_price"] or 0),
         "latitude": top["latitude"],
         "longitude": top["longitude"],
