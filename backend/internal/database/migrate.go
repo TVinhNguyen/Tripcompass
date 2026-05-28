@@ -439,14 +439,16 @@ END $$;`,
 					// of `$1` inside `$$...$$`. The lib/pq driver treats `$N`
 					// as a parameter placeholder even inside dollar-quoted
 					// strings, which corrupts the body when no args are bound.
-					// Using a named param avoids the driver entirely.
 					//
-					// We DON'T schema-qualify unaccent() — CREATE EXTENSION
-					// installs into whichever schema is first in search_path
-					// (schema_travel here, not public). Letting search_path
-					// resolve it is more portable than guessing.
+					// SET search_path inside the function so unaccent() resolves
+					// regardless of the calling session's search_path. Without
+					// this, asyncpg sessions (which default to "$user, public")
+					// can't find unaccent because the extensions live in
+					// schema_travel — function body `SELECT unaccent(t)` would
+					// raise `function unaccent(text) does not exist`.
 					`CREATE OR REPLACE FUNCTION schema_travel.f_unaccent(t text)
 						RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE
+						SET search_path = schema_travel, public
 						AS $func$ SELECT unaccent(t) $func$;`,
 					`CREATE INDEX IF NOT EXISTS idx_places_name_trgm
 						ON schema_travel.places
@@ -464,6 +466,28 @@ END $$;`,
 				_ = tx.Exec(`DROP FUNCTION IF EXISTS schema_travel.f_unaccent(text);`).Error
 				// Intentionally keep the extensions — other features (full-text
 				// search, future fuzzy lookups) may depend on them.
+				return nil
+			},
+		},
+		{
+			// Hotfix for 015: the f_unaccent body resolves `unaccent` via the
+			// CALLING session's search_path, which is "$user, public" for
+			// asyncpg connections — schema_travel is missing, so the function
+			// throws `function unaccent(text) does not exist` at call time.
+			// We attach `SET search_path = schema_travel, public` to the
+			// function so it pivots search_path during its own execution
+			// regardless of the calling session. Idempotent CREATE OR REPLACE.
+			ID: "202605280016_f_unaccent_search_path",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.Exec(`
+					CREATE OR REPLACE FUNCTION schema_travel.f_unaccent(t text)
+						RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE
+						SET search_path = schema_travel, public
+						AS $func$ SELECT unaccent(t) $func$;
+				`).Error
+			},
+			Rollback: func(tx *gorm.DB) error {
+				// No rollback — 015's broken version isn't worth restoring.
 				return nil
 			},
 		},

@@ -16,11 +16,24 @@ top of it caused more harm than good in the v1 pipeline.
 """
 from __future__ import annotations
 
+from collections import Counter
 from typing import Optional
 
 from loguru import logger
 from app.extractor.prose_parser import parse_prose, ProseDay, ProseSlot
 from app.extractor.place_resolver import resolve_places
+
+
+def _canonicalise_destination(raw: str) -> str:
+    """Lower-case "đà nẵng" → "Đà Nẵng".
+
+    The agent prompt instructs `destination` args in lower-case for tool
+    calls; that form is fine for SQL ILIKE but ugly when persisted as the
+    itinerary's display destination. Python's str.title() handles Vietnamese
+    diacritics correctly ("đ".upper() == "Đ"), and the multi-word case
+    ("nha trang" → "Nha Trang") is exactly what we want.
+    """
+    return " ".join(part.capitalize() for part in raw.strip().split())
 
 
 _FOOD_SLOT_TYPES = {"breakfast", "lunch", "dinner", "snack", "brunch"}
@@ -93,14 +106,24 @@ def _slot_to_fe(slot: ProseSlot, resolved: Optional[dict]) -> dict:
 async def prose_to_plan(
     text: str,
     destination: Optional[str] = None,
+    tool_destination: Optional[str] = None,
 ) -> Optional[dict]:
     """Parse + resolve + assemble. Returns GenerateResponse-shaped dict, or
     None when the prose doesn't contain a recognisable itinerary structure.
 
-    `destination` is a hint passed to the resolver to bias matches toward
-    the relevant city. Caller usually pulls it from the chat session or from
-    a previous tool call. If unknown, the resolver searches the whole table
-    — slightly less precise but still works.
+    Two destination hints are accepted, applied in priority order:
+
+      1. `destination` — explicit caller override (e.g. from a future UI hint).
+      2. Mode of resolved DB rows — primary path, DB-canonical form.
+      3. `tool_destination` — destination arg captured from any tool call the
+         agent made (`get_places(destination="đà nẵng")` etc.). High-quality
+         signal that survives even when the resolver can't match any place
+         name to the DB.
+      4. Fallback "Việt Nam" — honest signal that we have no idea.
+
+    `tool_destination` is provided by the streaming layer (pump.py), which
+    snoops the agent's `on_tool_start` events. The signal is bumped to
+    title-case so persisted itineraries display "Đà Nẵng" not "đà nẵng".
     """
     days_parsed = parse_prose(text)
     if not days_parsed:
@@ -114,6 +137,23 @@ async def prose_to_plan(
                 all_names.append(slot.place_name)
     resolved = await resolve_places(all_names, destination=destination)
 
+    effective_destination = destination
+
+    if not effective_destination:
+        db_destinations = [
+            row["destination"]
+            for row in resolved.values()
+            if row and row.get("destination")
+        ]
+        if db_destinations:
+            effective_destination = Counter(db_destinations).most_common(1)[0][0]
+
+    if not effective_destination and tool_destination:
+        effective_destination = _canonicalise_destination(tool_destination)
+
+    if not effective_destination:
+        effective_destination = "Việt Nam"
+
     total_days = len(days_parsed)
     days_out: list[dict] = []
     for day in days_parsed:
@@ -122,7 +162,7 @@ async def prose_to_plan(
             "day_num": day.day_num,
             "date_str": "",  # FE renders without if missing
             "day_type": _day_type(day.day_num, total_days),
-            "primary_area": destination or "",
+            "primary_area": effective_destination,
             "travel_min": 0,
             "buffer_min": 0,
             "slots": slots_out,

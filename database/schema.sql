@@ -266,6 +266,7 @@ ADD CONSTRAINT "fk_saved_place" FOREIGN KEY ("place_id") REFERENCES "places" ("i
 -- existing deployments get the same shape via the Go migration.
 CREATE OR REPLACE FUNCTION "f_unaccent"(t text)
     RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE
+    SET search_path = schema_travel, public
     AS $func$ SELECT unaccent(t) $func$;
 
 CREATE INDEX IF NOT EXISTS idx_places_name_trgm
