@@ -410,6 +410,63 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// Trigram + unaccent extensions for the prose-extraction pipeline
+			// (planner-ai/app/extractor/place_resolver.py uses similarity() and
+			// unaccent() to fuzzy-match LLM-mentioned place names to DB rows).
+			//
+			// Why this migration exists even though schema.sql also declares the
+			// extensions: schema.sql is only executed on a FIRST init of the
+			// postgres data dir. Existing deployments never re-run it, so
+			// without this migration a redeploy of planner-ai would crash on
+			// the first query the resolver makes.
+			//
+			// CREATE EXTENSION is idempotent.
+			//
+			// We wrap unaccent() in an IMMUTABLE SQL function because the
+			// extension-provided unaccent() is STABLE (the dictionary can be
+			// reloaded), and Postgres rejects non-IMMUTABLE functions in index
+			// expressions. The 2-arg form unaccent('unaccent', $1) pins the
+			// dictionary so IMMUTABLE is semantically valid. The index is then
+			// built on the IMMUTABLE wrapper, and the resolver query also
+			// calls it on both sides so the planner uses the index.
+			ID: "202605240015_pg_trgm_unaccent",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`CREATE EXTENSION IF NOT EXISTS pg_trgm;`,
+					`CREATE EXTENSION IF NOT EXISTS unaccent;`,
+					// Named parameter (t) + tagged dollar-quote ($func$) instead
+					// of `$1` inside `$$...$$`. The lib/pq driver treats `$N`
+					// as a parameter placeholder even inside dollar-quoted
+					// strings, which corrupts the body when no args are bound.
+					// Using a named param avoids the driver entirely.
+					//
+					// We DON'T schema-qualify unaccent() — CREATE EXTENSION
+					// installs into whichever schema is first in search_path
+					// (schema_travel here, not public). Letting search_path
+					// resolve it is more portable than guessing.
+					`CREATE OR REPLACE FUNCTION schema_travel.f_unaccent(t text)
+						RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE
+						AS $func$ SELECT unaccent(t) $func$;`,
+					`CREATE INDEX IF NOT EXISTS idx_places_name_trgm
+						ON schema_travel.places
+						USING GIN (schema_travel.f_unaccent(lower(name)) gin_trgm_ops);`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				_ = tx.Exec(`DROP INDEX IF EXISTS schema_travel.idx_places_name_trgm;`).Error
+				_ = tx.Exec(`DROP FUNCTION IF EXISTS schema_travel.f_unaccent(text);`).Error
+				// Intentionally keep the extensions — other features (full-text
+				// search, future fuzzy lookups) may depend on them.
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()
