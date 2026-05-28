@@ -2,6 +2,13 @@ CREATE SCHEMA IF NOT EXISTS "schema_travel";
 
 SET search_path TO "schema_travel";
 
+-- Extensions: pg_trgm for trigram similarity, unaccent to strip Vietnamese
+-- diacritics. Used by the prose-extraction pipeline to match LLM-mentioned
+-- place names (often spelled without diacritics, slightly truncated) to rows
+-- in places.name. CREATE EXTENSION is idempotent.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
 -- Enums
 CREATE TYPE "budget_category" AS ENUM ('BUDGET', 'MODERATE', 'LUXURY');
 
@@ -252,3 +259,14 @@ ADD CONSTRAINT "fk_saved_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id")
 
 ALTER TABLE "user_saved_places"
 ADD CONSTRAINT "fk_saved_place" FOREIGN KEY ("place_id") REFERENCES "places" ("id") ON DELETE CASCADE;
+
+-- Trigram index for fuzzy place-name lookup (prose-extraction pipeline).
+-- See backend gormigrate 202605240015 for the canonical version — this
+-- schema.sql copy only runs on first-init of a fresh postgres data dir;
+-- existing deployments get the same shape via the Go migration.
+CREATE OR REPLACE FUNCTION "f_unaccent"(t text)
+    RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE
+    AS $func$ SELECT unaccent(t) $func$;
+
+CREATE INDEX IF NOT EXISTS idx_places_name_trgm
+    ON "places" USING GIN (f_unaccent(lower("name")) gin_trgm_ops);

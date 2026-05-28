@@ -28,6 +28,7 @@ from app.streaming.think_stripper import _ThinkStripper, _strip_thinking
 from app.streaming.json_stripper import _JsonStripper
 from app.streaming.response_shape import _to_generate_response, _extract_plan
 from app.streaming.summary import _strip_json_objects, _deterministic_summary
+from app.extractor import prose_to_plan
 
 
 async def stream_chat_response(
@@ -234,6 +235,34 @@ async def stream_chat_response(
             logger.info("[stream-extract] outcome=full_text_fallback ok=true")
         else:
             logger.error("[stream-extract] outcome=missed ok=false — plan lost despite create_travel_plan firing")
+
+    # ── NEW: Prose extraction (v2 primary path) ────────────────────────────
+    # When the agent did NOT call create_travel_plan but the response contains
+    # day markers, treat it as a prose-format itinerary and project it into
+    # the same GenerateResponse shape the FE consumes. This is the design
+    # change that escapes the "JSON tax" Gemma struggles with: the model
+    # reasons in natural Vietnamese, we structure it after the fact.
+    #
+    # Destination is left as None so the fuzzy resolver searches the whole
+    # places table — slightly less precise than a destination-filtered query
+    # but avoids fragile NER on the prose. If precision becomes an issue,
+    # extract it from the day-1 title or from chat session context.
+    if not plan_data and "create_travel_plan" not in tools_used:
+        # The think-stripper has already cleaned reasoning tags but
+        # full_text at this point still includes the day/slot bullets.
+        prose_text = _strip_thinking(full_text)
+        try:
+            plan_data = await prose_to_plan(prose_text, destination=None)
+            if plan_data:
+                logger.info(
+                    f"[prose-extract] outcome=ok days={len(plan_data.get('days', []))}"
+                )
+            else:
+                logger.debug("[prose-extract] no day markers found — skipping")
+        except Exception as exc:
+            # Never let extractor failures break the chat response. Worst
+            # case the user sees the prose without a card.
+            logger.warning(f"[prose-extract] failed: {type(exc).__name__}: {exc}")
 
     # Emit anything still buffered by the think-stripper (post-</think> tail).
     trailing = think_stripper.flush()

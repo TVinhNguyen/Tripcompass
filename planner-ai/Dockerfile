@@ -3,9 +3,15 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install dependencies first (layer caching)
+# Install dependencies first (layer caching).
+#
+# BuildKit cache mount keeps the downloaded pip wheels between builds on the
+# same host — when requirements.txt hasn't changed, the RUN layer is cached
+# entirely and skipped (instant). When it DOES change, only the diff is
+# re-downloaded instead of all ~500MB of the LangChain stack.
 COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --prefix=/install -r requirements.txt
 
 # ---- Runtime stage ----
 FROM python:3.11-slim

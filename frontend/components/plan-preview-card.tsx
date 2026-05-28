@@ -116,8 +116,11 @@ export function PlanPreviewCard({ plan, onSaved }: PlanPreviewCardProps) {
         </div>
 
         <div className="p-4 space-y-3">
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3 text-white">
+          {/* Stats — budget shown only when planner reports a positive total.
+              In the prose-extraction pipeline costs are deliberately not
+              computed (the LLM mentions ranges in the chat bubble) so we
+              fall back to a 2-column layout to avoid showing "0.0M ₫". */}
+          <div className={`grid gap-3 text-white ${budget > 0 ? "grid-cols-3" : "grid-cols-2"}`}>
             <div>
               <div className="flex items-center gap-1 text-white/60 text-xs mb-1">
                 <MapPin className="w-3 h-3" /> Điểm đến
@@ -130,12 +133,14 @@ export function PlanPreviewCard({ plan, onSaved }: PlanPreviewCardProps) {
               </div>
               <div className="text-sm font-medium">{totalDays} ngày</div>
             </div>
-            <div>
-              <div className="flex items-center gap-1 text-white/60 text-xs mb-1">
-                <Wallet className="w-3 h-3" /> Ngân sách
+            {budget > 0 && (
+              <div>
+                <div className="flex items-center gap-1 text-white/60 text-xs mb-1">
+                  <Wallet className="w-3 h-3" /> Ngân sách
+                </div>
+                <div className="text-sm font-medium">{(budget / 1_000_000).toFixed(1)}M ₫</div>
               </div>
-              <div className="text-sm font-medium">{(budget / 1_000_000).toFixed(1)}M ₫</div>
-            </div>
+            )}
           </div>
 
           {/* Days summary */}
