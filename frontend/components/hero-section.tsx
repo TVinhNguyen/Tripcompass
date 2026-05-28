@@ -57,7 +57,7 @@ export function HeroSection() {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="font-serif text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-semibold text-white mb-6 leading-[0.9] tracking-tight"
+              className="font-serif text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-semibold text-white mb-6 leading-[1.05] tracking-tight"
             >
               Hành trình
               <br />
