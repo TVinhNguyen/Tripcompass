@@ -135,7 +135,13 @@ async def prose_to_plan(
         for slot in day.slots:
             if slot.place_name not in all_names:
                 all_names.append(slot.place_name)
-    resolved = await resolve_places(all_names, destination=destination)
+    # Scope resolution to the known destination so a generic name like
+    # "Hải sản ven biển" can't fuzzy-match a same-keyword place in another
+    # city (e.g. "Vựa Hải Sản Bai Chay" in Hạ Long). The captured tool
+    # destination is the best pre-resolution signal we have; when neither is
+    # known we fall back to a whole-table search.
+    resolution_scope = destination or tool_destination
+    resolved = await resolve_places(all_names, destination=resolution_scope)
 
     effective_destination = destination
 

@@ -545,6 +545,51 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// Second batch of VN landmark names — see 202605290017 for rationale.
+			// MUST be a new migration, not an edit of 017: gormigrate tracks
+			// applied migrations by ID and never re-runs one already recorded,
+			// so appending these to 017 (already deployed) would silently skip
+			// them on existing databases. Same idempotent "Tiếng Việt (English)"
+			// renames, covering Đà Nẵng landmarks that otherwise miss or
+			// mis-match in the fuzzy place-resolver.
+			ID: "202605290018_vi_landmark_names_batch2",
+			Migrate: func(tx *gorm.DB) error {
+				renames := map[string]string{
+					"Con Market":                       "Chợ Cồn (Con Market)",
+					"Da Nang Museum of Cham Sculpture": "Bảo tàng Điêu khắc Chăm (Museum of Cham Sculpture)",
+					"Da Nang Catheral":                 "Nhà thờ Con Gà (Da Nang Cathedral)",
+					"Cao Dai Temple":                   "Thánh thất Cao Đài (Cao Dai Temple)",
+					"Asia Park":                        "Công viên Châu Á (Asia Park)",
+				}
+				for oldName, newName := range renames {
+					if err := tx.Exec(
+						`UPDATE schema_travel.places SET name = ?
+						 WHERE name = ? AND LOWER(destination) LIKE '%nẵng%'`,
+						newName, oldName,
+					).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				reverts := map[string]string{
+					"Chợ Cồn (Con Market)":                               "Con Market",
+					"Bảo tàng Điêu khắc Chăm (Museum of Cham Sculpture)": "Da Nang Museum of Cham Sculpture",
+					"Nhà thờ Con Gà (Da Nang Cathedral)":                 "Da Nang Catheral",
+					"Thánh thất Cao Đài (Cao Dai Temple)":                "Cao Dai Temple",
+					"Công viên Châu Á (Asia Park)":                       "Asia Park",
+				}
+				for newName, oldName := range reverts {
+					_ = tx.Exec(
+						`UPDATE schema_travel.places SET name = ? WHERE name = ?`,
+						oldName, newName,
+					).Error
+				}
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()
