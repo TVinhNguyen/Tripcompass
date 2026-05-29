@@ -491,6 +491,60 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// Data fix: scraped place data stores English-only names for some
+			// famous Đà Nẵng landmarks (e.g. "Dragon Bridge"). The prose-first
+			// planner has the LLM write Vietnamese names ("Cầu Rồng") for a
+			// Vietnamese audience, and the fuzzy place-resolver (pg_trgm) can't
+			// bridge a full translation that shares no romanized characters, so
+			// those activities save with no DB linkage (coords/price).
+			//
+			// We rename them to the "Tiếng Việt (English)" convention already
+			// present in the data ("Chợ Hàn (Han Market)"). This makes the
+			// resolver match (the Vietnamese half overlaps the LLM's output) and
+			// shows a Vietnamese-first label in the UI. Idempotent: the WHERE
+			// clause no longer matches once renamed.
+			ID: "202605290017_vi_landmark_names",
+			Migrate: func(tx *gorm.DB) error {
+				renames := map[string]string{
+					"Dragon Bridge":        "Cầu Rồng (Dragon Bridge)",
+					"The Marble Mountains": "Ngũ Hành Sơn (Marble Mountains)",
+					"Golden Bridge":        "Cầu Vàng (Golden Bridge)",
+					"Lady Buddha":          "Tượng Phật Bà Quan Âm (Lady Buddha)",
+					"Han River Bridge":     "Cầu Sông Hàn (Han River Bridge)",
+					"Love Bridge Da Nang":  "Cầu Tình Yêu (Love Bridge)",
+					"Sun Wheel":            "Vòng quay Mặt Trời (Sun Wheel)",
+				}
+				for oldName, newName := range renames {
+					if err := tx.Exec(
+						`UPDATE schema_travel.places SET name = ?
+						 WHERE name = ? AND LOWER(destination) LIKE '%nẵng%'`,
+						newName, oldName,
+					).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				reverts := map[string]string{
+					"Cầu Rồng (Dragon Bridge)":            "Dragon Bridge",
+					"Ngũ Hành Sơn (Marble Mountains)":     "The Marble Mountains",
+					"Cầu Vàng (Golden Bridge)":            "Golden Bridge",
+					"Tượng Phật Bà Quan Âm (Lady Buddha)": "Lady Buddha",
+					"Cầu Sông Hàn (Han River Bridge)":     "Han River Bridge",
+					"Cầu Tình Yêu (Love Bridge)":          "Love Bridge Da Nang",
+					"Vòng quay Mặt Trời (Sun Wheel)":      "Sun Wheel",
+				}
+				for newName, oldName := range reverts {
+					_ = tx.Exec(
+						`UPDATE schema_travel.places SET name = ? WHERE name = ?`,
+						oldName, newName,
+					).Error
+				}
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()

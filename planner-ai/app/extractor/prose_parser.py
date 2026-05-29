@@ -31,8 +31,13 @@ from typing import Iterator
 
 # Day header: matches `# Ngày 1`, `## Ngày 1:`, `### Ngày 2 - Chinh phục Ba Na`.
 # We allow optional title after a `:` or `-` separator.
+# NOTE: every gap is `[^\S\n]*` (horizontal whitespace only), never `\s*`.
+# A bare `\s*` after the day number matches the trailing newline, letting the
+# optional `[:\-–—]?` separator eat the next line's bullet and the title group
+# swallow the first slot line — silently dropping it. Pinning to horizontal
+# whitespace keeps the header match on its own line.
 _DAY_RE = re.compile(
-    r"^\s*#{1,4}\s*(?:Ngày|NGÀY|ngày|Day)\s*(\d+)\s*[:\-–—]?\s*(.*?)\s*$",
+    r"^[^\S\n]*#{1,4}[^\S\n]*(?:Ngày|NGÀY|ngày|Day)[^\S\n]*(\d+)[^\S\n]*[:\-–—]?[^\S\n]*(.*?)[^\S\n]*$",
     re.MULTILINE,
 )
 
@@ -91,10 +96,20 @@ def _strip_marker(name: str) -> str:
     The prompt instructs marking must-visit spots with ⭐ (see prompts/agent.py).
     The star may land just after the bold (`**Biển Mỹ Khê** ⭐` — handled by the
     slot regex) or *inside* it (`**Biển Mỹ Khê ⭐**` — captured into `place`).
-    This strips the trailing run of non-word chars so the resolver matches the
-    clean name. A name ending in a letter/digit ("Bún Chả Cá 109") is untouched.
+    We strip only a trailing run of symbol/emoji chars (⭐ is Unicode category
+    "So") plus whitespace, so the resolver matches the clean name. Meaningful
+    punctuation is kept — "Chợ Hàn (Han Market)" must retain its closing ")",
+    and "Bún Chả Cá 109" its digit.
     """
-    return re.sub(r"\W+$", "", name).strip()
+    import unicodedata
+    chars = list(name.strip())
+    while chars and (
+        unicodedata.category(chars[-1]).startswith("S")  # symbols incl. emoji ⭐
+        or unicodedata.category(chars[-1]) == "Cf"        # variation selectors
+        or chars[-1].isspace()
+    ):
+        chars.pop()
+    return "".join(chars).strip()
 
 
 def _ascii_fold(text: str) -> str:

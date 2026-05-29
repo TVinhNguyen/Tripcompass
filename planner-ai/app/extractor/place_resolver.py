@@ -61,11 +61,11 @@ async def _resolve_one(
                    COALESCE(base_price, 0) AS base_price,
                    latitude, longitude, cover_image,
                    priority_score,
-                   similarity(schema_travel.f_unaccent(lower(name)),
+                   schema_travel.similarity(schema_travel.f_unaccent(lower(name)),
                               schema_travel.f_unaccent(lower($1))) AS sim
             FROM schema_travel.places
             WHERE LOWER(destination) ILIKE '%' || LOWER($2) || '%'
-              AND schema_travel.f_unaccent(lower(name)) %
+              AND schema_travel.f_unaccent(lower(name)) OPERATOR(schema_travel.%)
                   schema_travel.f_unaccent(lower($1))
             ORDER BY sim DESC, priority_score DESC NULLS LAST
             LIMIT $3
@@ -77,10 +77,10 @@ async def _resolve_one(
                    COALESCE(base_price, 0) AS base_price,
                    latitude, longitude, cover_image,
                    priority_score,
-                   similarity(schema_travel.f_unaccent(lower(name)),
+                   schema_travel.similarity(schema_travel.f_unaccent(lower(name)),
                               schema_travel.f_unaccent(lower($1))) AS sim
             FROM schema_travel.places
-            WHERE schema_travel.f_unaccent(lower(name)) %
+            WHERE schema_travel.f_unaccent(lower(name)) OPERATOR(schema_travel.%)
                   schema_travel.f_unaccent(lower($1))
             ORDER BY sim DESC, priority_score DESC NULLS LAST
             LIMIT $2
