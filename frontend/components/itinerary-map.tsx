@@ -154,10 +154,20 @@ export default function ItineraryMap({
     ? withCoords.find((a) => a.id === activeActivityId) || null
     : null;
 
-  // Auto-open popup when active changes
+  // Auto-open popup when active changes. We always close the popup we
+  // previously opened first — otherwise hovering an activity without coords
+  // (no marker) leaves the prior activity's popup, and its image, on the map.
+  const lastOpenedRef = useRef<string | null>(null);
   useEffect(() => {
+    const prev = lastOpenedRef.current;
+    if (prev && markerRefs.current[prev]) {
+      markerRefs.current[prev]?.closePopup();
+    }
+    lastOpenedRef.current = null;
+
     if (activeActivityId && markerRefs.current[activeActivityId]) {
       markerRefs.current[activeActivityId]?.openPopup();
+      lastOpenedRef.current = activeActivityId;
     }
   }, [activeActivityId]);
 
