@@ -51,7 +51,8 @@ _SLOT_RE = re.compile(
     (?P<bucket>[^|]+?)                        # buổi label
     \s*\|\s*
     \*\*\s*(?P<place>[^*]+?)\s*\*\*           # bolded place name
-    \s*(?:[—\-–:]\s*(?P<note>.+?))?           # optional description
+    [^\w\n—–:\-]*                             # tolerate ⭐/emoji decoration after the name
+    (?:[—–:\-]\s*(?P<note>.+?))?              # optional description
     \s*$
     """,
     re.MULTILINE | re.VERBOSE,
@@ -82,6 +83,18 @@ _MEAL_HINTS = {
     "lunch":     ("bua trua", "an trua"),
     "dinner":    ("bua toi", "an toi"),
 }
+
+
+def _strip_marker(name: str) -> str:
+    """Drop trailing decoration the agent appends to must-visit places.
+
+    The prompt instructs marking must-visit spots with ⭐ (see prompts/agent.py).
+    The star may land just after the bold (`**Biển Mỹ Khê** ⭐` — handled by the
+    slot regex) or *inside* it (`**Biển Mỹ Khê ⭐**` — captured into `place`).
+    This strips the trailing run of non-word chars so the resolver matches the
+    clean name. A name ending in a letter/digit ("Bún Chả Cá 109") is untouched.
+    """
+    return re.sub(r"\W+$", "", name).strip()
 
 
 def _ascii_fold(text: str) -> str:
@@ -167,7 +180,7 @@ def parse_prose(text: str) -> list[ProseDay]:
     for day_num, title, body in _iter_day_blocks(text):
         slots: list[ProseSlot] = []
         for m in _SLOT_RE.finditer(body):
-            place_name = m.group("place").strip()
+            place_name = _strip_marker(m.group("place"))
             if not place_name:
                 continue
             note = (m.group("note") or "").strip()

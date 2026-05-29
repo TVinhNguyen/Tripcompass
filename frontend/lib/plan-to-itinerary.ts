@@ -121,8 +121,14 @@ export async function savePlanAsItinerary(
   for (const day of plan.days) {
     let orderIndex = 0;
     for (const slot of day.slots) {
-      // Skip buffer slots & slots without a place
-      if (slot.is_buffer || !slot.place) continue;
+      // Skip genuine transit/buffer slots — those carry no place at all
+      // (see streaming/response_shape.py). A prose slot the resolver couldn't
+      // match still has a place with a name but an empty id; we persist it as
+      // a text-only activity (place_id omitted) so AI-suggested, web-searched
+      // venues aren't silently dropped on save.
+      if (!slot.place || !slot.place.name) continue;
+
+      const placeId = slot.place.id || undefined;
 
       const notes = [
         slot.notes,
@@ -131,7 +137,7 @@ export async function savePlanAsItinerary(
 
       const body: CreateActivityInput = {
         itinerary_id: itinerary.id,
-        place_id: slot.place.id,
+        place_id: placeId,
         day_number: day.day_num,
         order_index: orderIndex++,
         title: slot.place.name,
