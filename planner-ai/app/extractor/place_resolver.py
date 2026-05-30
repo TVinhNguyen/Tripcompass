@@ -20,6 +20,7 @@ without an `id` — the FE renders them as a text-only card.
 """
 from __future__ import annotations
 
+import re
 import asyncpg
 from typing import Optional
 
@@ -37,6 +38,16 @@ _SIMILARITY_THRESHOLD = 0.35
 # debugging a mismatch.
 _LIMIT = 3
 
+# A trailing "(...)" qualifier the agent appends — "Chùa Linh Ứng (Sơn Trà)" —
+# dilutes the trigram score below threshold (0.31 vs 0.43 for the bare name).
+# We drop it for matching only; the display name keeps the agent's full text.
+_PAREN_SUFFIX_RE = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def _strip_paren_suffix(name: str) -> str:
+    stripped = _PAREN_SUFFIX_RE.sub("", name).strip()
+    return stripped or name
+
 
 async def _resolve_one(
     conn: asyncpg.Connection,
@@ -46,6 +57,10 @@ async def _resolve_one(
     """Look up a single place name. Returns None if no candidate clears threshold."""
     if not name or not name.strip():
         return None
+
+    # Match on the parenthetical-stripped form; a DB name that legitimately
+    # carries its own "(...)" ("Chợ Hàn (Han Market)") still matches fine.
+    match_name = _strip_paren_suffix(name)
 
     # destination is optional — when provided, restrict to that area for
     # better precision (avoids matching "Chùa Linh Ứng" in HCMC when user is
@@ -70,7 +85,7 @@ async def _resolve_one(
             ORDER BY sim DESC, priority_score DESC NULLS LAST
             LIMIT $3
         """
-        rows = await conn.fetch(sql, name, destination, _LIMIT)
+        rows = await conn.fetch(sql, match_name, destination, _LIMIT)
     else:
         sql = """
             SELECT id::text, name, name_en, category::text, destination,
@@ -85,7 +100,7 @@ async def _resolve_one(
             ORDER BY sim DESC, priority_score DESC NULLS LAST
             LIMIT $2
         """
-        rows = await conn.fetch(sql, name, _LIMIT)
+        rows = await conn.fetch(sql, match_name, _LIMIT)
 
     if not rows:
         return None
