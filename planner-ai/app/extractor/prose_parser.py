@@ -153,9 +153,13 @@ def _classify_slot_type(bucket_label: str, note: str) -> str:
     upgrade `afternoon_activity` to `lunch` so the FE shows a food card with
     a fork icon instead of a generic attraction marker.
     """
-    note_folded = _ascii_fold(note or "")
+    # Space-pad both sides so hints match on word boundaries. A raw substring
+    # test mis-fires: "không gian sang trọng" folds to "...gian sang trong..."
+    # which contains "an sang" → would wrongly classify a dinner ("bữa tối")
+    # slot as breakfast. Padding requires " an sang " as whole words.
+    note_padded = f" {_ascii_fold(note or '')} "
     for meal, hints in _MEAL_HINTS.items():
-        if any(h in note_folded for h in hints):
+        if any(f" {h} " in note_padded for h in hints):
             return meal
 
     bucket_folded = _ascii_fold(bucket_label or "")
