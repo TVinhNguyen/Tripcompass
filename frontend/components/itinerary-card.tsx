@@ -41,7 +41,7 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
         viewport={{ once: true }}
       >
         <Link href={href} className="block h-full">
-          <article className="group relative bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 h-full flex flex-col">
+          <article className="group relative bg-card border border-border rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(26,26,26,0.04)] hover:shadow-[0_14px_36px_-12px_rgba(26,26,26,0.2)] hover:-translate-y-1 transition-all duration-300 h-full flex flex-col">
             <div className="relative aspect-[4/3] overflow-hidden">
               <Image
                 src={cover}
@@ -49,6 +49,8 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
                 fill
                 className="object-cover group-hover:scale-105 transition-transform duration-500"
               />
+              {/* Overlays below sit on the photo, so their colours are fixed
+                  (white scrims / dark gradient) rather than theme tokens. */}
               <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a]/60 via-transparent to-transparent" />
 
               <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 bg-white/95 backdrop-blur-sm rounded-full text-xs font-semibold text-[#1a1a1a]">
@@ -58,27 +60,27 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
             </div>
 
             <div className="p-4 flex flex-col flex-1">
-              <h3 className="text-base font-semibold text-[#1a1a1a] mb-1.5 group-hover:text-[#3d5a3d] transition-colors line-clamp-2 tracking-tight leading-snug">
+              <h3 className="text-base font-semibold text-foreground mb-1.5 group-hover:text-primary transition-colors line-clamp-2 tracking-tight leading-snug">
                 {itinerary.title}
               </h3>
 
-              <div className="flex items-center gap-1 text-xs text-[#6b6b6b] mb-3">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
                 <MapPin className="w-3 h-3 shrink-0" />
                 <span className="line-clamp-1">{itinerary.destination || "Việt Nam"}</span>
               </div>
 
-              <div className="flex items-center justify-between mt-auto pt-3 border-t border-[#e8e2d9]">
-                <div className="flex items-center gap-1 text-xs text-[#8b8378] shrink-0">
-                  <Eye className="w-3 h-3 text-[#6b6b6b]" />
+              <div className="flex items-center justify-between mt-auto pt-3 border-t border-border">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                  <Eye className="w-3 h-3 text-muted-foreground" />
                   <span>{itinerary.view_count?.toLocaleString("vi-VN") ?? 0}</span>
                 </div>
-                <div className="flex items-center gap-1 text-xs text-[#8b8378] shrink-0">
-                  <Copy className="w-3.5 h-3.5 text-[#c4785a]" />
+                <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                  <Copy className="w-3.5 h-3.5 text-secondary" />
                   <span>{itinerary.clone_count?.toLocaleString("vi-VN") ?? 0}</span>
                 </div>
                 {hasRating && (
-                  <div className="flex items-center gap-1 text-xs text-[#8b8378] shrink-0">
-                    <Star className="w-3.5 h-3.5 fill-[#d4a853] text-[#d4a853]" />
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                    <Star className="w-3.5 h-3.5 fill-accent text-accent" />
                     <span>{itinerary.rating.toFixed(1)}</span>
                   </div>
                 )}
@@ -98,7 +100,7 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
       viewport={{ once: true }}
     >
       <Link href={href} className="block h-full">
-        <article className="group relative bg-card border border-border rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full flex flex-col">
+        <article className="group relative bg-card border border-border rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(26,26,26,0.04)] hover:shadow-[0_16px_44px_-12px_rgba(26,26,26,0.24)] hover:-translate-y-1 transition-all duration-300 h-full flex flex-col">
           <div className="relative aspect-[16/10] overflow-hidden">
             <Image
               src={cover}
@@ -106,6 +108,7 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
               fill
               className="object-cover group-hover:scale-105 transition-transform duration-700"
             />
+            {/* Photo overlays: fixed colours, not theme tokens. */}
             <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a]/75 via-[#1a1a1a]/10 to-transparent" />
 
             <div className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-sm rounded-full text-xs font-semibold text-[#1a1a1a] shadow-sm">
@@ -133,36 +136,36 @@ export function ItineraryCard({ itinerary, index = 0, variant = "default" }: Iti
               {itinerary.tags.slice(0, 3).map((tag) => (
                 <span
                   key={tag}
-                  className="px-2.5 py-1 bg-[#f5f0e8] rounded-full text-xs font-medium text-[#3d5a3d]"
+                  className="px-2.5 py-1 bg-muted rounded-full text-xs font-medium text-primary"
                 >
                   {tag}
                 </span>
               ))}
               {itinerary.tags.length > 3 && (
-                <span className="px-2.5 py-1 text-xs font-medium text-[#8b8378]">
+                <span className="px-2.5 py-1 text-xs font-medium text-muted-foreground">
                   +{itinerary.tags.length - 3}
                 </span>
               )}
             </div>
 
-            <div className="flex items-center justify-between mt-auto pt-4 border-t border-[#e8e2d9]">
+            <div className="flex items-center justify-between mt-auto pt-4 border-t border-border">
               {/* Budget badge */}
-              <span className="text-xs font-medium text-[#6b6b6b] bg-[#f5f0e8] px-2.5 py-1 rounded-full">
+              <span className="text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
                 {BUDGET_LABELS[itinerary.budget_category] ?? itinerary.budget_category}
               </span>
 
-              <div className="flex items-center gap-3 text-[#6b6b6b] text-sm shrink-0">
+              <div className="flex items-center gap-3 text-muted-foreground text-sm shrink-0">
                 <div className="flex items-center gap-1">
                   <Eye className="w-4 h-4" />
                   <span>{itinerary.view_count?.toLocaleString("vi-VN") ?? 0}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Copy className="w-4 h-4 text-[#c4785a]" />
+                  <Copy className="w-4 h-4 text-secondary" />
                   <span className="font-medium">{itinerary.clone_count?.toLocaleString("vi-VN") ?? 0}</span>
                 </div>
                 {hasRating && (
                   <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 fill-[#d4a853] text-[#d4a853]" />
+                    <Star className="w-4 h-4 fill-accent text-accent" />
                     <span className="font-medium">{itinerary.rating.toFixed(1)}</span>
                   </div>
                 )}

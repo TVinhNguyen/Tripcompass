@@ -18,8 +18,10 @@ interface PlaceCardProps {
 }
 
 const CATEGORY_STYLES: Record<PlaceCategory, string> = {
-  ATTRACTION: "bg-[#3d5a3d]/10 text-[#3d5a3d] border-[#3d5a3d]/20",
-  FOOD:       "bg-[#c4785a]/10 text-[#c4785a] border-[#c4785a]/20",
+  ATTRACTION: "bg-primary/10 text-primary border-primary/20",
+  FOOD:       "bg-secondary/10 text-secondary border-secondary/20",
+  // STAY keeps a hand-tuned darker gold for light-mode contrast; revisit when
+  // the dark category palette is defined (accent doesn't lighten in dark).
   STAY:       "bg-[#d4a853]/10 text-[#a8842a] border-[#d4a853]/30",
 }
 
@@ -80,7 +82,7 @@ export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = f
       >
         <Link
           href={`/places/${place.id}`}
-          className="group flex flex-col sm:flex-row gap-4 p-4 bg-white border border-[#e8e2d9] rounded-2xl hover:border-[#3d5a3d]/40 hover:shadow-lg transition-all"
+          className="group flex flex-col sm:flex-row gap-4 p-4 bg-card border border-border rounded-2xl shadow-[0_1px_2px_rgba(26,26,26,0.04)] hover:border-primary/40 hover:shadow-[0_12px_28px_-10px_rgba(26,26,26,0.18)] transition-all duration-300"
         >
           <div className="relative w-full sm:w-48 aspect-[4/3] sm:aspect-square rounded-xl overflow-hidden shrink-0">
             <Image
@@ -96,28 +98,28 @@ export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = f
                 <div className={cn("inline-flex px-2 py-0.5 rounded-full text-xs border mb-2", catStyle)}>
                   {catLabel}
                 </div>
-                <h3 className="text-base font-semibold text-[#1a1a1a] group-hover:text-[#3d5a3d] transition-colors truncate tracking-tight">
+                <h3 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors truncate tracking-tight">
                   {place.name}
                 </h3>
               </div>
               <button onClick={toggleSave} className="shrink-0 p-2 -m-2" aria-label="Lưu địa điểm">
-                <Heart className={cn("w-5 h-5 transition-colors", saved ? "fill-[#c4785a] text-[#c4785a]" : "text-[#8b8378]")} />
+                <Heart className={cn("w-5 h-5 transition-colors", saved ? "fill-secondary text-secondary" : "text-muted-foreground")} />
               </button>
             </div>
-            <p className="text-sm text-[#6b6b6b] line-clamp-2 mb-3">{place.description}</p>
+            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{place.description}</p>
             <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-              <span className="flex items-center gap-1 text-[#6b6b6b]">
+              <span className="flex items-center gap-1 text-muted-foreground">
                 <MapPin className="w-3.5 h-3.5" />
                 {location}
               </span>
               {place.rating != null && (
-                <span className="flex items-center gap-1 text-[#1a1a1a]">
-                  <Star className="w-3.5 h-3.5 fill-[#d4a853] text-[#d4a853]" />
+                <span className="flex items-center gap-1 text-foreground">
+                  <Star className="w-3.5 h-3.5 fill-accent text-accent" />
                   <span className="font-medium">{place.rating.toFixed(1)}</span>
-                  <span className="text-[#8b8378]">({place.review_count})</span>
+                  <span className="text-muted-foreground">({place.review_count})</span>
                 </span>
               )}
-              <span className="ml-auto font-mono tabular-nums text-sm font-semibold text-[#3d5a3d]">
+              <span className="ml-auto font-mono tabular-nums text-sm font-semibold text-primary">
                 {formatVnd(place.base_price)}
               </span>
             </div>
@@ -135,7 +137,7 @@ export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = f
     >
       <Link
         href={`/places/${place.id}`}
-        className="group flex flex-col bg-white border border-[#e8e2d9] rounded-2xl overflow-hidden hover:border-[#3d5a3d]/40 hover:shadow-xl transition-all h-full"
+        className="group flex flex-col bg-card border border-border rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(26,26,26,0.04)] hover:border-primary/40 hover:shadow-[0_16px_40px_-12px_rgba(26,26,26,0.22)] hover:-translate-y-1 transition-all duration-300 h-full"
       >
         <div className="relative aspect-[4/3] overflow-hidden">
           <Image
@@ -154,6 +156,8 @@ export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = f
             aria-label="Lưu địa điểm"
             className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center hover:bg-white shadow-sm"
           >
+            {/* Heart sits on a fixed white scrim over the photo, so its default
+                colour stays dark in both themes (not tokenized). */}
             <Heart className={cn("w-4 h-4 transition-colors", saved ? "fill-[#c4785a] text-[#c4785a]" : "text-[#1a1a1a]")} />
           </button>
           {place.rating != null && (
@@ -163,16 +167,16 @@ export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = f
             </div>
           )}
           {place.must_visit && (
-            <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-[#d4a853] text-[#1a1a1a] text-xs font-semibold">
+            <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full bg-accent text-accent-foreground text-xs font-semibold">
               Phải thăm
             </div>
           )}
         </div>
         <div className="flex-1 flex flex-col p-4">
-          <h3 className="text-base font-semibold text-[#1a1a1a] group-hover:text-[#3d5a3d] transition-colors mb-1 line-clamp-1 tracking-tight">
+          <h3 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors mb-1 line-clamp-1 tracking-tight">
             {place.name}
           </h3>
-          <div className="flex items-center gap-1 text-xs text-[#6b6b6b] mb-3">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
             <MapPin className="w-3 h-3" />
             <span>{location}</span>
             {hours && (
@@ -183,13 +187,13 @@ export function PlaceCard({ place, index = 0, variant = "grid", initialSaved = f
               </>
             )}
           </div>
-          <p className="text-sm text-[#6b6b6b] line-clamp-2 mb-4 flex-1">{place.description}</p>
-          <div className="flex items-center justify-between pt-3 border-t border-[#e8e2d9]">
-            <span className="font-mono tabular-nums text-sm font-semibold text-[#3d5a3d]">
+          <p className="text-sm text-muted-foreground line-clamp-2 mb-4 flex-1">{place.description}</p>
+          <div className="flex items-center justify-between pt-3 border-t border-border">
+            <span className="font-mono tabular-nums text-sm font-semibold text-primary">
               {formatVnd(place.base_price)}
             </span>
             {place.review_count != null && (
-              <span className="text-xs text-[#8b8378]">{place.review_count} đánh giá</span>
+              <span className="text-xs text-muted-foreground">{place.review_count} đánh giá</span>
             )}
           </div>
         </div>
