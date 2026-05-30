@@ -38,6 +38,12 @@ def _canonicalise_destination(raw: str) -> str:
 
 _FOOD_SLOT_TYPES = {"breakfast", "lunch", "dinner", "snack", "brunch"}
 
+# Words that mark the agent's slot name as an actual eatery. Used to tell a real
+# food venue from an attraction that merely landed in a meal-labelled slot — the
+# agent writes "Ăn tối ... xem Cầu Rồng", so Cầu Rồng (the bridge) ends up a
+# "dinner" slot but is NOT food and must keep its pin.
+_FOOD_NAME_HINTS = ("buffet", "nhà hàng", "restaurant")
+
 
 def _slot_category(slot_type: str) -> str:
     """Coarse mapping used by the FE card renderer."""
@@ -54,15 +60,17 @@ def _day_type(day_num: int, total_days: int) -> str:
 
 def _slot_to_fe(slot: ProseSlot, resolved: Optional[dict]) -> dict:
     """Project one parsed slot + its DB row (if matched) to the FE slot shape."""
-    # A meal slot that only matched an ATTRACTION (not a real restaurant) must
-    # not borrow that attraction's pin: "Buffet Bà Nà Hills" resolves to the
-    # Bà Nà cable-car station, but the buffet is up on the summit, not at the
-    # ticket gate ~5km below. Drop the binding → render text-only (name + time).
-    # A missing pin is more honest than a wrong one.
+    # A named eatery that only matched an ATTRACTION must not borrow that
+    # attraction's pin: "Buffet Bà Nà Hills" resolves to the Bà Nà cable-car
+    # station, but the buffet is up on the summit, not at the ticket gate ~5km
+    # below → render text-only (a missing pin is more honest than a wrong one).
+    # Gated on a food keyword in the NAME so a real attraction that merely sits
+    # in a meal-labelled slot (e.g. "Cầu Rồng" in an "ăn tối" slot) keeps its pin.
     if (
         resolved
         and slot.slot_type in _FOOD_SLOT_TYPES
         and (resolved.get("category") or "").upper() != "FOOD"
+        and any(h in slot.place_name.lower() for h in _FOOD_NAME_HINTS)
     ):
         resolved = None
 
@@ -80,13 +88,10 @@ def _slot_to_fe(slot: ProseSlot, resolved: Optional[dict]) -> dict:
         out["notes"] = slot.note
 
     if resolved:
-        # A meal slot is FOOD regardless of the matched place's own category:
-        # "Buffet Bà Nà Hills" (lunch) binds to the Ba Na Hills *attraction*
-        # for coordinates but must render as a meal, not a sightseeing stop.
-        if slot.slot_type in _FOOD_SLOT_TYPES:
-            category = "FOOD"
-        else:
-            category = resolved.get("category") or _slot_category(slot.slot_type)
+        # Trust the matched place's own category (Cầu Rồng = ATTRACTION even when
+        # the agent parked it in an "ăn tối" slot; Mì Quảng = FOOD). A genuine
+        # eatery wrongly matched to an attraction was already dropped above.
+        category = resolved.get("category") or _slot_category(slot.slot_type)
         place = {
             "id": resolved["id"],
             # Keep the AI's wording as the display name — it carries the
