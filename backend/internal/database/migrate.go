@@ -590,6 +590,56 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// Dedup the Bà Nà Hills cluster. TripAdvisor lists the same complex
+			// as several separate "attractions"; the generic "Ba Na Hills"
+			// (d28160695, 10 reviews, summit coords) exact-name-matched the
+			// planner's query and shadowed the real canonical "Ba Na Hills
+			// SunWorld" (d2255351, 7174 reviews) — the base cable-car/ticket
+			// station tourists actually travel to. We repoint references to the
+			// canonical, then drop the duplicate. Keyed on external_id (stable
+			// across environments), never row UUIDs. Idempotent: once deleted,
+			// the repoints and delete match nothing.
+			ID: "202605290019_dedup_ba_na_hills",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					// Keep existing itineraries linked: repoint their activities.
+					`UPDATE schema_travel.activities a
+					    SET place_id = canon.id
+					    FROM schema_travel.places canon, schema_travel.places dup
+					    WHERE canon.external_id='2255351' AND canon.external_source='tripadvisor'
+					      AND dup.external_id='28160695'  AND dup.external_source='tripadvisor'
+					      AND a.place_id = dup.id;`,
+					// Repoint user bookmarks, but skip users who already saved the
+					// canonical (PK is user_id+place_id) — those leftover dup rows
+					// fall to the CASCADE on delete below, which is the intended
+					// dedup of a double-bookmark.
+					`UPDATE schema_travel.user_saved_places usp
+					    SET place_id = canon.id
+					    FROM schema_travel.places canon, schema_travel.places dup
+					    WHERE canon.external_id='2255351' AND canon.external_source='tripadvisor'
+					      AND dup.external_id='28160695'  AND dup.external_source='tripadvisor'
+					      AND usp.place_id = dup.id
+					      AND NOT EXISTS (
+					          SELECT 1 FROM schema_travel.user_saved_places x
+					          WHERE x.user_id = usp.user_id AND x.place_id = canon.id);`,
+					// Drop the duplicate (CASCADE clears any leftover bookmarks /
+					// place_seasons; activities were already repointed above).
+					`DELETE FROM schema_travel.places
+					    WHERE external_id='28160695' AND external_source='tripadvisor';`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				// Cannot un-delete a scraped row (its UUID is gone); no-op.
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()

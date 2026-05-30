@@ -54,6 +54,18 @@ def _day_type(day_num: int, total_days: int) -> str:
 
 def _slot_to_fe(slot: ProseSlot, resolved: Optional[dict]) -> dict:
     """Project one parsed slot + its DB row (if matched) to the FE slot shape."""
+    # A meal slot that only matched an ATTRACTION (not a real restaurant) must
+    # not borrow that attraction's pin: "Buffet Bà Nà Hills" resolves to the
+    # Bà Nà cable-car station, but the buffet is up on the summit, not at the
+    # ticket gate ~5km below. Drop the binding → render text-only (name + time).
+    # A missing pin is more honest than a wrong one.
+    if (
+        resolved
+        and slot.slot_type in _FOOD_SLOT_TYPES
+        and (resolved.get("category") or "").upper() != "FOOD"
+    ):
+        resolved = None
+
     out: dict = {
         "start": slot.start,
         "end": slot.end,
