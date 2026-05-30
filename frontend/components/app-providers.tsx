@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState } from "react"
+import { MotionConfig } from "framer-motion"
 import { GoogleOAuthProvider } from "@react-oauth/google"
 import { AuthProvider } from "@/hooks/use-auth"
 
@@ -38,11 +39,16 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     </GoogleOAuthReadyContext.Provider>
   )
 
-  if (!googleClientId) return app
-
+  // No theme system / dark mode — the app ships light-only by product
+  // decision. MotionConfig reducedMotion="user" makes every framer-motion
+  // animation honor prefers-reduced-motion (WCAG 2.3.3) in one place.
   return (
-    <GoogleOAuthProvider clientId={googleClientId}>
-      {app}
-    </GoogleOAuthProvider>
+    <MotionConfig reducedMotion="user">
+      {googleClientId ? (
+        <GoogleOAuthProvider clientId={googleClientId}>{app}</GoogleOAuthProvider>
+      ) : (
+        app
+      )}
+    </MotionConfig>
   )
 }

@@ -31,6 +31,7 @@ export function Navigation() {
   const [isExploreOpen, setIsExploreOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const exploreRef = useRef<HTMLDivElement>(null)
 
   const isLanding = pathname === "/"
   const needsSolidBg = !isLanding || isScrolled
@@ -42,15 +43,30 @@ export function Navigation() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Close user dropdown on outside click
+  // Close the user + explore dropdowns on outside click or Escape. Keyboard
+  // and touch users open "Khám phá" via the button's onClick (hover alone is
+  // unreachable for them); these handlers give them a way back out.
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
+    const handlePointer = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setIsUserMenuOpen(false)
       }
+      if (exploreRef.current && !exploreRef.current.contains(e.target as Node)) {
+        setIsExploreOpen(false)
+      }
     }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsUserMenuOpen(false)
+        setIsExploreOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handlePointer)
+    document.addEventListener("keydown", handleKey)
+    return () => {
+      document.removeEventListener("mousedown", handlePointer)
+      document.removeEventListener("keydown", handleKey)
+    }
   }, [])
 
   const avatarLetter = user?.full_name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "U"
@@ -84,11 +100,18 @@ export function Navigation() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-1">
             <div
+              ref={exploreRef}
               className="relative"
               onMouseEnter={() => setIsExploreOpen(true)}
               onMouseLeave={() => setIsExploreOpen(false)}
             >
-              <button className="flex items-center gap-1 px-4 py-2 text-sm text-white/80 hover:text-white transition-colors rounded-full hover:bg-white/5">
+              <button
+                type="button"
+                onClick={() => setIsExploreOpen((v) => !v)}
+                aria-haspopup="true"
+                aria-expanded={isExploreOpen}
+                className="flex items-center gap-1 px-4 py-2 text-sm text-white/80 hover:text-white transition-colors rounded-full hover:bg-white/5"
+              >
                 <span>Khám phá</span>
                 <ChevronDown className={cn("w-4 h-4 transition-transform", isExploreOpen && "rotate-180")} />
               </button>
@@ -171,7 +194,10 @@ export function Navigation() {
               /* ── Logged in: avatar + dropdown ── */
               <div className="relative" ref={userMenuRef}>
                 <button
+                  type="button"
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  aria-haspopup="true"
+                  aria-expanded={isUserMenuOpen}
                   className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full hover:bg-white/10 transition-colors"
                 >
                   {user.avatar_url ? (

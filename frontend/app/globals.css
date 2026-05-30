@@ -10,7 +10,9 @@
   /* Base - Warm cream/beige tones */
   --background: #f5f0e8;
   --foreground: #1a1a1a;
-  --card: #ffffff;
+  /* Warm off-white (not pure #fff) so cards harmonize with the cream
+     background instead of reading as cold/disjointed. */
+  --card: #fffdf9;
   --card-foreground: #1a1a1a;
   --popover: #ffffff;
   --popover-foreground: #1a1a1a;
@@ -248,4 +250,18 @@
 .nums {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
+}
+
+/* Respect the user's reduced-motion preference (WCAG 2.3.3).
+   framer-motion is handled globally via <MotionConfig reducedMotion="user">
+   in app-providers; this covers CSS-driven animations/transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
