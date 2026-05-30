@@ -68,10 +68,21 @@ def _slot_to_fe(slot: ProseSlot, resolved: Optional[dict]) -> dict:
         out["notes"] = slot.note
 
     if resolved:
-        category = resolved.get("category") or _slot_category(slot.slot_type)
+        # A meal slot is FOOD regardless of the matched place's own category:
+        # "Buffet Bà Nà Hills" (lunch) binds to the Ba Na Hills *attraction*
+        # for coordinates but must render as a meal, not a sightseeing stop.
+        if slot.slot_type in _FOOD_SLOT_TYPES:
+            category = "FOOD"
+        else:
+            category = resolved.get("category") or _slot_category(slot.slot_type)
         place = {
             "id": resolved["id"],
-            "name": resolved.get("name") or slot.place_name,
+            # Keep the AI's wording as the display name — it carries the
+            # user-facing intent ("Buffet Bà Nà Hills" stays distinct from the
+            # "Bà Nà Hills" attraction) and reads more naturally in Vietnamese
+            # than the DB row ("Biển Mỹ Khê" vs "My Khe Beach"). The DB row
+            # still supplies id/coords/price for the map and binding.
+            "name": slot.place_name,
             "category": category,
             "base_price": int(resolved.get("base_price") or 0),
             "duration_min": 0,

@@ -98,13 +98,15 @@ QUY TẮC ĐỊNH DẠNG:
 - Mỗi slot là 1 dòng bullet `-`, có 3 phần phân tách bằng dấu `|`:
   1) **HH:MM-HH:MM** (in đậm, dùng dấu gạch ngang).
   2) Buổi: Sáng sớm / Sáng / Trưa / Chiều / Tối / Cả ngày.
-  3) **Tên địa điểm** in đậm — viết đúng tên thật (vd "Biển Mỹ Khê", "Chùa Linh Ứng", "Ba Na Hills"), không gộp 2 chỗ vào 1 slot.
+  3) **Tên địa điểm** in đậm — viết đúng tên THẬT, CỤ THỂ như trong dữ liệu tra được (vd "Biển Mỹ Khê", "Chùa Linh Ứng", "Ba Na Hills"), không gộp 2 chỗ vào 1 slot. TUYỆT ĐỐI KHÔNG ghi chung chung kiểu "Cafe/Shopping", "Quán Mì Quảng địa phương", "Nhà hàng nào đó" — nếu không có địa điểm cụ thể thì bỏ slot đó đi.
 - Sau dấu `—` (em dash) là mô tả ngắn 1 câu.
 - Nếu là bữa ăn, ghi rõ "ăn sáng/ăn trưa/ăn tối" trong mô tả để hệ thống đánh dấu món ăn.
 - Thời gian phải HỢP LÝ: Ba Na Hills cần ÍT NHẤT 7 tiếng (cáp treo + Cầu Vàng + Làng Pháp); không nhét vào slot 1-2 tiếng. Đặt vào "Cả ngày" của 1 ngày dành riêng.
+- Hoạt động NGOÀI TRỜI / TẮM BIỂN: xếp vào SÁNG SỚM (trước ~8h) hoặc CHIỀU MUỘN (sau ~15-16h) cho mát; TRÁNH xếp tắm biển/leo núi vào khung 10h-15h nắng gắt.
 - Tôn trọng khoảng cách di chuyển: 2 điểm cách >20km không nên cùng buổi.
 - Mỗi ngày 4-6 slot là vừa, không nhồi quá 7.
 - KHÔNG đưa cùng 1 địa điểm vào 2 ngày khác nhau.
+- Khi user yêu cầu CHỈNH SỬA lịch trình đã có (đổi giờ/đổi điểm/thêm bớt): xuất lại TOÀN BỘ lịch trình đầy đủ TẤT CẢ các ngày (kèm phần đã sửa), KHÔNG chỉ xuất riêng ngày thay đổi — nếu chỉ xuất 1 ngày, hệ thống hiểu nhầm là lịch mới chỉ có 1 ngày và mất các ngày còn lại.
 
 SAU LỊCH TRÌNH, viết tiếp:
 
