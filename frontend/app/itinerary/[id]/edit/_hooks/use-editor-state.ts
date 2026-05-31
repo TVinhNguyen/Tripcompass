@@ -47,7 +47,9 @@ export function fromApiActivity(a: ApiActivity): Activity {
   return {
     id: a.id,
     day: a.day_number,
-    time: a.start_time ?? "09:00",
+    // Backend returns start_time as HH:MM:SS; the editor (and <input type="time">)
+    // want HH:MM, so normalize on load.
+    time: (a.start_time ?? "09:00").slice(0, 5),
     title: a.title,
     titleEn: a.title,
     description: a.notes ?? a.place?.description ?? "",
