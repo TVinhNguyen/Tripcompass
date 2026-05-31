@@ -325,7 +325,7 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
                             {String(index + 1).padStart(2, "0")}
                           </div>
                           <div className="mt-2 text-lg font-semibold tabular-nums leading-none">
-                            {activity.start_time ?? "--:--"}
+                            {(activity.start_time ?? "--:--").slice(0, 5)}
                           </div>
                         </div>
                         <div className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.15em] uppercase text-[#d4a853] font-medium">
@@ -350,7 +350,7 @@ export default function ItineraryDetailPage({ params }: { params: Promise<{ id: 
                           {activity.start_time && activity.end_time && (
                             <span className="inline-flex items-center gap-1.5 text-[#6b6b6b]">
                               <Clock className="w-3.5 h-3.5 text-[#c4785a]" />
-                              {activity.start_time} – {activity.end_time}
+                              {activity.start_time.slice(0, 5)} – {activity.end_time.slice(0, 5)}
                             </span>
                           )}
                           {activity.estimated_cost > 0 && (

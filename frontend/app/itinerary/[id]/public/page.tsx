@@ -182,25 +182,30 @@ export default function PublicItineraryPage({ params }: { params: Promise<{ id: 
                         {acts.map((a, i) => (
                           <article
                             key={a.id}
-                            className="grid grid-cols-[64px_1fr] sm:grid-cols-[80px_1fr] gap-4 sm:gap-6 bg-white border border-[#e8e2d9] rounded-xl overflow-hidden"
+                            className="flex items-stretch bg-white border border-[#e8e2d9] rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(26,26,26,0.04)] hover:shadow-[0_10px_24px_-10px_rgba(26,26,26,0.15)] hover:border-[#3d5a3d]/30 transition-all duration-300"
                           >
-                            <div className="bg-[#1a1a1a] text-white p-3 sm:p-4 flex flex-col justify-between">
+                            {/* Time rail — number + time grouped together, centered */}
+                            <div className="w-16 sm:w-20 shrink-0 bg-[#1a1a1a] text-white flex flex-col items-center justify-center gap-1.5 py-4 px-2">
                               <div className="text-[10px] tracking-[0.2em] uppercase text-[#d4a853] font-mono tabular-nums">
                                 {String(i + 1).padStart(2, "0")}
                               </div>
-                              <div className="text-sm font-semibold tabular-nums">{a.start_time ?? "--:--"}</div>
+                              <div className="text-sm font-semibold tabular-nums">{(a.start_time ?? "--:--").slice(0, 5)}</div>
                             </div>
-                            <div className="p-4 min-w-0">
-                              <div className="text-[11px] tracking-[0.16em] uppercase text-[#8b8378] mb-2">
-                                {CATEGORY_LABELS[a.category] ?? a.category}
+                            {/* Content — title block and price share one baseline */}
+                            <div className="flex-1 min-w-0 p-4 flex items-center justify-between gap-4">
+                              <div className="min-w-0">
+                                <div className="text-[11px] tracking-[0.16em] uppercase text-[#8b8378] mb-1.5">
+                                  {CATEGORY_LABELS[a.category] ?? a.category}
+                                </div>
+                                <h4 className="text-base font-semibold text-[#1a1a1a] leading-snug">{a.title}</h4>
+                                {a.notes && (
+                                  <p className="mt-1.5 text-sm text-[#6b6b6b] leading-relaxed line-clamp-2">{a.notes}</p>
+                                )}
                               </div>
-                              <h4 className="text-base font-semibold text-[#1a1a1a] leading-snug">{a.title}</h4>
-                              {a.notes && (
-                                <p className="mt-2 text-sm text-[#6b6b6b] leading-relaxed line-clamp-2">{a.notes}</p>
-                              )}
                               {a.estimated_cost > 0 && (
-                                <div className="mt-3 pt-3 border-t border-dashed border-[#e8e2d9] text-right">
-                                  <span className="text-xs font-semibold text-[#1a1a1a] tabular-nums">
+                                <div className="shrink-0 text-right">
+                                  <div className="text-[10px] tracking-[0.16em] uppercase text-[#8b8378] mb-0.5">Chi phí</div>
+                                  <span className="text-sm font-semibold text-[#1a1a1a] tabular-nums">
                                     {formatVND(a.estimated_cost)}
                                   </span>
                                 </div>
