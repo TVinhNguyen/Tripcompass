@@ -22,7 +22,32 @@ import (
 const (
 	plannerCacheTTL    = 1 * time.Hour
 	plannerCachePrefix = "planner:v1:"
+	// maxTripDays caps how long a generated trip may be (F10). An unbounded
+	// date range would let an authenticated user drive an arbitrarily large —
+	// and, on the LLM path, paid — generation (denial-of-wallet) despite the
+	// per-IP/user rate limit.
+	maxTripDays = 30
 )
+
+// validateTripLength rejects malformed or absurdly long date ranges before the
+// request reaches the (potentially paid) planner (F10).
+func validateTripLength(startDate, endDate string) error {
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return fmt.Errorf("start_date invalid (expected YYYY-MM-DD)")
+	}
+	end, err := time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return fmt.Errorf("end_date invalid (expected YYYY-MM-DD)")
+	}
+	if end.Before(start) {
+		return fmt.Errorf("end_date must be on or after start_date")
+	}
+	if days := int(end.Sub(start).Hours()/24) + 1; days > maxTripDays {
+		return fmt.Errorf("trip length %d days exceeds the %d-day maximum", days, maxTripDays)
+	}
+	return nil
+}
 
 // PlannerHandler handles planner API routes.
 // Supports two modes controlled by cfg.UseLLMPlanner:
@@ -72,6 +97,12 @@ func cacheKey(req planner.GenerateRequest) string {
 func (h *PlannerHandler) Generate(c *gin.Context) {
 	var req planner.GenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// F10: bound the trip length so a huge date range can't fan out into an
+	// unbounded (paid) LLM generation.
+	if err := validateTripLength(req.StartDate, req.EndDate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

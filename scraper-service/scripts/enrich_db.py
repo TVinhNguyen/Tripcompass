@@ -67,7 +67,9 @@ _load_env_file(ROOT / ".env")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 LLM_MODEL      = os.getenv("LLM_MODEL_OPENROUTER", "tencent/hy3-preview:free")
 TAVILY_KEY     = os.getenv("TAVILY_API_KEY", "")
-DATABASE_URL   = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/tripcompass")
+DATABASE_URL   = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set — copy scraper-service/.env.example and set it")
 DB_SCHEMA      = os.getenv("DB_SCHEMA", "schema_travel")
 
 NOMINATIM_BASE = "https://nominatim.openstreetmap.org"

@@ -27,7 +27,7 @@ function VerifyContent() {
   useEffect(() => {
     if (!tokenParam) return
     setLoading(true)
-    apiFetch("/auth/verify", { method: "POST", body: { token: tokenParam }, auth: false })
+    apiFetch("/auth/verify", { method: "POST", body: { email, token: tokenParam }, auth: false })
       .then(() => setSuccess(true))
       .catch((err) => {
         const msg = err instanceof ApiError && err.status === 400
@@ -74,7 +74,7 @@ function VerifyContent() {
     setError("")
     setLoading(true)
     try {
-      await apiFetch("/auth/verify", { method: "POST", body: { token: code }, auth: false })
+      await apiFetch("/auth/verify", { method: "POST", body: { email, token: code }, auth: false })
       setSuccess(true)
       setTimeout(() => router.push("/auth/login"), 1500)
     } catch (err) {

@@ -100,9 +100,9 @@ export async function apiFetch<T = unknown>(
   }
 
   // Always send the HttpOnly session cookie on backend calls. `auth` is a
-  // policy flag (controls 401 redirect behaviour), not a transport flag —
-  // login/register/logout also need the cookie round-trip in dev where
-  // frontend and backend live on different origins.
+  // policy flag (controls 401 redirect behaviour), not a transport flag.
+  // Login/social/logout need the cookie round-trip in dev where frontend and
+  // backend live on different origins; register intentionally creates no cookie.
   const useCredentials = base === "backend";
 
   const res = await fetch(buildUrl(base, path, query), {

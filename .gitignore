@@ -95,3 +95,14 @@ docker-compose.override.yml
 test_tripadvisor_api.py
 tripadvisor_list.json
 tripadvisor_detail.json
+
+# =========================
+# Database dumps / backups — never commit (may contain PII, hashes, tokens)
+# =========================
+database/backups/
+*.sql.gz
+*.dump
+*.sql.bak
+
+# Frontend uses pnpm (see frontend/package.json packageManager + CI).
+frontend/package-lock.json

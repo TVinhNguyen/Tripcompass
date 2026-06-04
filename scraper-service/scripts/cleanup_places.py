@@ -43,7 +43,9 @@ def _load_env_file(path: Path) -> None:
 _load_env_file(ROOT / "scraper-service" / ".env")
 _load_env_file(ROOT / ".env")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/tripcompass")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set — copy scraper-service/.env.example and set it")
 DB_SCHEMA = os.getenv("DB_SCHEMA", "schema_travel")
 
 

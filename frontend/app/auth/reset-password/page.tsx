@@ -13,7 +13,8 @@ import { AuthLayout } from "@/components/auth-layout"
 import { Button } from "@/components/ui/button"
 import { apiFetch, ApiError } from "@/lib/api"
 
-const MIN_PASSWORD_LENGTH = 6
+const MIN_PASSWORD_LENGTH = 8
+const PASSWORD_HAS_LETTER_AND_NUMBER = /^(?=.*[A-Za-z])(?=.*\d)/
 
 function ResetPasswordContent() {
   const router = useRouter()
@@ -52,6 +53,10 @@ function ResetPasswordContent() {
 
     if (password.length < MIN_PASSWORD_LENGTH) {
       setError(`Mật khẩu phải có ít nhất ${MIN_PASSWORD_LENGTH} ký tự`)
+      return
+    }
+    if (!PASSWORD_HAS_LETTER_AND_NUMBER.test(password)) {
+      setError("Mật khẩu phải bao gồm chữ và số")
       return
     }
     if (password !== confirm) {

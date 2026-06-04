@@ -4,9 +4,30 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
+
+// weakSecret reports whether s is a known default/placeholder secret that must
+// never be used in a deployable environment (security finding F2).
+func weakSecret(s string) bool {
+	lowered := strings.ToLower(strings.TrimSpace(s))
+	switch lowered {
+	case "dev-secret-change-in-production", "change-me", "changeme",
+		"secret", "password", "your-secret-key", "test", "dev":
+		return true
+	}
+	// Also reject any value still carrying a "change me" placeholder marker, so
+	// templated prod values like "CHANGE_ME_USE_openssl_rand_base64_64" (which
+	// are long enough to pass the length gate) can never reach a live secret.
+	for _, marker := range []string{"change_me", "change-me", "changeme"} {
+		if strings.Contains(lowered, marker) {
+			return true
+		}
+	}
+	return false
+}
 
 type Config struct {
 	DBHost         string
@@ -70,6 +91,16 @@ func Load() *Config {
 
 	if cfg.JWTSecret == "" {
 		log.Fatal("JWT_SECRET is required")
+	}
+	// Security F2: refuse to start with a known default/placeholder secret or a
+	// secret too short to be safe for HMAC signing. This guarantees a dev
+	// template value (e.g. "dev-secret-change-in-production") can never reach a
+	// deployable environment. Generate one with: openssl rand -base64 48
+	if weakSecret(cfg.JWTSecret) {
+		log.Fatal("JWT_SECRET is a known default/placeholder value — set a strong random secret (openssl rand -base64 48)")
+	}
+	if len(cfg.JWTSecret) < 32 {
+		log.Fatalf("JWT_SECRET too short (%d chars) — require at least 32 characters of random entropy", len(cfg.JWTSecret))
 	}
 	// L5: parse JWT_EXPIRE_HOURS at startup (fail-fast, consistent with other int config)
 	cfg.JWTExpireHours = 72 // default 72h

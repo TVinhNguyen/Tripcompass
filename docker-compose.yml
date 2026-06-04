@@ -5,9 +5,16 @@ services:
     environment:
       POSTGRES_DB: tripcompass
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      # F2: no default secret in committed config. Compose interpolates this
+      # from the repo-root .env (see .env.example); it errors if unset rather
+      # than silently running with a known "postgres" password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (copy .env.example)}
     ports:
-      - "5432:5432"
+      # F2: bind to loopback only so the DB is reachable for local dev tools but
+      # never exposed on the host's external interfaces (defense if this compose
+      # is ever run on an internet-facing box). Prod uses docker-compose.prod.yml
+      # which keeps Postgres internal-only (expose:).
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
@@ -20,7 +27,8 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      # F2: loopback-only (see postgres above).
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -42,7 +50,8 @@ services:
     env_file:
       - ./planner-ai/.env
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/tripcompass
+      # F2: password injected from .env, not hardcoded.
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/tripcompass
       REDIS_URL: redis://redis:6379
       DB_SCHEMA: schema_travel
     volumes:

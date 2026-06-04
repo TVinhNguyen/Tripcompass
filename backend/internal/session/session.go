@@ -113,10 +113,10 @@ func (r *Resolver) FromRequest(c *gin.Context) (*Session, error) {
 
 // FromToken resolves a raw token string into a Session. Used by entry
 // points that extract the token themselves — e.g. the WebSocket handshake,
-// which accepts the token in 3 places (cookie, Sec-WebSocket-Protocol,
-// query param). Same active+admin rules as FromRequest.
+// which accepts the token via cookie or Sec-WebSocket-Protocol. Same
+// active+admin rules as FromRequest.
 func (r *Resolver) FromToken(tokenStr string) (*Session, error) {
-	uid, _, err := r.parseClaims(tokenStr)
+	uid, _, tv, err := r.parseClaims(tokenStr)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +124,20 @@ func (r *Resolver) FromToken(tokenStr string) (*Session, error) {
 	if err := r.db.Where("id = ?", uid).First(&u).Error; err != nil {
 		return nil, ErrUserNotFound
 	}
+	// F9: token_version mismatch ⇒ the token was revoked by a logout or
+	// password change since it was issued. Reject it.
+	if tv != u.TokenVersion {
+		return nil, ErrInvalidToken
+	}
 	if u.Status == models.UserStatusSuspended {
 		return nil, ErrUserSuspended
+	}
+	// F6: a local account that never verified its email must not be able to
+	// use a token (defense-in-depth — Register no longer issues one, but an
+	// older/leaked token must also be rejected). Social accounts are
+	// provider-verified, so this only gates provider=="local".
+	if u.Provider == "local" && !u.IsVerified {
+		return nil, ErrUnverified
 	}
 	return r.fromUser(&u), nil
 }
@@ -205,9 +217,11 @@ func tokenFromGin(c *gin.Context) string {
 	return ""
 }
 
-// parseClaims verifies the HMAC signature and pulls (sub, email). Email
-// is best-effort — older tokens might lack it.
-func (r *Resolver) parseClaims(tokenStr string) (string, string, error) {
+// parseClaims verifies the HMAC signature and pulls (sub, email, tokenVersion).
+// Email is best-effort — older tokens might lack it. tokenVersion ("tv") is 0
+// for legacy tokens issued before F9, which matches a fresh user's version so
+// existing sessions survive the rollout.
+func (r *Resolver) parseClaims(tokenStr string) (string, string, int, error) {
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
@@ -215,18 +229,19 @@ func (r *Resolver) parseClaims(tokenStr string) (string, string, error) {
 		return []byte(r.jwtSecret), nil
 	})
 	if err != nil || !token.Valid {
-		return "", "", ErrInvalidToken
+		return "", "", 0, ErrInvalidToken
 	}
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return "", "", ErrInvalidToken
+		return "", "", 0, ErrInvalidToken
 	}
 	sub, _ := claims["sub"].(string)
 	if sub == "" {
-		return "", "", ErrInvalidToken
+		return "", "", 0, ErrInvalidToken
 	}
 	email, _ := claims["email"].(string)
-	return sub, email, nil
+	tv, _ := claims["tv"].(float64) // JSON numbers decode to float64
+	return sub, email, int(tv), nil
 }
 
 // HTTPStatus maps a session error to the appropriate gin response status.

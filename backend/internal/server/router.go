@@ -104,7 +104,6 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 		api.GET("/itineraries/:id/public", middleware.OptionalJWTAuth(sessions), itineraryHandler.GetPublic)
 
 		api.GET("/knowledge-base/lookup", lookupHandler.Lookup)
-		api.POST("/planner/generate", middleware.RateLimitRedis(rdb, 30, 60), plannerHandler.Generate)
 		api.GET("/ws/itinerary/:id", wsHandler.HandleWebSocket)
 		// Per-user notification channel. Same JWT-via-subprotocol auth path
 		// as the itinerary socket, but no itinerary param — the "room" is
@@ -148,6 +147,12 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 			protected.GET("/ai-chat/sessions/:id/history", aiChatHandler.GetHistory)
 			protected.DELETE("/ai-chat/sessions/:id", aiChatHandler.DeleteSession)
 			protected.POST("/ai-chat/stream", middleware.RateLimitRedis(rdb, 30, 60), aiChatHandler.Stream)
+
+			// F10: LLM itinerary generation is resource-intensive (paid LLM
+			// calls). Moved behind JWTAuth so anonymous users cannot drive
+			// "denial-of-wallet" abuse. Per-IP rate limit kept; per-user/daily
+			// quotas should be layered on if cost pressure grows.
+			protected.POST("/planner/generate", middleware.RateLimitRedis(rdb, 30, 60), plannerHandler.Generate)
 
 			// Master-catalog writes: any logged-in user must NOT be able to
 			// mutate places/combos/knowledge-base. Gated by admin-email

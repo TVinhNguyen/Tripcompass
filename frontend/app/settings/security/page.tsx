@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button"
 import { apiFetch } from "@/lib/api"
 import { RequireAuth } from "@/components/require-auth"
 
+const PASSWORD_HAS_LETTER_AND_NUMBER = /^(?=.*[A-Za-z])(?=.*\d)/
+
 export default function SecurityPage() {
   return (
     <RequireAuth>
@@ -33,6 +35,10 @@ function SecurityContent() {
     setError("")
     if (newPw.length < 8) {
       setError("Mật khẩu mới phải có ít nhất 8 ký tự")
+      return
+    }
+    if (!PASSWORD_HAS_LETTER_AND_NUMBER.test(newPw)) {
+      setError("Mật khẩu mới phải bao gồm chữ và số")
       return
     }
     if (newPw !== confirmPw) {

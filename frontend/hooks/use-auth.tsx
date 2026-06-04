@@ -3,9 +3,10 @@
 // Source of truth: docs/integration/06-FRONTEND-INFRA.md §2
 //                  docs/integration/02-AUTH-FLOW.md
 //
-// Auth is cookie-based: the backend sets an HttpOnly cookie on login/register
-// /google/facebook, so JavaScript never holds the token. apiFetch sends the
-// cookie via `credentials: "include"`. Logout calls the backend to clear it.
+// Auth is cookie-based: the backend sets an HttpOnly cookie on login and social
+// login only. Register intentionally does not create a session until the email
+// is verified. apiFetch sends the cookie via `credentials: "include"`.
+// Logout calls the backend to clear it.
 // =============================================================================
 
 "use client";

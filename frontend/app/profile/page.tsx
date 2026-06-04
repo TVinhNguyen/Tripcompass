@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
 type Tab = "profile" | "itineraries" | "saved" | "security"
+const PASSWORD_HAS_LETTER_AND_NUMBER = /^(?=.*[A-Za-z])(?=.*\d)/
 
 function ProfileContent() {
   const { user: authUser, refresh: refreshAuth } = useAuth()
@@ -95,6 +96,7 @@ function ProfileContent() {
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) { toast.error("Mật khẩu xác nhận không khớp"); return }
     if (newPassword.length < 8) { toast.error("Mật khẩu mới phải ít nhất 8 ký tự"); return }
+    if (!PASSWORD_HAS_LETTER_AND_NUMBER.test(newPassword)) { toast.error("Mật khẩu mới phải bao gồm chữ và số"); return }
     setChangingPass(true)
     try {
       await apiFetch("/user/change-password", {
