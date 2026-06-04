@@ -382,7 +382,7 @@ func verificationEmailBody(fullName, token string) (string, string) {
 
 Mã xác minh TripCompass của bạn là: %s
 
-Mã này có hiệu lực trong 24 giờ. Nếu bạn không tạo tài khoản TripCompass, hãy bỏ qua email này.
+Mã này có hiệu lực trong 15 phút. Nếu bạn không tạo tài khoản TripCompass, hãy bỏ qua email này.
 
 Trân trọng,
 Đội ngũ TripCompass`, displayName, token)
@@ -399,7 +399,7 @@ Trân trọng,
 </head>
 <body style="margin:0; padding:0; background:#f5f7f4; color:#1f2a24; font-family:Arial, Helvetica, sans-serif;">
   <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
-    Mã xác minh TripCompass của bạn có hiệu lực trong 24 giờ.
+    Mã xác minh TripCompass của bạn có hiệu lực trong 15 phút.
   </div>
   <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="background:#f5f7f4; padding:32px 12px;">
     <tr>
@@ -427,7 +427,7 @@ Trân trọng,
           </tr>
           <tr>
             <td style="padding:0 32px 28px 32px;">
-              <p style="margin:0; font-size:14px; line-height:22px; color:#4d5c51;">Mã này có hiệu lực trong <strong>24 giờ</strong>. Nếu bạn không tạo tài khoản TripCompass, hãy bỏ qua email này.</p>
+              <p style="margin:0; font-size:14px; line-height:22px; color:#4d5c51;">Mã này có hiệu lực trong <strong>15 phút</strong>. Nếu bạn không tạo tài khoản TripCompass, hãy bỏ qua email này.</p>
             </td>
           </tr>
           <tr>

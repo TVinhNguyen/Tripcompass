@@ -70,10 +70,13 @@ func (h *WSHandler) newUpgrader() *websocket.Upgrader {
 
 // tokenFromRequest extracts the JWT from the request. Order:
 //  1. HttpOnly cookie "token" — primary path now that auth is cookie-based.
-//  2. Sec-WebSocket-Protocol ("bearer, <jwt>") — kept for non-browser clients
-//     and for back-compat with already-connected sessions.
-//  3. ?token= query param — legacy fallback; a warn at the caller flags it.
-func tokenFromRequest(r *http.Request, q string) string {
+//  2. Sec-WebSocket-Protocol ("bearer, <jwt>") — for non-browser clients.
+//
+// F12: the ?token= query-param fallback was removed. Tokens in URLs leak into
+// browser history, proxy/access logs, and monitoring, where they can be
+// replayed. Browsers send the HttpOnly cookie automatically on same-origin WS
+// handshakes; non-browser clients use Sec-WebSocket-Protocol.
+func tokenFromRequest(r *http.Request) string {
 	if cookie, err := r.Cookie("token"); err == nil && cookie.Value != "" {
 		return cookie.Value
 	}
@@ -87,17 +90,14 @@ func tokenFromRequest(r *http.Request, q string) string {
 			return part
 		}
 	}
-	return q
+	return ""
 }
 
 // HandleWebSocket upgrades HTTP → WebSocket.
 // Route: GET /api/v1/ws/itinerary/:id (token via Sec-WebSocket-Protocol).
 func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	itineraryID := c.Param("id")
-	tokenStr := tokenFromRequest(c.Request, c.Query("token"))
-	if c.Query("token") != "" && c.Request.Header.Get("Sec-WebSocket-Protocol") == "" {
-		slog.Warn("ws: legacy token query param used — migrate to Sec-WebSocket-Protocol")
-	}
+	tokenStr := tokenFromRequest(c.Request)
 
 	if tokenStr == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing credentials"})
@@ -148,7 +148,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 //
 // Route: GET /api/v1/ws/user (token via Sec-WebSocket-Protocol).
 func (h *WSHandler) HandleUserWebSocket(c *gin.Context) {
-	tokenStr := tokenFromRequest(c.Request, c.Query("token"))
+	tokenStr := tokenFromRequest(c.Request)
 	if tokenStr == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing credentials"})
 		return

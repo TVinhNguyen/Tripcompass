@@ -37,12 +37,50 @@ func (s *ItineraryService) WithTx(tx *gorm.DB) *ItineraryService {
 	return &ItineraryService{db: tx, vc: s.vc}
 }
 
+// maxBudgetVND caps the itinerary budget so absurd/overflow values can't poison
+// downstream cost math (F13). 100 billion VND is far above any real trip.
+const maxBudgetVND = 100_000_000_000
+
+// containsHTML reports whether s carries angle-bracket markup. Short text
+// fields (title, destination, tags) must not contain HTML — it serves no
+// purpose and risks stored XSS if ever rendered unsafely (F11).
+func containsHTML(s string) bool {
+	return strings.ContainsAny(s, "<>")
+}
+
+// validateBudget enforces the F13 budget business rule: 0 ≤ budget ≤ max.
+func validateBudget(b float64) error {
+	if b < 0 {
+		return fmt.Errorf("%w: budget cannot be negative", apperror.ErrInvalidInput)
+	}
+	if b > maxBudgetVND {
+		return fmt.Errorf("%w: budget exceeds the allowed maximum", apperror.ErrInvalidInput)
+	}
+	return nil
+}
+
+// validateTextFields rejects HTML in the itinerary's short text fields (F11).
+func validateTextFields(title, destination string, tags []string) error {
+	if containsHTML(title) {
+		return fmt.Errorf("%w: title must not contain HTML", apperror.ErrInvalidInput)
+	}
+	if containsHTML(destination) {
+		return fmt.Errorf("%w: destination must not contain HTML", apperror.ErrInvalidInput)
+	}
+	for _, t := range tags {
+		if containsHTML(t) {
+			return fmt.Errorf("%w: tags must not contain HTML", apperror.ErrInvalidInput)
+		}
+	}
+	return nil
+}
+
 // ---------- DTOs ----------
 
 type CreateItineraryInput struct {
 	Title          string   `json:"title" binding:"required"`
 	Destination    string   `json:"destination" binding:"required"`
-	Budget         float64  `json:"budget" binding:"required,gt=0"`
+	Budget         float64  `json:"budget" binding:"required,gte=0"`
 	StartDate      string   `json:"start_date" binding:"required"`
 	EndDate        string   `json:"end_date" binding:"required"`
 	GuestCount     int      `json:"guest_count"`
@@ -101,6 +139,15 @@ func (s *ItineraryService) Create(ownerID string, input CreateItineraryInput) (*
 	uid, err := uuid.Parse(ownerID)
 	if err != nil {
 		return nil, errors.New("invalid user id")
+	}
+
+	// F11 + F13: reject HTML in text fields and cap the budget. (Binding already
+	// enforces budget >= 0 on create; this adds the upper bound.)
+	if err := validateTextFields(input.Title, input.Destination, input.Tags); err != nil {
+		return nil, err
+	}
+	if err := validateBudget(input.Budget); err != nil {
+		return nil, err
 	}
 
 	budgetCat := "MODERATE"
@@ -185,12 +232,21 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 
 	updates := map[string]interface{}{}
 	if input.Title != nil {
+		if containsHTML(*input.Title) { // F11
+			return nil, fmt.Errorf("%w: title must not contain HTML", apperror.ErrInvalidInput)
+		}
 		updates["title"] = *input.Title
 	}
 	if input.Destination != nil {
+		if containsHTML(*input.Destination) { // F11
+			return nil, fmt.Errorf("%w: destination must not contain HTML", apperror.ErrInvalidInput)
+		}
 		updates["destination"] = *input.Destination
 	}
 	if input.Budget != nil {
+		if err := validateBudget(*input.Budget); err != nil { // F13: was unbounded — accepted negatives
+			return nil, err
+		}
 		updates["budget"] = *input.Budget
 	}
 	if input.GuestCount != nil {
@@ -203,14 +259,23 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 		updates["cover_image_url"] = *input.CoverImageURL
 	}
 	if input.Tags != nil {
+		for _, t := range input.Tags { // F11
+			if containsHTML(t) {
+				return nil, fmt.Errorf("%w: tags must not contain HTML", apperror.ErrInvalidInput)
+			}
+		}
 		updates["tags"] = input.Tags
 	}
+	// F13: validate the date range against the *effective* values (new where
+	// provided, existing otherwise) so a partial update can't leave end < start.
+	effectiveStart, effectiveEnd := it.StartDate, it.EndDate
 	if input.StartDate != nil {
 		t, err := parseDate(*input.StartDate)
 		if err != nil {
 			return nil, fmt.Errorf("%w: start_date invalid (expected YYYY-MM-DD)", apperror.ErrInvalidInput)
 		}
 		updates["start_date"] = t
+		effectiveStart = t
 	}
 	if input.EndDate != nil {
 		t, err := parseDate(*input.EndDate)
@@ -218,6 +283,10 @@ func (s *ItineraryService) Update(id, ownerID string, input UpdateItineraryInput
 			return nil, fmt.Errorf("%w: end_date invalid (expected YYYY-MM-DD)", apperror.ErrInvalidInput)
 		}
 		updates["end_date"] = t
+		effectiveEnd = t
+	}
+	if effectiveEnd.Time.Before(effectiveStart.Time) {
+		return nil, fmt.Errorf("%w: end_date must be on or after start_date", apperror.ErrInvalidInput)
 	}
 
 	if err := s.db.Model(&it).Updates(updates).Error; err != nil {

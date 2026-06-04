@@ -26,7 +26,7 @@ Usage:
 Env (đọc từ scraper-service/.env hoặc môi trường):
   TRIPADVISOR_API_KEY            – omkar Travel Data API key (cho /search + /list)
   TRIPADVISOR_OFFICIAL_API_KEY   – official TripAdvisor Content API key (cho /details + /photos)
-  DATABASE_URL                   – default postgresql://postgres:postgres@localhost:5432/tripcompass
+  DATABASE_URL                   – required, e.g. postgresql://postgres:<password>@localhost:5432/tripcompass
   DB_SCHEMA                      – default schema_travel
 """
 from __future__ import annotations
@@ -69,7 +69,9 @@ _load_env_file(ROOT / ".env")
 
 OMKAR_KEY    = os.getenv("TRIPADVISOR_API_KEY", "")
 TA_KEY       = os.getenv("TRIPADVISOR_OFFICIAL_API_KEY", "")
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/tripcompass")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set — copy scraper-service/.env.example and set it")
 DB_SCHEMA    = os.getenv("DB_SCHEMA", "schema_travel")
 
 OMKAR_BASE   = "https://travel-data-api.omkar.cloud/travel"

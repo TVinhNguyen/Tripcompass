@@ -15,12 +15,18 @@ from app.services.plan_cache import flush_all_plans, flush_plans_by_destination
 from app.services.session_manager import flush_all_sessions
 
 
+# Known placeholder values that must never gate a real admin endpoint (F2).
+_WEAK_TOKENS = {"change-me", "changeme", "secret", "admin", "token", "test"}
+
+
 def require_cache_admin(x_admin_token: str | None = Header(default=None)) -> None:
     token = config.CACHE_ADMIN_TOKEN.strip()
-    if not token:
+    if not token or token.lower() in _WEAK_TOKENS or len(token) < 16:
+        # Treat a missing OR weak/default token as "not configured" so the admin
+        # surface stays closed until a strong random token is set.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="CACHE_ADMIN_TOKEN is not configured.",
+            detail="CACHE_ADMIN_TOKEN is not configured with a strong value.",
         )
     if not x_admin_token or not secrets.compare_digest(x_admin_token, token):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin token.")

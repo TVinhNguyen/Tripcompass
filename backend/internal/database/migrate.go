@@ -640,6 +640,25 @@ END $$;`,
 				return nil
 			},
 		},
+		{
+			// Security F7 + F9: per-account OTP attempt counter (lockout) and a
+			// token_version used to revoke all JWTs on logout / password change.
+			ID: "202606030020_auth_hardening_columns",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.Exec(`
+					ALTER TABLE schema_travel.users
+					    ADD COLUMN IF NOT EXISTS verify_attempts INT NOT NULL DEFAULT 0,
+					    ADD COLUMN IF NOT EXISTS token_version   INT NOT NULL DEFAULT 0;
+				`).Error
+			},
+			Rollback: func(tx *gorm.DB) error {
+				return tx.Exec(`
+					ALTER TABLE schema_travel.users
+					    DROP COLUMN IF EXISTS verify_attempts,
+					    DROP COLUMN IF EXISTS token_version;
+				`).Error
+			},
+		},
 	})
 
 	return m.Migrate()

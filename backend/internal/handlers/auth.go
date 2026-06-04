@@ -29,7 +29,7 @@ func NewAuthHandler(db *gorm.DB, cfg *config.Config, pub ws.Publisher, sessions 
 	if pub != nil {
 		collabSvc = collabSvc.WithPublisher(pub)
 	}
-	authSvc := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpireHours, emailSvc, cfg.GoogleClientID, cfg.FacebookAppSecret, sessions).
+	authSvc := services.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpireHours, emailSvc, cfg.GoogleClientID, cfg.FacebookAppID, cfg.FacebookAppSecret, sessions).
 		WithCollaboratorService(collabSvc)
 
 	// Cookie attributes are decided once at startup so handlers don't have
@@ -102,6 +102,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // POST /api/v1/auth/logout — clear the session cookie. Public so an expired
 // session can still log itself out cleanly.
 func (h *AuthHandler) Logout(c *gin.Context) {
+	// F9: revoke server-side so the JWT can't be replayed after logout. Best
+	// effort — if the cookie token is missing/invalid there is nothing to
+	// revoke and we still clear the cookie. This is a global revoke (all of
+	// the user's sessions), which is the safe default for a logout action.
+	if s, err := h.sessions.FromRequest(c); err == nil {
+		_ = h.svc.RevokeTokens(s.UserID)
+	}
 	h.clearAuthCookie(c)
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
@@ -124,14 +131,17 @@ func (h *AuthHandler) Me(c *gin.Context) {
 // POST /api/v1/auth/verify
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	var body struct {
+		Email string `json:"email" binding:"required,email"`
 		Token string `json:"token" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.svc.VerifyEmail(body.Token); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired verification token"})
+	// F7: verification is bound to the email so the OTP can't be brute-forced
+	// across all unverified accounts. Surface the service's (generic) message.
+	if err := h.svc.VerifyEmail(body.Email, body.Token); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "email verified successfully"})
@@ -175,7 +185,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var body struct {
 		Token       string `json:"token"        binding:"required"`
-		NewPassword string `json:"new_password" binding:"required,min=6"`
+		NewPassword string `json:"new_password" binding:"required,min=8"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

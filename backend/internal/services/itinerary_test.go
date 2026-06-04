@@ -536,3 +536,104 @@ func createTestUserWith(t *testing.T, db *gorm.DB, email string) models.User {
 	}
 	return user
 }
+
+// ─── F11 / F13 input validation ──────────────────────────────────────────────
+
+// TestItineraryService_Create_Validation pins F13 (budget bounds) and F11
+// (no HTML in text fields) on the create path.
+func TestItineraryService_Create_Validation(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewItineraryService(db)
+	user := createTestUser(t, db)
+
+	base := func() CreateItineraryInput {
+		return CreateItineraryInput{
+			Title:       "Trip",
+			Destination: "Da Nang",
+			Budget:      1_000_000,
+			StartDate:   "2025-06-15",
+			EndDate:     "2025-06-20",
+		}
+	}
+
+	t.Run("negative budget rejected (F13)", func(t *testing.T) {
+		in := base()
+		in.Budget = -1
+		_, err := svc.Create(user.ID.String(), in)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, apperror.ErrInvalidInput))
+		assert.Contains(t, err.Error(), "budget cannot be negative")
+	})
+
+	t.Run("budget above the cap rejected (F13)", func(t *testing.T) {
+		in := base()
+		in.Budget = maxBudgetVND + 1
+		_, err := svc.Create(user.ID.String(), in)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, apperror.ErrInvalidInput))
+		assert.Contains(t, err.Error(), "budget exceeds")
+	})
+
+	t.Run("HTML in title rejected (F11)", func(t *testing.T) {
+		in := base()
+		in.Title = "<script>alert(1)</script>"
+		_, err := svc.Create(user.ID.String(), in)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, apperror.ErrInvalidInput))
+		assert.Contains(t, err.Error(), "title must not contain HTML")
+	})
+
+	t.Run("HTML in tags rejected (F11)", func(t *testing.T) {
+		in := base()
+		in.Tags = []string{"ok", "<img src=x onerror=alert(1)>"}
+		_, err := svc.Create(user.ID.String(), in)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, apperror.ErrInvalidInput))
+		assert.Contains(t, err.Error(), "tags must not contain HTML")
+	})
+}
+
+// TestItineraryService_Update_Validation pins F13/F11 on the update path —
+// the update endpoint previously accepted unbounded/negative budgets and HTML.
+func TestItineraryService_Update_Validation(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewItineraryService(db)
+	user := createTestUser(t, db)
+	it := createTestItinerary(t, db, user.ID)
+	id, owner := it.ID.String(), user.ID.String()
+
+	neg := -5.0
+	t.Run("negative budget rejected (F13)", func(t *testing.T) {
+		_, err := svc.Update(id, owner, UpdateItineraryInput{Budget: &neg})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, apperror.ErrInvalidInput))
+		assert.Contains(t, err.Error(), "budget cannot be negative")
+	})
+
+	over := float64(maxBudgetVND) + 1
+	t.Run("budget above the cap rejected (F13)", func(t *testing.T) {
+		_, err := svc.Update(id, owner, UpdateItineraryInput{Budget: &over})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, apperror.ErrInvalidInput))
+		assert.Contains(t, err.Error(), "budget exceeds")
+	})
+
+	html := "<b>oops</b>"
+	t.Run("HTML in destination rejected (F11)", func(t *testing.T) {
+		_, err := svc.Update(id, owner, UpdateItineraryInput{Destination: &html})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, apperror.ErrInvalidInput))
+		assert.Contains(t, err.Error(), "destination must not contain HTML")
+	})
+
+	reversedStart, reversedEnd := "2025-08-20", "2025-08-10"
+	t.Run("reversed date range rejected (F13)", func(t *testing.T) {
+		_, err := svc.Update(id, owner, UpdateItineraryInput{
+			StartDate: &reversedStart,
+			EndDate:   &reversedEnd,
+		})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, apperror.ErrInvalidInput))
+		assert.Contains(t, err.Error(), "end_date must be on or after start_date")
+	})
+}

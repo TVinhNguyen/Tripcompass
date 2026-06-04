@@ -29,7 +29,7 @@ type UpdateProfileInput struct {
 
 type ChangePasswordInput struct {
 	OldPassword string `json:"old_password" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required,min=6"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,6 +93,10 @@ func (s *UserService) ChangePassword(userID string, input ChangePasswordInput) e
 	if input.OldPassword == input.NewPassword {
 		return errors.New("new password must be different from current password")
 	}
+	// F5: enforce the shared password policy (≥8 chars, letters + digits).
+	if err := validatePassword(input.NewPassword); err != nil {
+		return err
+	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -100,7 +104,12 @@ func (s *UserService) ChangePassword(userID string, input ChangePasswordInput) e
 	}
 
 	hashStr := string(hash)
-	return s.db.Model(&u).Update("password_hash", hashStr).Error
+	// F9: bump token_version so existing JWTs are revoked after a password
+	// change — old/stolen sessions must stop working.
+	return s.db.Model(&u).Updates(map[string]interface{}{
+		"password_hash": hashStr,
+		"token_version": gorm.Expr("token_version + 1"),
+	}).Error
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

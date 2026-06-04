@@ -2,6 +2,12 @@ module tripcompass-backend
 
 go 1.25.0
 
+// F3: pin the build toolchain to a Go patch that fixes the reachable
+// crypto/x509 + net/http stdlib advisories (GO-2026-4599/4600 et al.). With
+// GOTOOLCHAIN=auto (the default) `go build`/`go test`/govulncheck download and
+// use exactly this version regardless of the locally-installed go.
+toolchain go1.26.4
+
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-gormigrate/gormigrate/v2 v2.1.5
@@ -12,7 +18,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/crypto v0.49.0
+	golang.org/x/crypto v0.51.0
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1
@@ -56,10 +62,10 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/arch v0.22.0 // indirect
-	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/driver/mysql v1.5.6 // indirect

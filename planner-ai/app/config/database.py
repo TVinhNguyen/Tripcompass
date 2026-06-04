@@ -5,11 +5,17 @@ Loaded after env.py so os.environ already contains .env values.
 """
 import os
 
-# Postgres (shared with the Go backend's schema)
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@postgres:5432/tripcompass",
-)
+# Postgres (shared with the Go backend's schema).
+# F2: no hardcoded credential default — DATABASE_URL must be supplied by the
+# environment (docker-compose injects it). A baked-in postgres:postgres URL is a
+# default secret in deployable config, and it only resolves inside the compose
+# network anyway, so requiring it costs nothing and fails loudly when unset.
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is required — set it in the environment "
+        "(e.g. planner-ai/.env or docker-compose). No insecure default is provided."
+    )
 DB_SCHEMA = os.environ.get("DB_SCHEMA", "schema_travel")
 
 # Redis (shared with the Go backend)

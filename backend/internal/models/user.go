@@ -35,6 +35,14 @@ type User struct {
 	// same time without the second action invalidating the first).
 	ResetToken           *string    `gorm:"column:reset_token" json:"-"`
 	ResetTokenExpiresAt  *time.Time `gorm:"column:reset_token_expires_at" json:"-"`
+	// VerifyAttempts counts failed OTP guesses for the current verify token
+	// (security F7). The token is invalidated once this exceeds the lockout
+	// threshold, forcing a fresh resend — defeats slow/distributed brute force.
+	VerifyAttempts int `gorm:"column:verify_attempts;not null;default:0" json:"-"`
+	// TokenVersion is embedded in every issued JWT (claim "tv"). Logout and
+	// password change increment it, which instantly invalidates all previously
+	// issued tokens (security F9 — server-side revocation without a denylist).
+	TokenVersion int `gorm:"column:token_version;not null;default:0" json:"-"`
 	Role                  string     `gorm:"column:role;not null;default:user" json:"role"`
 	Status                string     `gorm:"column:status;not null;default:active" json:"status"`
 	CreatedAt             time.Time  `json:"created_at"`
