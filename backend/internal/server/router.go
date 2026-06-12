@@ -136,6 +136,7 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 			protected.GET("/collaborators/pending", collabHandler.ListPending)
 			protected.POST("/collaborators/:id/accept", collabHandler.Accept)
 			protected.POST("/collaborators/:id/decline", collabHandler.Decline)
+			protected.PATCH("/collaborators/:id/role", collabHandler.UpdateRole)
 			protected.DELETE("/collaborators/:id", collabHandler.Remove)
 
 			protected.POST("/activities", activityHandler.Create)
@@ -174,6 +175,8 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 		admin := api.Group("/admin")
 		admin.Use(middleware.JWTAuth(sessions), middleware.RequireAdmin())
 		{
+			admin.GET("/planner/cache", plannerHandler.CacheStats)
+			admin.DELETE("/planner/cache/key", plannerHandler.DeleteCacheKey)
 			admin.DELETE("/planner/cache", plannerHandler.FlushCache)
 
 			admin.GET("/stats", adminStatsHandler.Stats)

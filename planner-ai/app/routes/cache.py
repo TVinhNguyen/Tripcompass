@@ -8,10 +8,16 @@ Manages two cache categories:
 """
 import secrets
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from app import config
-from app.services.plan_cache import flush_all_plans, flush_plans_by_destination
+from app.services.plan_cache import (
+    PLAN_CACHE_PREFIX,
+    delete_plan_cache_key,
+    flush_all_plans,
+    flush_plans_by_destination,
+    list_plan_cache,
+)
 from app.services.session_manager import flush_all_sessions
 
 
@@ -33,6 +39,21 @@ def require_cache_admin(x_admin_token: str | None = Header(default=None)) -> Non
 
 
 router = APIRouter(prefix="/cache", tags=["cache"], dependencies=[Depends(require_cache_admin)])
+
+
+@router.get("/stats")
+async def cache_stats():
+    """Return read-only plan cache stats for the admin dashboard."""
+    return await list_plan_cache()
+
+
+@router.delete("/key")
+async def delete_cache_key(key: str = Query(..., min_length=1)):
+    """Delete one plan cache key."""
+    if not key.startswith(PLAN_CACHE_PREFIX):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only plan cache keys can be deleted.")
+    deleted = await delete_plan_cache_key(key)
+    return {"deleted": deleted, "key": key}
 
 
 @router.delete("")

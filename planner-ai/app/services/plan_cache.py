@@ -15,6 +15,7 @@ from app.services.normalize import (
 from app import config
 
 CACHE_KEY_VERSION = "v2"
+PLAN_CACHE_PREFIX = f"plan:{CACHE_KEY_VERSION}:"
 
 
 def _get(request: Any, name: str, default: Any = None) -> Any:
@@ -108,9 +109,120 @@ async def _scan_and_delete(pattern: str) -> int:
 
 async def flush_all_plans() -> int:
     """Delete all plan cache keys."""
-    return await _scan_and_delete("plan:*")
+    return await _scan_and_delete(f"{PLAN_CACHE_PREFIX}*")
 
 
 async def flush_plans_by_destination(destination: str) -> int:
     """Delete plan cache keys for a specific destination."""
     return await _scan_and_delete(f"plan:{CACHE_KEY_VERSION}:{destination_cache_scope(destination)}:*")
+
+
+async def delete_plan_cache_key(key: str) -> int:
+    """Delete one plan cache key. Refuse non-plan keys for safety."""
+    if not key.startswith(PLAN_CACHE_PREFIX):
+        return 0
+    client = await get_redis()
+    return await client.delete(key)
+
+
+def _format_bytes(n: int) -> str:
+    unit = 1024
+    if n < unit:
+        return f"{n} B"
+    value = float(n)
+    for suffix in ["KB", "MB", "GB", "TB"]:
+        value /= unit
+        if value < unit:
+            return f"{value:.1f} {suffix}"
+    return f"{value:.1f} PB"
+
+
+def _ttl_score(ttl_seconds: int) -> float:
+    if ttl_seconds <= 0 or config.CACHE_TTL <= 0:
+        return 0.0
+    return min(1.0, ttl_seconds / config.CACHE_TTL)
+
+
+def _field(payload: dict[str, Any], name: str) -> str:
+    value = payload.get(name)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _nested_field(payload: dict[str, Any], parent: str, child: str) -> str:
+    value = payload.get(parent)
+    if isinstance(value, dict):
+        return _field(value, child)
+    return ""
+
+
+def _describe_plan_entry(key: str, raw: str | None) -> str:
+    if raw:
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            destination = (
+                _field(payload, "destination")
+                or _nested_field(payload, "plan", "destination")
+                or _nested_field(payload, "final_plan", "destination")
+            )
+            if destination:
+                return f"planner-ai plan: {destination}"
+
+    short_key = key[-18:] if len(key) > 18 else key
+    return f"planner-ai cache {short_key}"
+
+
+async def list_plan_cache(limit: int = 100) -> dict[str, Any]:
+    """Return read-only stats for plan cache entries."""
+    client = await get_redis()
+    entries: list[dict[str, Any]] = []
+    total_entries = 0
+    total_bytes = 0
+    ttl_total = 0
+    ttl_count = 0
+    cursor = 0
+
+    while True:
+        cursor, keys = await client.scan(cursor, match=f"{PLAN_CACHE_PREFIX}*", count=100)
+        for key in keys:
+            total_entries += 1
+
+            size = await client.strlen(key)
+            total_bytes += size
+
+            ttl_seconds = await client.ttl(key)
+            if ttl_seconds > 0:
+                ttl_total += ttl_seconds
+                ttl_count += 1
+
+            if len(entries) < limit:
+                raw = await client.get(key)
+                entries.append({
+                    "id": key,
+                    "key": key,
+                    "query": _describe_plan_entry(key, raw),
+                    "source": "planner-ai",
+                    "hits": 0,
+                    "last_used": "Không theo dõi",
+                    "size": _format_bytes(size),
+                    "size_bytes": size,
+                    "score": _ttl_score(ttl_seconds),
+                    "ttl_seconds": ttl_seconds,
+                })
+
+        if cursor == 0:
+            break
+
+    return {
+        "stats": {
+            "hit_rate": 0,
+            "total_entries": total_entries,
+            "total_bytes": total_bytes,
+            "tokens_saved": 0,
+            "avg_response_ms": 0,
+            "avg_ttl_seconds": ttl_total // ttl_count if ttl_count else 0,
+        },
+        "queries": entries,
+    }

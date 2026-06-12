@@ -185,7 +185,7 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
               users={onlineUsers.map((u) => ({ user_id: u.id, full_name: u.name }))}
               className="mr-1"
             />
-            <CollaboratorsPanel collaborators={onlineUsers} itineraryId={id} />
+            <CollaboratorsPanel collaborators={onlineUsers} itineraryId={id} ownerId={itinerary?.owner_id} />
           </div>
 
           <button

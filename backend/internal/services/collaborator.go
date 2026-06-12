@@ -47,6 +47,10 @@ type InviteInput struct {
 	Role  string `json:"role"` // EDITOR | VIEWER, default VIEWER
 }
 
+type UpdateCollaboratorRoleInput struct {
+	Role string `json:"role" binding:"required"` // EDITOR | VIEWER
+}
+
 func validRole(role string) bool {
 	return role == "EDITOR" || role == "VIEWER"
 }
@@ -262,6 +266,44 @@ func (s *CollaboratorService) List(itineraryID, requesterID string) ([]models.Co
 		return nil, err
 	}
 	return list, nil
+}
+
+// UpdateRole changes a collaborator's permission on an itinerary.
+// Only the itinerary owner can change collaborator roles.
+func (s *CollaboratorService) UpdateRole(collabID, requesterID string, input UpdateCollaboratorRoleInput) (*models.Collaborator, error) {
+	role := strings.ToUpper(strings.TrimSpace(input.Role))
+	if !validRole(role) {
+		return nil, fmt.Errorf("%w: role must be EDITOR or VIEWER", apperror.ErrInvalidInput)
+	}
+
+	var collab models.Collaborator
+	if err := s.db.First(&collab, "id = ?", collabID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
+		return nil, err
+	}
+
+	var it models.Itinerary
+	if err := s.db.Select("id", "owner_id").First(&it, "id = ?", collab.ItineraryID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
+		return nil, err
+	}
+	if it.OwnerID.String() != requesterID {
+		return nil, apperror.ErrForbidden
+	}
+
+	if err := s.db.Model(&collab).Update("role", role).Error; err != nil {
+		return nil, err
+	}
+	collab.Role = role
+
+	if err := s.db.Preload("User").First(&collab, "id = ?", collab.ID).Error; err != nil {
+		return nil, err
+	}
+	return &collab, nil
 }
 
 // ListPending returns PENDING invitations for the requester. Matches both
