@@ -59,6 +59,25 @@ func (h *CollaboratorHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": list})
 }
 
+// PATCH /collaborators/:id/role — owner changes a collaborator permission.
+func (h *CollaboratorHandler) UpdateRole(c *gin.Context) {
+	uid, ok := mustUserID(c)
+	if !ok {
+		return
+	}
+	var input services.UpdateCollaboratorRoleInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	collab, err := h.svc.UpdateRole(c.Param("id"), uid, input)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, collab)
+}
+
 // GET /collaborators/pending — list my pending invitations.
 func (h *CollaboratorHandler) ListPending(c *gin.Context) {
 	uid, ok := mustUserID(c)

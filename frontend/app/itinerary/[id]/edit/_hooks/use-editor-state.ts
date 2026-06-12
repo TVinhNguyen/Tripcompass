@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import type { DragEndEvent, DragOverEvent } from "@dnd-kit/core"
 import { toast } from "sonner"
 
-import { apiFetch } from "@/lib/api"
+import { apiFetch, ApiError } from "@/lib/api"
 import type { Itinerary, Activity as ApiActivity, WSEvent } from "@/lib/types"
 import { useItineraryWS } from "@/hooks/use-itinerary-ws"
 
@@ -62,6 +62,14 @@ export function fromApiActivity(a: ApiActivity): Activity {
     lng: a.lng ?? a.place?.longitude,
     coverImage: a.image_url ?? a.place?.cover_image,
   }
+}
+
+const READ_ONLY_MESSAGE = "Bạn chỉ có quyền xem lịch trình này. Vui lòng liên hệ chủ sở hữu để được cấp quyền chỉnh sửa."
+const OWNER_ONLY_MESSAGE = "Chỉ chủ sở hữu mới được cập nhật thông tin tổng quát của lịch trình."
+
+function mutationErrorMessage(err: unknown, fallback: string, forbiddenMessage = READ_ONLY_MESSAGE) {
+  if (err instanceof ApiError && err.status === 403) return forbiddenMessage
+  return fallback
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -153,8 +161,8 @@ export function useEditorState(id: string) {
       const updated = await apiFetch<Itinerary>(`/itineraries/${id}`, { method: "PATCH", body: { title } })
       setItinerary((prev) => prev ? { ...prev, ...updated, activities: prev.activities } : updated)
       toast.success("Đã lưu lịch trình")
-    } catch {
-      toast.error("Lưu thất bại")
+    } catch (err) {
+      toast.error(mutationErrorMessage(err, "Lưu thất bại", OWNER_ONLY_MESSAGE))
     } finally {
       setSaving(false)
     }
@@ -170,8 +178,8 @@ export function useEditorState(id: string) {
       dispatch({ kind: "removeActivity", id: activityId })
       try {
         await apiFetch(`/activities/${activityId}`, { method: "DELETE" })
-      } catch {
-        toast.error("Xoá thất bại")
+      } catch (err) {
+        toast.error(mutationErrorMessage(err, "Xoá thất bại"))
         dispatch({ kind: "setActivities", activities: snapshot })
       }
     },
@@ -179,6 +187,7 @@ export function useEditorState(id: string) {
   )
 
   const saveActivity = useCallback(async (updated: Activity) => {
+    const previous = activities.find((a) => a.id === updated.id)
     dispatch({ kind: "updateActivity", activity: updated })
     try {
       await apiFetch(`/activities/${updated.id}`, {
@@ -192,10 +201,11 @@ export function useEditorState(id: string) {
           day_number: updated.day,
         },
       })
-    } catch {
-      toast.error("Cập nhật thất bại")
+    } catch (err) {
+      if (previous) dispatch({ kind: "updateActivity", activity: previous })
+      toast.error(mutationErrorMessage(err, "Cập nhật thất bại"))
     }
-  }, [])
+  }, [activities])
 
   // Create activity from scratch (e.g. user clicks "+ Thêm" inside a day).
   // Same optimistic + POST + replaceTempActivity flow as template-drop, just
@@ -310,8 +320,8 @@ export function useEditorState(id: string) {
             },
           })
           dispatch({ kind: "replaceTempActivity", tempId, activity: fromApiActivity(created) })
-        } catch {
-          toast.error("Thêm hoạt động thất bại")
+        } catch (err) {
+          toast.error(mutationErrorMessage(err, "Thêm hoạt động thất bại"))
           dispatch({ kind: "removeActivity", id: tempId })
         }
         return
@@ -339,8 +349,8 @@ export function useEditorState(id: string) {
 
         try {
           await apiFetch("/activities/reorder", { method: "PATCH", body: { items } })
-        } catch {
-          toast.error("Sắp xếp thất bại")
+        } catch (err) {
+          toast.error(mutationErrorMessage(err, "Sắp xếp thất bại"))
           dispatch({ kind: "setActivities", activities: snapshot })
         }
       }
