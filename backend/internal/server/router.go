@@ -175,6 +175,8 @@ func NewRouter(db *gorm.DB, rdb *redis.Client, hub *ws.Hub, cfg *config.Config, 
 		admin := api.Group("/admin")
 		admin.Use(middleware.JWTAuth(sessions), middleware.RequireAdmin())
 		{
+			admin.GET("/planner/cache", plannerHandler.CacheStats)
+			admin.DELETE("/planner/cache/key", plannerHandler.DeleteCacheKey)
 			admin.DELETE("/planner/cache", plannerHandler.FlushCache)
 
 			admin.GET("/stats", adminStatsHandler.Stats)
