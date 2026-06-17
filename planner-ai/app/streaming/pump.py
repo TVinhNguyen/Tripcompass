@@ -49,6 +49,9 @@ async def stream_chat_response(
     """
     tools_used: list[str] = []
     plan_data: dict | None = None
+    # Granular edit operations proposed via the edit_itinerary tool. Forwarded
+    # in the done event; the FE previews them and applies on user confirm.
+    edit_ops: list | None = None
     full_text = ""
     stream_dropped = False  # True if upstream LLM closed the connection mid-stream
     # Captured from on_tool_start events. The agent's first tool call usually
@@ -166,6 +169,22 @@ async def stream_chat_response(
                         # below will try again. This log lets us measure how
                         # often the primary path actually succeeds.
                         logger.warning("[stream-extract] outcome=on_tool_end ok=false")
+                elif tool_name == "edit_itinerary":
+                    # The tool returns {success, ops:[...]} — validated edits to
+                    # the user's current itinerary. Capture for the done event;
+                    # do NOT fast-finish, the agent still narrates the changes.
+                    output = data.get("output", "")
+                    if hasattr(output, "content"):
+                        output = output.content
+                    if isinstance(output, dict):
+                        output = json.dumps(output, ensure_ascii=False)
+                    try:
+                        parsed = json.loads(str(output))
+                    except (ValueError, TypeError):
+                        parsed = None
+                    if isinstance(parsed, dict) and parsed.get("ops"):
+                        edit_ops = parsed["ops"]
+                        logger.info(f"[stream] captured {len(edit_ops)} edit op(s) from edit_itinerary")
 
             # ── LLM token streaming ────────────────────────────────────
             elif kind == "on_chat_model_stream":
@@ -324,5 +343,6 @@ async def stream_chat_response(
         "session_id": session_id,
         "tool_calls": tools_used,
         "plan":       plan_data,
+        "edit_ops":   edit_ops,
         "full_text":  clean_text,
     })

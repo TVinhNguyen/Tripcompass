@@ -14,6 +14,7 @@ from .search_hotels   import search_hotels
 from .search_flights  import search_flights
 from .get_real_prices import get_real_prices
 from .create_plan     import create_travel_plan
+from .edit_itinerary  import edit_itinerary
 from .web_search      import web_search
 
 ALL_TOOLS = [
@@ -25,6 +26,7 @@ ALL_TOOLS = [
     search_flights,
     get_real_prices,
     create_travel_plan,
+    edit_itinerary,
 ]
 
 # Only expose web_search when the flag + key are both present. Registering a

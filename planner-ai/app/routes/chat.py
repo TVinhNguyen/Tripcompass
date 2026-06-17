@@ -45,6 +45,9 @@ def _compact_itinerary_context(context: dict) -> dict:
             slot = {
                 key: value
                 for key, value in {
+                    # `id` is the activity_id the agent must pass back in
+                    # edit_itinerary ops to target an update/delete precisely.
+                    "id": activity.get("id"),
                     "order": activity.get("order_index"),
                     "title": activity.get("title"),
                     "category": activity.get("category"),
@@ -109,8 +112,11 @@ def _itinerary_context_message(context: dict | None) -> str | None:
         "DỮ LIỆU LỊCH TRÌNH HIỆN TẠI CỦA USER:\n"
         f"{json.dumps(compact, ensure_ascii=False, separators=(',', ':'))}\n\n"
         "Hãy dùng dữ liệu này làm nguồn chính khi user hỏi về lịch trình đang chỉnh sửa. "
-        "Nếu user yêu cầu tối ưu, thêm, xoá hoặc sắp xếp lại, hãy đưa ra đề xuất cụ thể "
-        "theo ngày/giờ/hoạt động; đừng nói rằng bạn đã sửa DB vì chat này chỉ có quyền tư vấn."
+        "Khi user muốn thay đổi các hoạt động cụ thể (thêm/xoá/đổi giờ/đổi ngày/sửa mô tả), "
+        "GỌI edit_itinerary với các op chính xác, tham chiếu hoạt động bằng `id` trong dữ liệu trên; "
+        "rồi tóm tắt ngắn các thay đổi bằng lời. Thay đổi chỉ áp dụng sau khi user bấm xác nhận — "
+        "nói 'mình đề xuất…', đừng nói đã sửa xong. Nếu user muốn dựng lại toàn bộ lịch trình mới, "
+        "dùng định dạng văn bản lịch trình thay vì edit_itinerary."
     )
 
 

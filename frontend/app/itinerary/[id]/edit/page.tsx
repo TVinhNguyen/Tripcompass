@@ -75,9 +75,14 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
     activities, title, setTitle, itinerary,
     pageLoading, saving, onlineUsers,
     days, totalBudget, totalActivities, getTemplates,
-    handleManualSave, removeActivity, saveActivity, createActivity,
+    handleManualSave, removeActivity, saveActivity, createActivity, applyEditOps,
     handleDragOver, handleDragEnd, addNewDay,
   } = useEditorState(id);
+
+  // Resolve an activity_id → title so the AI edit-ops preview names the
+  // activities a user is about to change, not raw UUIDs.
+  const resolveActivityLabel = (activityId: string) =>
+    activities.find((a) => a.id === activityId)?.title || "hoạt động";
 
   // ── UI-only state ─────────────────────────────────────────────────────────
   const [activeId,        setActiveId]        = useState<string | null>(null);
@@ -330,6 +335,8 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
                 onClose={() => setIsChatOpen(false)}
                 itineraryTitle={title}
                 itineraryId={id}
+                onApplyOps={applyEditOps}
+                resolveActivityLabel={resolveActivityLabel}
               />
             )}
           </AnimatePresence>
@@ -443,6 +450,8 @@ export default function ItineraryEditPage({ params }: { params: Promise<{ id: st
             onClose={() => setIsChatOpen(false)}
             itineraryTitle={title}
             itineraryId={id}
+            onApplyOps={applyEditOps}
+            resolveActivityLabel={resolveActivityLabel}
           />
         )}
       </AnimatePresence>

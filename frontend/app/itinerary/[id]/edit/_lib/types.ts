@@ -1,4 +1,4 @@
-import type { GenerateResponse } from "@/lib/types";
+import type { EditOp, GenerateResponse } from "@/lib/types";
 
 // Sentinel id prefix for the placeholder row rendered when the user adds an
 // empty day. The row lets DroppableDay render the day column before any real
@@ -37,6 +37,9 @@ export interface ChatMessage {
   toolCalls?: string[];
   streaming?: boolean;
   error?: boolean;
+  // AI-proposed granular edits to the current itinerary + their preview state.
+  editOps?: EditOp[] | null;
+  editOpsStatus?: "pending" | "applied" | "dismissed";
 }
 
 export interface Collaborator {
