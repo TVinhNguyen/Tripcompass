@@ -13,6 +13,9 @@ export function isEmptyDaySentinel(a: { id: string }): boolean {
 // (Maps from API Activity on load, serialises back on save)
 export type Activity = {
   id: string;
+  // Linked DB place (when this activity came from a real place). Drives the
+  // "view place detail" link; absent for free-text / template / AI-added rows.
+  placeId?: string;
   day: number;
   time: string;
   title: string;

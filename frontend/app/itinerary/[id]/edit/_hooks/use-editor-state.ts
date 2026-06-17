@@ -46,6 +46,7 @@ export function fromApiActivity(a: ApiActivity): Activity {
   // doesn't have its own snapshot (AI-planner saves leave lat/lng/notes NULL).
   return {
     id: a.id,
+    placeId: a.place_id,
     day: a.day_number,
     // Backend returns start_time as HH:MM:SS; the editor (and <input type="time">)
     // want HH:MM, so normalize on load.
