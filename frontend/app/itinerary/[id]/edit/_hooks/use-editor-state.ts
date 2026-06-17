@@ -232,6 +232,7 @@ export function useEditorState(id: string) {
           method: "POST",
           body: {
             itinerary_id: id,
+            place_id: optimistic.placeId,
             day_number: optimistic.day,
             title: optimistic.title || "Hoạt động mới",
             category: activityTypeToCategory(optimistic.type),
@@ -295,6 +296,7 @@ export function useEditorState(id: string) {
             await createActivity(
               {
                 id: `__new-${Date.now()}-${applied}`,
+                placeId: op.place_id,
                 day: op.day_number,
                 time: op.start_time ?? "09:00",
                 title,

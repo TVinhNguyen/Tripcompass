@@ -285,6 +285,9 @@ export type EditOp =
       start_time?: string;
       estimated_cost?: number;
       notes?: string;
+      // Set when the AI grounded the suggestion in a real DB place — links the
+      // created activity to that Place (detail page, location, coords).
+      place_id?: string;
     }
   | {
       op: "update";

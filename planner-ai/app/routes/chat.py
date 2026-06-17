@@ -113,8 +113,9 @@ def _itinerary_context_message(context: dict | None) -> str | None:
         f"{json.dumps(compact, ensure_ascii=False, separators=(',', ':'))}\n\n"
         "Hãy dùng dữ liệu này làm nguồn chính khi user hỏi về lịch trình đang chỉnh sửa. "
         "Khi user muốn thay đổi các hoạt động cụ thể (thêm/xoá/đổi giờ/đổi ngày/sửa mô tả), "
-        "GỌI edit_itinerary với các op chính xác, tham chiếu hoạt động bằng `id` trong dữ liệu trên; "
-        "rồi tóm tắt ngắn các thay đổi bằng lời. Thay đổi chỉ áp dụng sau khi user bấm xác nhận — "
+        "GỌI edit_itinerary; mỗi op update/delete phải có `activity_id` = đúng giá trị `id` của hoạt động trong dữ liệu trên (đừng bịa id); "
+        "rồi tóm tắt ngắn các thay đổi bằng lời. Khi THÊM/THAY địa điểm mới, tra cứu địa điểm thật trước rồi truyền `id` của nó làm `place_id` trong op 'add'. "
+        "Thay đổi chỉ áp dụng sau khi user bấm xác nhận — "
         "nói 'mình đề xuất…', đừng nói đã sửa xong. Nếu user muốn dựng lại toàn bộ lịch trình mới, "
         "dùng định dạng văn bản lịch trình thay vì edit_itinerary."
     )
