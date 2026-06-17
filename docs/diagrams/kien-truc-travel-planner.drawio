@@ -1,0 +1,202 @@
+<mxfile host="app.diagrams.net" modified="2026-06-11T00:00:00.000Z" agent="TripCompass Docs" version="24.7.17" type="device">
+  <diagram id="tripcompass-code-architecture" name="TripCompass Architecture">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="Kiến trúc tổng quan hệ thống TripCompass" style="text;html=1;strokeColor=none;fillColor=none;fontSize=26;fontStyle=1;fontColor=#0d1b2a;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="450" y="20" width="760" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="note" value="Sơ đồ kiến trúc codebase chính, không bao gồm reverse proxy/deployment hoặc các thành phần chưa sử dụng như object storage." style="text;html=1;strokeColor=none;fillColor=none;fontSize=13;fontColor=#475569;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="380" y="65" width="900" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="client_group" value="Client" style="swimlane;html=1;rounded=1;startSize=36;fillColor=#e3f2fd;strokeColor=#1565c0;fontColor=#0d1b2a;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="50" y="150" width="170" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="frontend_group" value="Frontend - Next.js" style="swimlane;html=1;rounded=1;startSize=36;fillColor=#e8f5e9;strokeColor=#2e7d32;fontColor=#0d1b2a;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="280" y="120" width="260" height="390" as="geometry"/>
+        </mxCell>
+        <mxCell id="backend_group" value="Backend API - Go / Gin" style="swimlane;html=1;rounded=1;startSize=36;fillColor=#fff3e0;strokeColor=#ef6c00;fontColor=#0d1b2a;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="610" y="120" width="300" height="520" as="geometry"/>
+        </mxCell>
+        <mxCell id="planner_group" value="Planner AI - FastAPI / LangGraph" style="swimlane;html=1;rounded=1;startSize=36;fillColor=#ede7f6;strokeColor=#5e35b1;fontColor=#0d1b2a;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="980" y="120" width="300" height="520" as="geometry"/>
+        </mxCell>
+        <mxCell id="data_group" value="Tầng dữ liệu" style="swimlane;html=1;rounded=1;startSize=36;fillColor=#e0f2f1;strokeColor=#00796b;fontColor=#0d1b2a;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1350" y="120" width="240" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="external_group" value="Dịch vụ bên ngoài" style="swimlane;html=1;rounded=1;startSize=36;fillColor=#fce4ec;strokeColor=#ad1457;fontColor=#0d1b2a;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1350" y="410" width="240" height="360" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="browser" value="Người dùng&lt;br&gt;Trình duyệt web" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbdefb;strokeColor=#1565c0;fontColor=#0d1b2a;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="75" y="205" width="120" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_ui" value="React UI&lt;br&gt;Pages, components" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#2e7d32;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="320" y="170" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="auth_guard" value="Auth Guard&lt;br&gt;Route protection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#2e7d32;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="320" y="285" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="api_client" value="API Client&lt;br&gt;REST, SSE, WebSocket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#2e7d32;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="320" y="400" width="180" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="router" value="Router&lt;br&gt;/health, /api/v1/*" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#ef6c00;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="660" y="165" width="200" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="middleware" value="Middleware&lt;br&gt;CORS, JWT, rate limit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#ef6c00;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="660" y="255" width="200" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="handlers" value="Handlers &amp; Services&lt;br&gt;auth, user, itinerary, place,&lt;br&gt;combo, planner, ai-chat" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#ef6c00;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="650" y="345" width="220" height="86" as="geometry"/>
+        </mxCell>
+        <mxCell id="realtime" value="Realtime Layer&lt;br&gt;WebSocket Hub, Pub/Sub,&lt;br&gt;view counter, outbox events" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#ef6c00;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="650" y="480" width="220" height="86" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ai_routes" value="Routes&lt;br&gt;/chat, /chat/stream, /plan,&lt;br&gt;/sessions, /cache, /health" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1c4e9;strokeColor=#5e35b1;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="165" width="210" height="78" as="geometry"/>
+        </mxCell>
+        <mxCell id="agent" value="ReAct Agent&lt;br&gt;LangGraph" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1c4e9;strokeColor=#5e35b1;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="285" width="210" height="64" as="geometry"/>
+        </mxCell>
+        <mxCell id="pipeline" value="Planning Pipeline&lt;br&gt;resolve, budget, schedule,&lt;br&gt;validate, enrich" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1c4e9;strokeColor=#5e35b1;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="385" width="210" height="78" as="geometry"/>
+        </mxCell>
+        <mxCell id="tools" value="AI Tools&lt;br&gt;places, food, combos,&lt;br&gt;weather, hotels, flights, prices" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1c4e9;strokeColor=#5e35b1;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="1025" y="510" width="210" height="78" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="postgres" value="PostgreSQL&lt;br&gt;schema_travel&lt;br&gt;domain data, outbox" style="shape=cylinder3d;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#b2dfdb;strokeColor=#00796b;fontColor=#0d1b2a;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1385" y="175" width="170" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="redis" value="Redis&lt;br&gt;cache, rate limit,&lt;br&gt;Pub/Sub, view counter" style="shape=cylinder3d;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#b2dfdb;strokeColor=#00796b;fontColor=#0d1b2a;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1385" y="265" width="170" height="75" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="llm" value="LLM Providers&lt;br&gt;model inference" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8bbd0;strokeColor=#ad1457;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="1385" y="465" width="170" height="62" as="geometry"/>
+        </mxCell>
+        <mxCell id="serp" value="SerpAPI&lt;br&gt;hotels, flights, real prices" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8bbd0;strokeColor=#ad1457;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="1385" y="545" width="170" height="62" as="geometry"/>
+        </mxCell>
+        <mxCell id="weather" value="WeatherAPI&lt;br&gt;weather lookup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8bbd0;strokeColor=#ad1457;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="1385" y="625" width="170" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="oauth" value="Google OAuth&lt;br&gt;social login" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8bbd0;strokeColor=#ad1457;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="1385" y="700" width="170" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="email" value="Resend Email&lt;br&gt;verification, invites" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8bbd0;strokeColor=#ad1457;fontColor=#0d1b2a;" vertex="1" parent="1">
+          <mxGeometry x="1165" y="700" width="170" height="56" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_request" value="Request / response" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#263238;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="70" y="820" width="130" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend_request_line" value="" style="endArrow=block;html=1;strokeColor=#263238;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="70" y="805" as="sourcePoint"/>
+            <mxPoint x="200" y="805" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="legend_data" value="Data / cache" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#00796b;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="255" y="820" width="130" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend_data_line" value="" style="endArrow=block;html=1;strokeColor=#00796b;strokeWidth=2;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="255" y="805" as="sourcePoint"/>
+            <mxPoint x="385" y="805" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="legend_ext" value="External API" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#ad1457;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="440" y="820" width="130" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend_ext_line" value="" style="endArrow=block;html=1;strokeColor=#ad1457;strokeWidth=2;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="440" y="805" as="sourcePoint"/>
+            <mxPoint x="570" y="805" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e_browser_ui" value="HTTPS" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;fontColor=#263238;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="browser" target="react_ui">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_ui_auth" value="" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;" edge="1" parent="1" source="react_ui" target="auth_guard">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_auth_client" value="" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;" edge="1" parent="1" source="auth_guard" target="api_client">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_client_router" value="REST / SSE / WebSocket" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;fontColor=#263238;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="api_client" target="router">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_middleware" value="" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;" edge="1" parent="1" source="router" target="middleware">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_middleware_handlers" value="" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;" edge="1" parent="1" source="middleware" target="handlers">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_handlers_realtime" value="WS events" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;fontColor=#263238;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="handlers" target="realtime">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_handlers_ai" value="planner / ai-chat proxy" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;fontColor=#263238;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="handlers" target="ai_routes">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_handlers_pg" value="SQL read/write" style="endArrow=block;html=1;rounded=0;strokeColor=#00796b;strokeWidth=2;fontColor=#00796b;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="handlers" target="postgres">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_realtime_pg" value="outbox, counters" style="endArrow=block;html=1;rounded=0;strokeColor=#00796b;strokeWidth=2;fontColor=#00796b;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="realtime" target="postgres">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_realtime_redis" value="Pub/Sub" style="startArrow=block;startFill=1;endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#00796b;strokeWidth=2;fontColor=#00796b;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="realtime" target="redis">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_ai_pg" value="places, combos, itinerary data" style="endArrow=block;html=1;rounded=0;strokeColor=#00796b;strokeWidth=2;fontColor=#00796b;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="tools" target="postgres">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_ai_redis" value="session / cache" style="endArrow=block;html=1;rounded=0;strokeColor=#00796b;strokeWidth=2;fontColor=#00796b;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ai_routes" target="redis">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_routes_agent" value="" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;" edge="1" parent="1" source="ai_routes" target="agent">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_routes_pipeline" value="" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;" edge="1" parent="1" source="ai_routes" target="pipeline">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_agent_tools" value="" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;" edge="1" parent="1" source="agent" target="tools">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1255" y="317"/>
+              <mxPoint x="1255" y="549"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_pipeline_tools" value="" style="endArrow=block;html=1;rounded=0;strokeColor=#263238;strokeWidth=2;" edge="1" parent="1" source="pipeline" target="tools">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_agent_llm" value="LLM call" style="endArrow=block;html=1;rounded=0;strokeColor=#ad1457;strokeWidth=2;dashed=1;fontColor=#ad1457;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="agent" target="llm">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_tools_serp" value="search / price tools" style="endArrow=block;html=1;rounded=0;strokeColor=#ad1457;strokeWidth=2;dashed=1;fontColor=#ad1457;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="tools" target="serp">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_tools_weather" value="weather tool" style="endArrow=block;html=1;rounded=0;strokeColor=#ad1457;strokeWidth=2;dashed=1;fontColor=#ad1457;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="tools" target="weather">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_backend_oauth" value="OAuth login" style="endArrow=block;html=1;rounded=0;strokeColor=#ad1457;strokeWidth=2;dashed=1;fontColor=#ad1457;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="handlers" target="oauth">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_backend_email" value="verification / invite" style="endArrow=block;html=1;rounded=0;strokeColor=#ad1457;strokeWidth=2;dashed=1;fontColor=#ad1457;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="handlers" target="email">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

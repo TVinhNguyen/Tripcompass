@@ -23,15 +23,16 @@ flowchart TB
     subgraph MODE_B["💬 Chế độ B — Chat AI (Multi-turn SSE)"]
         direction LR
         CHAT_INPUT["Nhập câu hỏi<br/>tự nhiên"]
-        CHAT_INPUT --> SSE["POST /chat/stream<br/>(SSE)"]
-        SSE --> REACT["ReAct Agent<br/>(LangGraph)"]
+        CHAT_INPUT --> BE_CHAT["POST /api/v1/ai-chat/stream<br/>(Backend proxy SSE)"]
+        BE_CHAT --> AI_CHAT["POST /chat/stream<br/>(Planner AI)"]
+        AI_CHAT --> REACT["ReAct Agent<br/>(LangGraph)"]
         REACT -->|"Tự gọi tools"| TOOLS["8 AI Tools"]
-        REACT --> RESULT_B["Streaming Response<br/>+ Plan JSON"]
+        REACT --> RESULT_B["SSE chunks<br/>+ Plan JSON"]
     end
 
     RESULT_A --> PREVIEW["📋 PlanPreviewCard"]
     RESULT_B --> PREVIEW
-    PREVIEW -->|"Lưu thành<br/>lịch trình"| SAVE["POST /itineraries<br/>+ N × POST /activities"]
+    PREVIEW -->|"Lưu thành<br/>lịch trình"| SAVE["POST /api/v1/itineraries<br/>+ N × POST /api/v1/activities"]
     SAVE --> EDIT["📝 /itinerary/:id/edit"]
 
     style MODE_A fill:#e3f2fd,stroke:#1565C0,color:#000
@@ -39,11 +40,11 @@ flowchart TB
     style PREVIEW fill:#e8f5e9,stroke:#2E7D32,color:#000
 ```
 
-## 3.2 Pipeline chi tiết — 5 Giai đoạn (create_travel_plan)
+## 3.2 Pipeline chi tiết — Planning Service
 
 ```mermaid
 flowchart TB
-    INPUT["📥 Input<br/>destination, num_days,<br/>budget_vnd, guest_count"]
+    INPUT["📥 Input<br/>destination, num_days,<br/>budget_vnd, guest_count,<br/>start/end date, preferences"]
 
     subgraph STAGE1["Giai đoạn 1: RESOLVE 🔍"]
         direction LR
@@ -59,7 +60,7 @@ flowchart TB
         G1["🏝️ get_places<br/>→ 15 attractions"]
         G2["🍜 get_food_venues<br/>→ 12 restaurants"]
         G3["☀️ get_weather<br/>→ climate data"]
-        G4["🏨 search_hotels<br/>→ 3 hotels"]
+        G4["🎁 get_combos<br/>→ travel combos"]
     end
 
     subgraph STAGE2["Giai đoạn 2: BUDGET 💰"]
@@ -67,6 +68,16 @@ flowchart TB
         B1["Phân loại tier:<br/>survival / budget /<br/>standard / premium"]
         B2["Phân bổ ngân sách:<br/>• Tham quan: X VND<br/>• Ăn uống: Y VND<br/>• Khách sạn: Z VND/đêm"]
         B1 --> B2
+    end
+
+    subgraph HOTEL["Tùy chọn: HOTEL LOOKUP 🏨"]
+        direction TB
+        H1{"need_hotel<br/>và có start_date?"}
+        H2["search_hotels<br/>→ giá khách sạn thực tế"]
+        H3["Chạy lại budget<br/>với hotel price"]
+        H4["Dùng hotel budget mặc định"]
+        H1 -->|"Có"| H2 --> H3
+        H1 -->|"Không"| H4
     end
 
     subgraph STAGE3["Giai đoạn 3: SCHEDULE 📅"]
@@ -86,7 +97,7 @@ flowchart TB
         V1 --> V2 --> V3 --> V4 --> V5
     end
 
-    subgraph STAGE5["Giai đoạn 5: ENRICH ✨"]
+    subgraph STAGE5["Giai đoạn 5: ENRICH ✨ (tùy chọn)"]
         direction TB
         E1["🤖 LLM thêm mô tả"]
         E2["Thêm tips du lịch"]
@@ -99,17 +110,20 @@ flowchart TB
     INPUT --> STAGE1
     STAGE1 --> GATHER
     GATHER --> STAGE2
-    STAGE2 --> STAGE3
+    STAGE2 --> HOTEL
+    HOTEL --> STAGE3
     STAGE3 --> STAGE4
 
     STAGE4 -->|"❌ Có violations<br/>(max retry 2)"| STAGE3
-    STAGE4 -->|"✅ Pass hoặc<br/>hết retry"| STAGE5
+    STAGE4 -->|"✅ Pass/hết retry<br/>+ include_enrich=true"| STAGE5
+    STAGE4 -->|"include_enrich=false<br/>(Chat tool fast-finish)"| OUTPUT
 
     STAGE5 --> OUTPUT
 
     style STAGE1 fill:#e3f2fd,stroke:#1565C0,color:#000
     style GATHER fill:#fff3e0,stroke:#E65100,color:#000
     style STAGE2 fill:#e8f5e9,stroke:#2E7D32,color:#000
+    style HOTEL fill:#f1f8e9,stroke:#558b2f,color:#000
     style STAGE3 fill:#f3e5f5,stroke:#6A1B9A,color:#000
     style STAGE4 fill:#fff9c4,stroke:#F57F17,color:#000
     style STAGE5 fill:#e0f7fa,stroke:#00695C,color:#000
@@ -130,11 +144,12 @@ sequenceDiagram
     participant N5 as ✨ Enrich
     participant DB as 💾 PostgreSQL
     participant LLM as 🧠 LLM
+    participant EXT as 🌐 External APIs
     participant CACHE as 📦 Redis Cache
 
     U->>FE: Điền form (destination, days, budget)
     FE->>BE: POST /api/v1/planner/generate
-    BE->>AI: POST /plan (proxy)
+    BE->>AI: POST /plan (proxy khi USE_LLM_PLANNER=true)
 
     AI->>CACHE: Check cache key
     CACHE-->>AI: ❌ Cache MISS
@@ -145,21 +160,31 @@ sequenceDiagram
     N1-->>AI: destination_id resolved
 
     par Thu thập song song
-        AI->>DB: get_places(đà nẵng)
+        AI->>DB: query places(đà nẵng)
         DB-->>AI: 15 attractions
     and
-        AI->>DB: get_food_venues(đà nẵng)
+        AI->>DB: query food_venues(đà nẵng)
         DB-->>AI: 12 restaurants
     and
-        AI->>DB: get_weather(đà nẵng, tháng 5)
-        DB-->>AI: 30°C, mưa ít
+        AI->>EXT: get_weather(đà nẵng, tháng 5)
+        EXT-->>AI: 30°C, mưa ít
+    and
+        AI->>DB: query combos(đà nẵng)
+        DB-->>AI: combo data
     end
 
     AI->>N2: budget_classify(5,000,000 VND, 3 days, 2 guests)
     N2-->>AI: tier=standard, attr=2.25M, food=2.0M
 
+    opt Cần khách sạn và có ngày đi
+        AI->>EXT: search_hotels(đà nẵng, dates, tier)
+        EXT-->>AI: hotels + real prices
+        AI->>N2: recalc_budget(hotel prices)
+        N2-->>AI: updated hotel_budget_per_night
+    end
+
     loop Retry (max 2 lần)
-        AI->>N3: schedule_draft(places, food, budget)
+        AI->>N3: schedule_draft(places, food, combos, weather, budget)
         N3->>LLM: Generate day-by-day schedule
         LLM-->>N3: {days: [{slots: [...]}]}
         N3-->>AI: Draft schedule
@@ -178,18 +203,18 @@ sequenceDiagram
     LLM-->>N5: Enriched content
     N5-->>AI: Final plan
 
-    AI->>CACHE: Cache result (TTL 1h)
+    AI->>CACHE: Cache result (TTL theo config)
     AI-->>BE: PlanResponse JSON
-    BE-->>FE: {data: GenerateResponse}
+    BE-->>FE: Plan JSON
 
     FE->>U: Hiển thị PlanPreviewCard
 
     opt Lưu lịch trình
         U->>FE: Bấm "Lưu lịch trình"
-        FE->>BE: POST /itineraries
+        FE->>BE: POST /api/v1/itineraries
         BE-->>FE: 201 {id}
         loop Mỗi activity
-            FE->>BE: POST /activities
+            FE->>BE: POST /api/v1/activities
         end
         FE->>U: Redirect /itinerary/:id/edit
     end
@@ -203,7 +228,7 @@ pie title "Tỷ lệ LLM vs Pure Code trong Pipeline"
     "Pure Code (Budget)" : 1
     "LLM (Schedule)" : 1
     "Pure Code (Validate)" : 1
-    "LLM (Enrich)" : 1
+    "LLM (Enrich tùy chọn)" : 1
 ```
 
 | Giai đoạn | LLM? | Lý do |
@@ -212,4 +237,4 @@ pie title "Tỷ lệ LLM vs Pure Code trong Pipeline"
 | 2. Budget | ❌ Pure Python | "LLM hallucinate numbers" — dùng math thuần |
 | 3. Schedule | ✅ LLM | Cần creativity để sắp xếp lịch trình hợp lý |
 | 4. Validate | ❌ Pure Rules | Bắt lỗi LLM bằng rule cứng, deterministic |
-| 5. Enrich | ✅ LLM (guarded) | Thêm mô tả tự nhiên, nhưng guard bảo vệ data quan trọng |
+| 5. Enrich | ✅ LLM tùy chọn | `/plan` direct dùng để thêm mô tả tự nhiên; `create_travel_plan` trong Chat có thể bỏ qua để trả plan nhanh, stream layer tạo summary ngắn |

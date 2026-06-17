@@ -6,17 +6,19 @@
 sequenceDiagram
     actor U as 👤 User
     participant FE as 🖥️ Frontend
+    participant BE as ⚙️ Backend
     participant AI as 🤖 Planner AI
     participant HIST as 📜 Chat History (Redis)
     participant AGENT as 🧠 ReAct Agent
     participant TOOLS as 🔧 Tools
     participant LLM as 🧠 LLM
-    participant BE as ⚙️ Backend
+    participant PG as 💾 PostgreSQL
 
     Note over U,BE: === Bước 1: User gửi ý định ===
 
     U->>FE: "Tôi muốn đi Đà Nẵng 3 ngày,<br/>ngân sách 5tr cho 2 người"
-    FE->>AI: POST /chat/stream<br/>{session_id: null, message}
+    FE->>BE: POST /api/v1/ai-chat/stream<br/>{session_id: null, message}
+    BE->>AI: POST /chat/stream<br/>{session_id, user_id, message}
 
     AI->>HIST: load_history(null → tạo mới)
     HIST-->>AI: session_id mới + empty history
@@ -28,7 +30,8 @@ sequenceDiagram
         AGENT->>LLM: "Tôi nên gọi tool nào?"
         LLM-->>AGENT: tool_call: get_places("đà nẵng")
 
-        AI-->>FE: SSE: {type: "tool_start",<br/>tool: "get_places",<br/>label: "Đang tra cứu..."}
+        AI-->>BE: SSE: {type: "tool_start",<br/>tool: "get_places",<br/>label: "Đang tra cứu..."}
+        BE-->>FE: Forward SSE chunk
         FE->>FE: Hiện chip "🏝️ Đang tra cứu<br/>địa điểm tham quan..."
 
         AGENT->>TOOLS: execute get_places
@@ -39,18 +42,21 @@ sequenceDiagram
     end
 
     loop Token streaming
-        AI-->>FE: SSE: {type: "token",<br/>content: "Đà Nẵng "}
+        AI-->>BE: SSE: {type: "token",<br/>content: "Đà Nẵng "}
+        BE-->>FE: Forward SSE token
         FE->>FE: Append vào chat bubble
     end
 
-    AI-->>FE: SSE: {type: "done",<br/>session_id, full_text}
+    AI-->>BE: SSE: {type: "done",<br/>session_id, full_text}
+    BE-->>FE: Forward SSE done
+    BE->>PG: Lưu ai_chat_sessions<br/>và ai_chat_messages
     AI->>HIST: save_history(session_id, messages)
 
     FE->>FE: Hiển thị AI response:<br/>"Đây là các điểm nổi bật..."
 
     Note over U,BE: === Bước 2: Place Picker ===
 
-    FE->>BE: GET /places?destination=đà nẵng<br/>&category=ATTRACTION&limit=30
+    FE->>BE: GET /api/v1/places?destination=đà nẵng<br/>&category=ATTRACTION&limit=30
     BE-->>FE: {data: Place[]}
 
     FE->>FE: Render PlacePicker UI
@@ -61,7 +67,8 @@ sequenceDiagram
     Note over U,BE: === Bước 3: Tạo lịch trình ===
 
     U->>FE: Bấm "Tạo lịch trình"
-    FE->>AI: POST /chat/stream<br/>{message: "Tạo lịch trình 3 ngày...<br/>BẮT BUỘC: Cầu Vàng, Bà Nà.<br/>KHÔNG: Ngũ Hành Sơn."}
+    FE->>BE: POST /api/v1/ai-chat/stream<br/>{session_id, message: "Tạo lịch trình 3 ngày...<br/>BẮT BUỘC: Cầu Vàng, Bà Nà.<br/>KHÔNG: Ngũ Hành Sơn."}
+    BE->>AI: POST /chat/stream
 
     AI->>AGENT: ainvoke(messages)
 
@@ -69,7 +76,8 @@ sequenceDiagram
         AGENT->>LLM: Quyết định gọi tool
         LLM-->>AGENT: tool_call: create_travel_plan(...)
 
-        AI-->>FE: SSE: {type: "tool_start",<br/>tool: "create_travel_plan",<br/>label: "📅 Đang lên lịch trình..."}
+        AI-->>BE: SSE: {type: "tool_start",<br/>tool: "create_travel_plan",<br/>label: "📅 Đang lên lịch trình..."}
+        BE-->>FE: Forward SSE chunk
         FE->>FE: Hiện chip "Đang lên lịch trình..."<br/>(có thể mất 30-90s)
 
         Note over AGENT: Pipeline 5 giai đoạn chạy...
@@ -77,18 +85,20 @@ sequenceDiagram
         TOOLS-->>AGENT: Plan JSON
     end
 
-    AI-->>FE: SSE: {type: "done",<br/>session_id, full_text,<br/>plan: {days: [...]}}
+    AI-->>BE: SSE: {type: "done",<br/>session_id, full_text,<br/>plan: {days: [...]}}
+    BE-->>FE: Forward SSE done
+    BE->>PG: Lưu user message + assistant message<br/>kèm metadata plan
 
     FE->>FE: Render PlanPreviewCard<br/>trong chat bubble
 
     Note over U,BE: === Bước 4: Lưu ===
 
     U->>FE: Bấm "Lưu thành lịch trình"
-    FE->>BE: POST /itineraries<br/>{title, destination, dates, budget}
+    FE->>BE: POST /api/v1/itineraries<br/>{title, destination, dates, budget}
     BE-->>FE: 201 {id}
 
     loop Mỗi day.slot
-        FE->>BE: POST /activities<br/>{itinerary_id, place_id,<br/>day_number, order_index, ...}
+        FE->>BE: POST /api/v1/activities<br/>{itinerary_id, place_id,<br/>day_number, order_index, ...}
     end
 
     FE->>U: Redirect /itinerary/:id/edit
@@ -115,6 +125,14 @@ flowchart TB
         PLAN_CARD["PlanPreviewCard"]
     end
 
+    subgraph Backend["⚙️ Backend API"]
+        direction TB
+        BE_ROUTE["POST /api/v1/ai-chat/stream"]
+        BE_PROXY["SSE Proxy<br/>forward chunks"]
+        BE_PARSE["Parse done event"]
+        BE_SAVE["Persist chat session<br/>PostgreSQL"]
+    end
+
     subgraph Server["🤖 Planner AI"]
         direction TB
         ROUTE["POST /chat/stream"]
@@ -132,7 +150,9 @@ flowchart TB
     end
 
     INPUT -->|"POST"| FETCH
-    FETCH -->|"SSE connection"| ROUTE
+    FETCH -->|"SSE connection"| BE_ROUTE
+    BE_ROUTE --> BE_PROXY
+    BE_PROXY -->|"POST /chat/stream"| ROUTE
     ROUTE --> HISTORY --> AGENT
 
     AGENT --> TOOL_EXEC --> E1
@@ -140,7 +160,9 @@ flowchart TB
     AGENT -->|"Complete"| E3
     AGENT -->|"Error"| E4
 
-    ROUTE -.->|"Stream"| READER
+    ROUTE -.->|"SSE events"| BE_PROXY
+    BE_PROXY -.->|"Forward stream"| READER
+    BE_PROXY -->|"done payload"| BE_PARSE --> BE_SAVE
     READER --> BUFFER
 
     E1 -.-> H_TOOL
@@ -151,6 +173,7 @@ flowchart TB
     H_DONE -->|"Nếu có plan"| PLAN_CARD
 
     style Client fill:#e8f5e9,stroke:#2E7D32,color:#000
+    style Backend fill:#e3f2fd,stroke:#1565C0,color:#000
     style Server fill:#f3e5f5,stroke:#6A1B9A,color:#000
     style EventHandlers fill:#fff9c4,stroke:#F57F17,color:#000
     style SSE_Events fill:#e1bee7,stroke:#6A1B9A,color:#000

@@ -1,0 +1,121 @@
+<mxfile host="app.diagrams.net" agent="TripCompass Docs">
+  <diagram id="uc-ai-itinerary" name="Hinh 2.7 - AI Planner va lich trinh">
+    <mxGraphModel dx="1664" dy="914" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1350" pageHeight="860" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;fontSize=22;fontStyle=1;fontColor=#111827;align=center;verticalAlign=middle;" value="Sơ đồ ca sử dụng nhóm chức năng AI Planner và quản lý lịch trình" vertex="1">
+          <mxGeometry height="40" width="880" x="235" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="system" parent="1" style="swimlane;html=1;rounded=0;startSize=34;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;strokeWidth=2;" value="TripCompass - AI Planner và quản lý lịch trình" vertex="1">
+          <mxGeometry height="690" width="920" x="220" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_activity" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Quản lý hoạt động&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="190" x="265" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_reorder" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Sắp xếp hoạt động&lt;br&gt;theo ngày&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="160" x="700" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="inc_activity_reorder" edge="1" parent="system" source="uc_activity" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_reorder" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;«include»&lt;/font&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_delete_itin" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Xóa lịch trình&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="190" x="500" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_publish_itin" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Xuất bản lịch trình&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="160" x="660" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_save_ai_plan" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Lưu kế hoạch&lt;br&gt;thành lịch trình&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="190" x="380" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_chat_history" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Quản lý lịch sử&lt;br&gt;chat AI&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="190" x="570" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_chat_ai" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Chat với AI Planner&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="190" x="440" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_form_plan" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Tạo kế hoạch&lt;br&gt;bằng biểu mẫu&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="190" x="460" y="187.5" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_clone_itin" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Sao chép lịch trình&lt;br&gt;công khai&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="190" x="630" y="275" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_update_itin" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Cập nhật lịch trình&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="160" x="110" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_create_itin" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Tạo lịch trình&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="190" x="660" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_view_itin" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Xem lịch trình&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="160" x="200" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="user" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="User" vertex="1">
+          <mxGeometry height="110" width="70" x="140" y="277.5" as="geometry" />
+        </mxCell>
+        <mxCell id="owner" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Owner" vertex="1">
+          <mxGeometry height="110" width="70" x="90" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="editor" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Editor" vertex="1">
+          <mxGeometry height="110" width="70" x="10" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="gen_owner_user" edge="1" parent="1" style="endArrow=block;endFill=0;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120.00141843971615" y="626.2499999999998" as="sourcePoint" />
+            <mxPoint x="154.39858156028362" y="383.7500000000002" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="gen_editor_user" edge="1" parent="1" source="editor" style="endArrow=block;endFill=0;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="user" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gen_viewer_user" edge="1" parent="1" source="viewer" style="endArrow=block;endFill=0;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="user" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_form" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_form_plan" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_chat" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_chat_ai" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_save_ai" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_save_ai_plan" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_history" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_chat_history" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_create" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_create_itin" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_view" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_view_itin" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_clone" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_clone_itin" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_owner_update" edge="1" parent="1" source="owner" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_update_itin" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_owner_delete" edge="1" parent="1" source="owner" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_delete_itin" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_owner_publish" edge="1" parent="1" source="owner" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_publish_itin" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_owner_activity" edge="1" parent="1" source="owner" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_activity" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_editor_update" edge="1" parent="1" source="editor" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_update_itin" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_editor_activity" edge="1" parent="1" source="editor" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_activity" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_viewer_view" edge="1" parent="1" source="viewer" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_view_itin" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="viewer" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Viewer" vertex="1">
+          <mxGeometry height="110" width="70" x="20" y="110" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

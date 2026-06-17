@@ -1,0 +1,91 @@
+<mxfile host="app.diagrams.net" agent="TripCompass Docs">
+  <diagram id="uc-overview" name="Hinh 2.5 - Tong quan">
+    <mxGraphModel dx="1414" dy="777" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;fontSize=22;fontStyle=1;fontColor=#111827;align=center;verticalAlign=middle;" value="Sơ đồ ca sử dụng tổng quan hệ thống TripCompass" vertex="1">
+          <mxGeometry height="40" width="800" x="250" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="system" parent="1" style="swimlane;html=1;rounded=0;startSize=34;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;strokeWidth=2;" value="uc TripCompassSystem" vertex="1">
+          <mxGeometry height="650" width="860" x="210" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_itinerary" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Quản lý itinerary&lt;br&gt;và activity&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="350" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_collaboration" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Chia sẻ và cộng tác&lt;br&gt;theo thời gian thực&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="220" x="490" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_ai" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Lập kế hoạch bằng&lt;br&gt;AI Planner / AI Chat&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="220" x="120" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_discovery" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Khám phá địa điểm, combo&lt;br&gt;và lịch trình công khai&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="220" x="350" y="165" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_auth" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Đăng ký / đăng nhập&lt;br&gt;và quản lý tài khoản&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="210" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_saved" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Lưu địa điểm&lt;br&gt;yêu thích&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="190" x="200" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_admin" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="&lt;font style=&quot;font-size: 15px;&quot;&gt;Quản trị dữ liệu&lt;br&gt;places, combos, cache&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="220" x="380" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="guest" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Guest" vertex="1">
+          <mxGeometry height="110" width="70" x="55" y="145" as="geometry" />
+        </mxCell>
+        <mxCell id="user" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="User" vertex="1">
+          <mxGeometry height="110" width="70" x="40" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="owner" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Owner" vertex="1">
+          <mxGeometry height="110" width="70" x="1140" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="collaborator" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Collaborator&#xa;Editor / Viewer" vertex="1">
+          <mxGeometry height="120" width="80" x="1130" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="admin" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Admin" vertex="1">
+          <mxGeometry height="110" width="70" x="1165" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="e_guest_auth" edge="1" parent="1" source="guest" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_auth" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_guest_discovery" edge="1" parent="1" source="guest" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_discovery" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_auth" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_auth" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_discovery" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_discovery" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_saved" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_saved" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_ai" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_ai" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_itinerary" edge="1" parent="1" source="user" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_itinerary" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_owner_itinerary" edge="1" parent="1" source="owner" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_itinerary" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_owner_collaboration" edge="1" parent="1" source="owner" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_collaboration" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_collab_itinerary" edge="1" parent="1" source="collaborator" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_itinerary" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_collab_collaboration" edge="1" parent="1" source="collaborator" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_collaboration" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_admin_admin" edge="1" parent="1" source="admin" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_admin" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IJDCrS-FBaDsTxu9ccZi-1" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;" value="" vertex="1">
+          <mxGeometry height="30" width="50" x="1113" y="547" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

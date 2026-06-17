@@ -2,6 +2,20 @@
 
 ## 2.1 Sơ đồ quan hệ thực thể (ERD)
 
+Bản dễ xem hơn để trình bày là DBML cho dbdiagram.io:
+
+- [`02-erd-logical.dbml`](./02-erd-logical.dbml): bản nên dùng cho slide, có node logic `destinations` để nối `places`, `itineraries`, `combos`, `destination_neighbors`; bỏ bảng kỹ thuật `outbox`.
+- [`02-erd.dbml`](./02-erd.dbml): bản physical đúng theo database thật, nên một số bảng sẽ đứng lẻ nếu DB không có foreign key.
+
+Cách dùng:
+
+1. Mở dbdiagram.io.
+2. Tạo diagram mới.
+3. Copy nội dung `docs/diagrams/02-erd-logical.dbml` vào editor DBML nếu cần sơ đồ dễ nhìn, hoặc `02-erd.dbml` nếu cần đúng physical schema.
+4. Dùng auto-layout/kéo thả để nhóm các cụm: users/auth, itinerary, places, AI chat, realtime outbox.
+
+Mermaid dưới đây giữ lại làm bản tham chiếu trong Markdown.
+
 ```mermaid
 erDiagram
     USERS {
@@ -14,6 +28,10 @@ erDiagram
         BOOLEAN is_verified
         VARCHAR verify_token
         TIMESTAMP verify_token_expires_at
+        VARCHAR reset_token
+        TIMESTAMP reset_token_expires_at
+        VARCHAR role "user | editor | admin"
+        VARCHAR status "active | suspended"
         TIMESTAMP created_at
     }
 
@@ -83,6 +101,8 @@ erDiagram
         TEXT website
         VARCHAR external_id
         VARCHAR external_source
+        UUID parent_id FK
+        TEXT_ARRAY sub_attractions
         JSONB metadata
         TEXT source_url
         TIMESTAMP price_updated_at
@@ -111,6 +131,7 @@ erDiagram
         UUID id PK
         UUID itinerary_id FK
         UUID user_id FK
+        TEXT email
         UUID invited_by FK
         ENUM role "EDITOR | VIEWER"
         ENUM status "PENDING | ACCEPTED"
@@ -144,22 +165,53 @@ erDiagram
         TIMESTAMP saved_at
     }
 
+    DESTINATION_NEIGHBORS {
+        UUID id PK
+        TEXT destination
+        TEXT neighbor
+        INTEGER travel_min_ow
+        VARCHAR trip_type "day_trip | half_day"
+        INTEGER min_trip_days
+        TEXT notes
+    }
+
+    PLACE_SEASONS {
+        UUID id PK
+        UUID place_id FK
+        INTEGER_ARRAY open_months
+        TEXT notes
+    }
+
+    OUTBOX {
+        UUID id PK
+        TEXT event_type
+        TEXT room_id
+        JSONB payload
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ dispatched_at
+        INTEGER retry_count
+        TEXT last_error
+    }
+
     %% Relationships
     USERS ||--o{ ITINERARIES : "owns"
-    USERS ||--o{ COLLABORATORS : "collaborates"
+    USERS |o--o{ COLLABORATORS : "accepted as"
+    USERS ||--o{ COLLABORATORS : "invites"
     USERS ||--o{ AI_CHAT_SESSIONS : "has sessions"
     USERS ||--o{ USER_SAVED_PLACES : "saves"
 
     ITINERARIES ||--o{ ACTIVITIES : "contains"
     ITINERARIES ||--o{ COLLABORATORS : "shared with"
-    ITINERARIES ||--o| ITINERARIES : "cloned from"
-    ITINERARIES ||--o{ AI_CHAT_MESSAGES : "discussed in"
+    ITINERARIES |o--o{ ITINERARIES : "cloned by"
+    ITINERARIES |o--o{ AI_CHAT_MESSAGES : "discussed in"
+    ITINERARIES |o--o{ AI_CHAT_SESSIONS : "saved from"
 
-    PLACES ||--o{ ACTIVITIES : "referenced by"
+    PLACES |o--o{ ACTIVITIES : "referenced by"
     PLACES ||--o{ USER_SAVED_PLACES : "saved by"
+    PLACES ||--o{ PLACE_SEASONS : "has seasons"
+    PLACES |o--o{ PLACES : "parent of"
 
-    AI_CHAT_SESSIONS ||--o{ AI_CHAT_MESSAGES : "contains"
-    AI_CHAT_SESSIONS ||--o| ITINERARIES : "saved as"
+    AI_CHAT_SESSIONS |o--o{ AI_CHAT_MESSAGES : "contains"
 ```
 
 ## 2.2 Sơ đồ quan hệ đơn giản (rút gọn cho slide)
@@ -173,14 +225,19 @@ graph TB
 
     ITIN -->|"contains"| ACT["📍 Activities"]
     ITIN -->|"shared via"| COLLAB
+    USER -->|"invites"| COLLAB
     ITIN -->|"cloned from"| ITIN
 
     ACT -->|"references"| PLACE["🏝️ Places"]
     USP -->|"references"| PLACE
+    PLACE -->|"seasonal availability"| SEASON["Place Seasons"]
+    PLACE -->|"parent/sub attractions"| PLACE
 
     SESSION -->|"contains"| MSG["📝 AI Chat Messages"]
-    SESSION -->|"saved as"| ITIN
+    SESSION -->|"saved itinerary"| ITIN
     MSG -->|"about"| ITIN
+    NEIGHBOR["Destination Neighbors"] -.->|"nearby trip rules"| PLACE
+    OUTBOX["Outbox"] -.->|"dispatches realtime events"| ITIN
 
     COMBO["🎁 Combos"] -.->|"contains places from"| PLACE
 
@@ -193,4 +250,7 @@ graph TB
     style SESSION fill:#d1c4e9,stroke:#4527A0,color:#000
     style MSG fill:#f0f4c3,stroke:#827717,color:#000
     style USP fill:#ffcdd2,stroke:#B71C1C,color:#000
+    style SEASON fill:#ffe0b2,stroke:#E65100,color:#000
+    style NEIGHBOR fill:#d7ccc8,stroke:#4E342E,color:#000
+    style OUTBOX fill:#eeeeee,stroke:#424242,color:#000
 ```

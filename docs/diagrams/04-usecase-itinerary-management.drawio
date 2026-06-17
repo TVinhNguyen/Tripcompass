@@ -1,0 +1,104 @@
+<mxfile host="app.diagrams.net" agent="TripCompass Docs">
+  <diagram id="uc-itinerary-management" name="UC-QuanLyLichTrinh">
+    <mxGraphModel dx="1178" dy="648" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="760" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;fontSize=24;fontStyle=1;fontColor=#111827;align=center;verticalAlign=middle;" value="Sơ đồ ca sử dụng - Quản lý lịch trình" vertex="1">
+          <mxGeometry height="40" width="620" x="310" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="system" parent="1" style="swimlane;html=1;rounded=0;startSize=32;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;strokeWidth=2;horizontal=1;" value="uc UC-QuanLyLichTrinh" vertex="1">
+          <mxGeometry height="590" width="880" x="210" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_manage" parent="system" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;shadow=1;" value="Quản lý&#xa;lịch trình" vertex="1">
+          <mxGeometry height="75" width="155" x="100" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="owner" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Chủ lịch trình" vertex="1">
+          <mxGeometry height="110" width="70" x="55" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="editor" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Cộng tác viên&#xa;Editor" vertex="1">
+          <mxGeometry height="120" width="70" x="55" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="viewer" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;fontStyle=1;" value="Cộng tác viên&#xa;Viewer" vertex="1">
+          <mxGeometry height="120" width="70" x="70" y="535" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_auth" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="Đăng nhập /&#xa;xác thực quyền" vertex="1">
+          <mxGeometry height="65" width="155" x="365" y="515" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_view_list" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="Xem danh sách&#xa;lịch trình" vertex="1">
+          <mxGeometry height="65" width="165" x="675" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_view_detail" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="Xem chi tiết&#xa;lịch trình" vertex="1">
+          <mxGeometry height="65" width="165" x="850" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_create" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="Tạo lịch trình" vertex="1">
+          <mxGeometry height="65" width="165" x="675" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_update" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="Cập nhật thông tin&#xa;lịch trình" vertex="1">
+          <mxGeometry height="65" width="165" x="850" y="415" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_delete" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="Xóa lịch trình" vertex="1">
+          <mxGeometry height="65" width="165" x="675" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_publish" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="Publish lịch trình&#xa;công khai" vertex="1">
+          <mxGeometry height="65" width="165" x="850" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_activity" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="Quản lý hoạt động&#xa;trong lịch trình" vertex="1">
+          <mxGeometry height="70" width="165" x="365" y="165" as="geometry" />
+        </mxCell>
+        <mxCell id="uc_collab" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;fontColor=#111827;shadow=1;" value="Mời / quản lý&#xa;cộng tác viên" vertex="1">
+          <mxGeometry height="70" width="165" x="520" y="245" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_owner_manage" edge="1" parent="1" source="owner" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_manage" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_editor_manage" edge="1" parent="1" source="editor" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_manage" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_viewer_detail" edge="1" parent="1" source="viewer" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_view_detail" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_owner_collab" edge="1" parent="1" source="owner" style="endArrow=none;html=1;rounded=0;strokeColor=#111827;strokeWidth=2;" target="uc_collab" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc_manage_auth" edge="1" parent="1" source="uc_manage" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_auth" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc_detail_auth" edge="1" parent="1" source="uc_view_detail" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_auth" value="«include»">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="890" y="545" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ext_view_list" edge="1" parent="1" source="uc_view_list" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_manage" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_view_detail" edge="1" parent="1" source="uc_view_detail" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_manage" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_create" edge="1" parent="1" source="uc_create" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_manage" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_update" edge="1" parent="1" source="uc_update" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_manage" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_delete" edge="1" parent="1" source="uc_delete" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_manage" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_publish" edge="1" parent="1" source="uc_publish" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_manage" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_activity" edge="1" parent="1" source="uc_activity" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_manage" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_collab" edge="1" parent="1" source="uc_collab" style="endArrow=open;html=1;rounded=0;dashed=1;strokeColor=#111827;fontColor=#111827;endFill=0;" target="uc_manage" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="note" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#f59e0b;fontColor=#111827;" value="Ghi chú: Owner có toàn quyền quản lý lịch trình. Editor được xem và chỉnh sửa hoạt động. Viewer chỉ xem lịch trình được chia sẻ." vertex="1">
+          <mxGeometry height="36" width="760" x="260" y="700" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
