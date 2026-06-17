@@ -59,14 +59,16 @@ def _normalise_op(raw: object) -> dict | None:
     if op not in _VALID_OPS:
         return None
 
-    if op == "delete":
-        aid = raw.get("activity_id")
-        return {"op": "delete", "activity_id": str(aid)} if aid else None
-
-    if op == "update":
-        aid = raw.get("activity_id")
+    # The itinerary context labels each activity `id`; small models often echo
+    # that key instead of the op's `activity_id`. Accept either so a correct
+    # reference isn't dropped (an update/delete with no id silently produced an
+    # empty ops list → no preview card on the FE).
+    if op in ("delete", "update"):
+        aid = raw.get("activity_id") or raw.get("id")
         if not aid:
             return None
+        if op == "delete":
+            return {"op": "delete", "activity_id": str(aid)}
         out = {"op": "update", "activity_id": str(aid)}
         _copy_optional_fields(raw, out)
         # An update that changes nothing is a no-op — drop it.
@@ -78,6 +80,13 @@ def _normalise_op(raw: object) -> dict | None:
     if "title" not in out or "day_number" not in out:
         return None  # an add needs at least a title + day to be actionable
     out.setdefault("category", "ACTIVITY")
+    # When the agent grounded the suggestion in a real DB place (via the place
+    # lookup tools), it passes that place's id — thread it so the created
+    # activity links to the Place (detail page, location, coords) instead of
+    # being free text. The backend validates it exists.
+    pid = raw.get("place_id")
+    if isinstance(pid, str) and pid.strip():
+        out["place_id"] = pid.strip()
     return out
 
 
@@ -91,9 +100,13 @@ async def edit_itinerary(ops: list[dict]) -> str:
     Tham chiếu hoạt động cần sửa/xoá bằng activity_id có trong dữ liệu lịch trình.
 
     Mỗi phần tử trong ops:
-      - {"op":"add","day_number":N,"title":"...","category":"FOOD|ATTRACTION|TRANSPORT|STAY|ACTIVITY","start_time":"HH:MM","estimated_cost":int,"notes":"..."}
+      - {"op":"add","day_number":N,"title":"...","category":"FOOD|ATTRACTION|TRANSPORT|STAY|ACTIVITY","start_time":"HH:MM","estimated_cost":int,"notes":"...","place_id":"<id từ kết quả tra cứu địa điểm nếu có>"}
       - {"op":"update","activity_id":"...", + các trường cần đổi}
       - {"op":"delete","activity_id":"..."}
+
+    activity_id: dùng đúng giá trị `id` của hoạt động trong dữ liệu lịch trình.
+    place_id (chỉ cho "add"): nếu địa điểm mới lấy từ kết quả tra cứu địa điểm/quán ăn,
+    truyền `id` của nó vào đây để hoạt động liên kết với địa điểm thật.
     """
     if not isinstance(ops, list):
         return json.dumps({"success": False, "error": "ops must be a list", "ops": []}, ensure_ascii=False)

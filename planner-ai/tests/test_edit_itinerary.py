@@ -48,6 +48,28 @@ def test_delete_requires_id():
     assert _normalise_op({"op": "delete"}) is None
 
 
+def test_id_accepted_as_alias_for_activity_id():
+    # The itinerary context labels activities `id`; small models echo that key.
+    # Both update and delete must accept it so the op isn't silently dropped.
+    assert _normalise_op({"op": "update", "id": "a1", "start_time": "09:30"}) == {
+        "op": "update", "activity_id": "a1", "start_time": "09:30",
+    }
+    assert _normalise_op({"op": "delete", "id": "a2"}) == {"op": "delete", "activity_id": "a2"}
+    # Explicit activity_id still wins / works.
+    assert _normalise_op({"op": "delete", "activity_id": "a3"}) == {"op": "delete", "activity_id": "a3"}
+
+
+def test_add_threads_place_id_when_present():
+    out = _normalise_op({
+        "op": "add", "title": "Du thuyền sông Hàn", "day_number": 2,
+        "place_id": " 11111111-1111-1111-1111-111111111111 ",
+    })
+    assert out["place_id"] == "11111111-1111-1111-1111-111111111111"
+    # Absent / blank place_id → key omitted (free-text activity).
+    assert "place_id" not in _normalise_op({"op": "add", "title": "X", "day_number": 1})
+    assert "place_id" not in _normalise_op({"op": "add", "title": "X", "day_number": 1, "place_id": "  "})
+
+
 def test_unknown_op_dropped():
     assert _normalise_op({"op": "frobnicate", "activity_id": "a1"}) is None
     assert _normalise_op("not a dict") is None
