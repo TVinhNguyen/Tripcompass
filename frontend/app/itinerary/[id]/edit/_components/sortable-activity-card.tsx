@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, MapPin, Sparkles, Trash2 } from "lucide-react";
+import { GripVertical, Info, MapPin, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatVND } from "@/lib/format";
 import type { Activity } from "../_lib/types";
@@ -116,13 +116,31 @@ export function SortableActivityCard({
               : <span className="text-[#b8b1a6] italic">Miễn phí</span>
             }
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="p-1 text-[#b8b1a6] hover:text-[#c94a4a] hover:bg-[#f5ecec] rounded transition opacity-0 group-hover:opacity-100"
-            aria-label="Xóa"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            {/* DB-backed places get a link to their full detail page. Stops
+                propagation so it doesn't open the edit modal; new tab keeps
+                the editor (and any unsaved drag state) intact. */}
+            {activity.placeId && (
+              <a
+                href={`/places/${activity.placeId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="p-1 text-[#b8b1a6] hover:text-[#3d5a3d] hover:bg-[#eef2ee] rounded transition opacity-0 group-hover:opacity-100"
+                title="Xem chi tiết địa điểm"
+                aria-label="Xem chi tiết địa điểm"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </a>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onRemove(); }}
+              className="p-1 text-[#b8b1a6] hover:text-[#c94a4a] hover:bg-[#f5ecec] rounded transition opacity-0 group-hover:opacity-100"
+              aria-label="Xóa"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

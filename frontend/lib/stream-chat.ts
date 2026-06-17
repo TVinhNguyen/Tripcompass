@@ -3,7 +3,7 @@
 // Source of truth: docs/integration/06-FRONTEND-INFRA.md §5
 // =============================================================================
 
-import type { GenerateResponse } from "./types";
+import type { EditOp, GenerateResponse } from "./types";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL!;
 
@@ -26,6 +26,7 @@ export type StreamHandlers = {
     fullText: string,
     plan?: GenerateResponse | null,
     toolCalls?: string[],
+    editOps?: EditOp[] | null,
   ) => void;
   /** Called on stream-level or parse error */
   onError?: (msg: string) => void;
@@ -47,6 +48,7 @@ type SseEvent =
       full_text?: string;
       plan?: GenerateResponse | null;
       tool_calls?: string[];
+      edit_ops?: EditOp[] | null;
     }
   | { type: "error"; message?: string };
 
@@ -157,6 +159,7 @@ export async function streamChat(
               evt.full_text ?? "",
               evt.plan,
               evt.tool_calls,
+              evt.edit_ops,
             );
             break;
           case "error":

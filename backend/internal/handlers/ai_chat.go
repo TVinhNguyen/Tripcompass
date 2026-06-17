@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 	"tripcompass-backend/internal/models"
+	"tripcompass-backend/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -279,12 +280,24 @@ func (h *AIChatHandler) loadItineraryContext(c *gin.Context, userID uuid.UUID, r
 		return nil, false
 	}
 
+	// The AI may propose edits via edit_itinerary; the FE applies them through
+	// the activity write endpoints. Gate the context on the SAME permission
+	// those endpoints use (owner OR accepted EDITOR collaborator) so the
+	// assistant can edit exactly when the user can — not owner-only. Viewers
+	// (and non-collaborators) get ErrForbidden → no context. CheckEditAccess
+	// also returns ErrNotFound for a missing itinerary; handleServiceError maps
+	// both to the right status without leaking existence to outsiders.
+	if err := services.CheckEditAccess(h.db.WithContext(c.Request.Context()), rawID, userID.String()); err != nil {
+		handleServiceError(c, err)
+		return nil, false
+	}
+
 	var itinerary models.Itinerary
 	err = h.db.WithContext(c.Request.Context()).
 		Preload("Activities", func(db *gorm.DB) *gorm.DB {
 			return db.Order("day_number ASC, order_index ASC").Preload("Place")
 		}).
-		Where("id = ? AND owner_id = ?", itineraryID, userID).
+		Where("id = ?", itineraryID).
 		First(&itinerary).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "itinerary not found"})

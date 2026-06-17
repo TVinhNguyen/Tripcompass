@@ -17,7 +17,7 @@ import type { DragEndEvent, DragOverEvent } from "@dnd-kit/core"
 import { toast } from "sonner"
 
 import { apiFetch, ApiError } from "@/lib/api"
-import type { Itinerary, Activity as ApiActivity, WSEvent } from "@/lib/types"
+import type { Itinerary, Activity as ApiActivity, WSEvent, EditOp } from "@/lib/types"
 import { useItineraryWS } from "@/hooks/use-itinerary-ws"
 
 import { isEmptyDaySentinel, type Activity } from "../_lib/types"
@@ -46,6 +46,7 @@ export function fromApiActivity(a: ApiActivity): Activity {
   // doesn't have its own snapshot (AI-planner saves leave lat/lng/notes NULL).
   return {
     id: a.id,
+    placeId: a.place_id,
     day: a.day_number,
     // Backend returns start_time as HH:MM:SS; the editor (and <input type="time">)
     // want HH:MM, so normalize on load.
@@ -212,14 +213,17 @@ export function useEditorState(id: string) {
   // without a template payload — caller passes the partial fields the modal
   // collected. Activity appears at the bottom of the day's list.
   const createActivity = useCallback(
-    async (newAct: Activity) => {
+    async (newAct: Activity, orderIndexOverride?: number) => {
       if (!itinerary) return
       const tempId = newAct.id.startsWith("__new-") ? newAct.id : `__new-${Date.now()}`
       const optimistic: Activity = { ...newAct, id: tempId }
       // Count BEFORE dispatch so order_index reflects the new tail. Exclude
       // the `__empty-day-*` sentinel so the first real activity on a freshly
-      // added day lands at index 0, not 1.
-      const orderIndex = activities.filter(
+      // added day lands at index 0, not 1. Callers that POST several adds to
+      // the same day in one synchronous batch (applyEditOps) pass an explicit
+      // override — the `activities` closure is stale between awaits, so relying
+      // on it would give every add the same index and trip uq_activity_order.
+      const orderIndex = orderIndexOverride ?? activities.filter(
         (a) => a.day === optimistic.day && !isEmptyDaySentinel(a),
       ).length
       dispatch({ kind: "addActivity", activity: optimistic })
@@ -246,6 +250,76 @@ export function useEditorState(id: string) {
       }
     },
     [activities, id, itinerary],
+  )
+
+  // ── AI edit ops → existing CRUD path ───────────────────────────────────────
+  // Apply a batch of AI-proposed edits sequentially through the SAME handlers a
+  // human edit uses. Each mutation persists via REST and the backend broadcasts
+  // the WS event, so collaborators see the AI's changes in realtime — no extra
+  // realtime plumbing. Returns the count actually applied.
+  const applyEditOps = useCallback(
+    async (ops: EditOp[]): Promise<number> => {
+      if (!itinerary || ops.length === 0) return 0
+
+      // Running per-day order_index for adds, seeded from the current tail so a
+      // batch of same-day adds gets distinct indices (uq_activity_order).
+      const nextIndexByDay = new Map<number, number>()
+      const takeIndex = (day: number) => {
+        const seed = nextIndexByDay.get(day) ??
+          activities.filter((a) => a.day === day && !isEmptyDaySentinel(a)).length
+        nextIndexByDay.set(day, seed + 1)
+        return seed
+      }
+
+      let applied = 0
+      for (const op of ops) {
+        try {
+          if (op.op === "delete") {
+            await removeActivity(op.activity_id)
+            applied++
+          } else if (op.op === "update") {
+            const current = activities.find((a) => a.id === op.activity_id)
+            if (!current) continue
+            await saveActivity({
+              ...current,
+              title: op.title ?? current.title,
+              type: op.category ? mapApiCategory(op.category) : current.type,
+              time: op.start_time ?? current.time,
+              cost: op.estimated_cost ?? current.cost,
+              description: op.notes ?? current.description,
+              day: op.day_number ?? current.day,
+            })
+            applied++
+          } else if (op.op === "add") {
+            const title = op.title || "Hoạt động mới"
+            await createActivity(
+              {
+                id: `__new-${Date.now()}-${applied}`,
+                day: op.day_number,
+                time: op.start_time ?? "09:00",
+                title,
+                titleEn: title,
+                description: op.notes ?? "",
+                descriptionEn: op.notes ?? "",
+                type: op.category ? mapApiCategory(op.category) : "activity",
+                location: "",
+                duration: 60,
+                cost: op.estimated_cost ?? 0,
+              },
+              takeIndex(op.day_number),
+            )
+            applied++
+          }
+        } catch {
+          // Per-op failures already toast inside the handler; keep going so one
+          // bad op doesn't abort the whole batch.
+        }
+      }
+
+      if (applied > 0) toast.success(`Đã áp dụng ${applied} thay đổi từ AI`)
+      return applied
+    },
+    [activities, itinerary, removeActivity, saveActivity, createActivity],
   )
 
   // ── DnD: drag over (cross-day preview) ─────────────────────────────────────
@@ -425,6 +499,7 @@ export function useEditorState(id: string) {
     removeActivity,
     saveActivity,
     createActivity,
+    applyEditOps,
     handleDragOver,
     handleDragEnd,
     addNewDay,

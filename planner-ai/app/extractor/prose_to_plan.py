@@ -182,6 +182,21 @@ async def prose_to_plan(
         if db_destinations:
             effective_destination = Counter(db_destinations).most_common(1)[0][0]
 
+            # The first pass ran without a destination scope (none was known up
+            # front), so the whole-table fuzzy search can let a same-keyword
+            # place in another city outrank the right one — e.g. "Bán đảo Sơn
+            # Trà" matches "Ba Trai Dao" (Đảo Cát Bà, sim .47) over "Son Tra
+            # Beach" (Đà Nẵng, .43). Now that the matches reveal the plan's
+            # dominant city, re-resolve scoped to it and prefer those matches;
+            # fall back to a first-pass hit only for names the scoped pass can't
+            # find (legitimate neighbouring-area places).
+            if resolution_scope is None:
+                scoped = await resolve_places(all_names, destination=effective_destination)
+                resolved = {
+                    name: (scoped.get(name) or row)
+                    for name, row in resolved.items()
+                }
+
     if not effective_destination and tool_destination:
         effective_destination = _canonicalise_destination(tool_destination)
 

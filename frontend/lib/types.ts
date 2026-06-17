@@ -272,6 +272,32 @@ export type GenerateResponse = {
 // Planner-AI Chat
 // ---------------------------------------------------------------------------
 
+// Granular itinerary-edit proposals from the AI assistant (edit_itinerary tool).
+// The FE previews these and, on user confirm, applies each through the same
+// REST + WebSocket path a human edit uses. `category` mirrors the activity
+// category enum (FOOD | ATTRACTION | TRANSPORT | STAY | ACTIVITY).
+export type EditOp =
+  | {
+      op: "add";
+      day_number: number;
+      title: string;
+      category?: string;
+      start_time?: string;
+      estimated_cost?: number;
+      notes?: string;
+    }
+  | {
+      op: "update";
+      activity_id: string;
+      title?: string;
+      category?: string;
+      start_time?: string;
+      estimated_cost?: number;
+      notes?: string;
+      day_number?: number;
+    }
+  | { op: "delete"; activity_id: string };
+
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;

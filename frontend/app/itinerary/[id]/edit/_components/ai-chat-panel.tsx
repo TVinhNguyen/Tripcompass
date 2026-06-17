@@ -10,7 +10,9 @@ import { PlanPreviewCard } from "@/components/plan-preview-card";
 import { streamChat } from "@/lib/stream-chat";
 import { getToolLabel } from "@/lib/tool-labels";
 import { cn } from "@/lib/utils";
+import type { EditOp } from "@/lib/types";
 import type { ChatMessage } from "../_lib/types";
+import { EditOpsCard } from "./edit-ops-card";
 
 const QUICK_CHIPS = ["Gợi ý nhà hàng", "Thêm hoạt động", "Tối ưu lịch trình", "Chi phí dự kiến"];
 
@@ -21,6 +23,8 @@ export function AIChatPanel({
   itineraryId,
   mode = "overlay",
   className,
+  onApplyOps,
+  resolveActivityLabel,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -28,7 +32,12 @@ export function AIChatPanel({
   itineraryId?: string;
   mode?: "docked" | "overlay";
   className?: string;
+  /** Apply AI-proposed edit ops to the live itinerary. Returns count applied. */
+  onApplyOps?: (ops: EditOp[]) => Promise<number>;
+  /** Resolve an activity_id to a human label for the edit-ops preview. */
+  resolveActivityLabel?: (activityId: string) => string;
 }) {
+  const [applyingId, setApplyingId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "init",
@@ -99,25 +108,30 @@ export function AIChatPanel({
         });
         setToolRunning((prev) => (prev === "🤔 AI đang suy nghĩ..." ? null : prev));
       },
-      onDone(newSessionId, fullText, plan, toolCalls) {
+      onDone(newSessionId, fullText, plan, toolCalls, editOps) {
         setSessionId(newSessionId);
+        const ops = editOps && editOps.length > 0 ? editOps : null;
         const displayText = fullText.trim() || (
           plan
             ? "Mình đã tạo được lịch trình nháp. Bạn có thể xem nhanh bên dưới và lưu lại nếu phù hợp."
-            : "Mình đã xử lý xong yêu cầu của bạn."
+            : ops
+              ? "Mình đề xuất các thay đổi dưới đây. Bạn xem rồi bấm Áp dụng nếu phù hợp nhé."
+              : "Mình đã xử lý xong yêu cầu của bạn."
         );
         setMessages((prev) =>
           prev.map((m) =>
             m.id === aiMsgId
-              ? m.error && !displayText && !plan
+              ? m.error && !displayText && !plan && !ops
                 ? { ...m, streaming: false }
                 : {
                     ...m,
                     content: displayText || "AI đã kết thúc phản hồi nhưng không trả về nội dung. Vui lòng thử lại.",
                     plan: plan ?? null,
                     toolCalls: toolCalls ?? [],
+                    editOps: ops,
+                    editOpsStatus: ops ? "pending" : undefined,
                     streaming: false,
-                    error: m.error && !plan,
+                    error: m.error && !plan && !ops,
                   }
               : m,
           ),
@@ -137,6 +151,27 @@ export function AIChatPanel({
         setToolRunning(null);
       },
     });
+  };
+
+  const applyOps = async (messageId: string, ops: EditOp[]) => {
+    if (!onApplyOps || applyingId) return;
+    setApplyingId(messageId);
+    try {
+      const applied = await onApplyOps(ops);
+      if (applied > 0) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, editOpsStatus: "applied" } : m)),
+        );
+      }
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
+  const dismissOps = (messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, editOpsStatus: "dismissed" } : m)),
+    );
   };
 
   if (!isOpen) return null;
@@ -237,6 +272,16 @@ export function AIChatPanel({
                 </button>
               )}
               {m.role === "assistant" && m.plan && <PlanPreviewCard plan={m.plan} />}
+              {m.role === "assistant" && m.editOps && m.editOps.length > 0 && (
+                <EditOpsCard
+                  ops={m.editOps}
+                  status={m.editOpsStatus ?? "pending"}
+                  busy={applyingId === m.id}
+                  onApply={() => applyOps(m.id, m.editOps!)}
+                  onDismiss={() => dismissOps(m.id)}
+                  resolveLabel={resolveActivityLabel}
+                />
+              )}
             </div>
           </div>
         ))}
