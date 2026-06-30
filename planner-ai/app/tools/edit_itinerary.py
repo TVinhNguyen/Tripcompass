@@ -25,8 +25,13 @@ _VALID_OPS = {"add", "update", "delete"}
 
 
 def _copy_optional_fields(raw: dict, out: dict) -> None:
-    """Copy the editable fields that survive validation from raw → out."""
-    title = raw.get("title")
+    """Copy the editable fields that survive validation from raw → out.
+
+    LLMs frequently return numbers as strings (``"day_number": "3"``) or use
+    alternate key names (``day`` instead of ``day_number``).  We coerce to the
+    canonical types so the normaliser doesn't silently drop valid ops.
+    """
+    title = raw.get("title") or raw.get("name")
     if isinstance(title, str) and title.strip():
         out["title"] = title.strip()
 
@@ -38,17 +43,50 @@ def _copy_optional_fields(raw: dict, out: dict) -> None:
     if isinstance(start, str) and start.strip():
         out["start_time"] = start.strip()[:5]  # HH:MM
 
-    day = raw.get("day_number")
-    if isinstance(day, int) and not isinstance(day, bool) and day >= 1:
+    day = raw.get("day_number") or raw.get("day")
+    day = _to_positive_int(day)
+    if day is not None:
         out["day_number"] = day
 
-    cost = raw.get("estimated_cost")
-    if isinstance(cost, (int, float)) and not isinstance(cost, bool) and cost >= 0:
-        out["estimated_cost"] = int(cost)
+    cost = raw.get("estimated_cost") or raw.get("cost") or raw.get("price")
+    cost = _to_non_negative_number(cost)
+    if cost is not None:
+        out["estimated_cost"] = cost
 
-    notes = raw.get("notes")
+    notes = raw.get("notes") or raw.get("description")
     if isinstance(notes, str) and notes.strip():
         out["notes"] = notes.strip()
+
+
+def _to_positive_int(value: object) -> int | None:
+    """Coerce value to a positive int, accepting strings and floats."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 1 else None
+    if isinstance(value, float) and value == int(value):
+        return int(value) if int(value) >= 1 else None
+    if isinstance(value, str):
+        try:
+            n = int(value.strip())
+            return n if n >= 1 else None
+        except ValueError:
+            return None
+    return None
+
+
+def _to_non_negative_number(value: object) -> int | None:
+    """Coerce value to a non-negative int, accepting strings and floats."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value >= 0 else None
+    if isinstance(value, str):
+        try:
+            return max(0, int(float(value.strip())))
+        except ValueError:
+            return None
+    return None
 
 
 def _normalise_op(raw: object) -> dict | None:
