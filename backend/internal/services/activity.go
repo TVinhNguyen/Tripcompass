@@ -1,7 +1,7 @@
 package services
 
 import (
-	"errors"
+	"fmt"
 	"tripcompass-backend/internal/apperror"
 	"tripcompass-backend/internal/models"
 
@@ -74,42 +74,62 @@ func (s *ActivityService) checkActivityEditAccess(activityID, userID string) (*m
 	return &act, nil
 }
 
+// resolveOptionalPlaceID parses and validates an optional place_id string.
+// Returns nil when the input is nil or empty ("unlinked" activity).
+func (s *ActivityService) resolveOptionalPlaceID(raw *string) (*uuid.UUID, error) {
+	if raw == nil || *raw == "" {
+		return nil, nil
+	}
+	parsed, err := uuid.Parse(*raw)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid place_id", apperror.ErrInvalidInput)
+	}
+	var count int64
+	if err := s.db.Model(&models.Place{}).Where("id = ?", parsed).Count(&count).Error; err != nil {
+		return nil, err
+	}
+	if count == 0 {
+		return nil, fmt.Errorf("%w: place not found", apperror.ErrNotFound)
+	}
+	return &parsed, nil
+}
+
 func (s *ActivityService) Create(userID string, input CreateActivityInput) (*models.Activity, error) {
 	itID, err := uuid.Parse(input.ItineraryID)
 	if err != nil {
-		return nil, errors.New("invalid itinerary_id")
+		return nil, fmt.Errorf("%w: invalid itinerary_id", apperror.ErrInvalidInput)
 	}
 
-	var placeUUID *uuid.UUID
-	if input.PlaceID != nil {
-		pid := *input.PlaceID
-		if pid != "" {
-			parsedPlaceID, err := uuid.Parse(pid)
-			if err != nil {
-				return nil, errors.New("invalid place_id")
-			}
-
-			var count int64
-			if err := s.db.Model(&models.Place{}).Where("id = ?", parsedPlaceID).Count(&count).Error; err != nil {
-				return nil, err
-			}
-			if count == 0 {
-				return nil, errors.New("place not found")
-			}
-			placeUUID = &parsedPlaceID
-		}
+	placeUUID, err := s.resolveOptionalPlaceID(input.PlaceID)
+	if err != nil {
+		return nil, err
 	}
 
-	// Verify edit access (owner or EDITOR collaborator)
 	if err := CheckEditAccess(s.db, itID.String(), userID); err != nil {
 		return nil, err
+	}
+
+	// Auto-compute order_index: use the client hint when available, fall back
+	// to MAX(order_index)+1 if the slot is already taken. Prevents unique
+	// constraint violations (uq_activity_order) when frontend state is stale.
+	orderIndex := input.OrderIndex
+	var taken int64
+	s.db.Model(&models.Activity{}).
+		Where("itinerary_id = ? AND day_number = ? AND order_index = ?", itID, input.DayNumber, orderIndex).
+		Count(&taken)
+	if taken > 0 {
+		var maxIdx int
+		s.db.Model(&models.Activity{}).
+			Where("itinerary_id = ? AND day_number = ?", itID, input.DayNumber).
+			Select("COALESCE(MAX(order_index), -1)").Scan(&maxIdx)
+		orderIndex = maxIdx + 1
 	}
 
 	act := models.Activity{
 		ItineraryID:   itID,
 		PlaceID:       placeUUID,
 		DayNumber:     input.DayNumber,
-		OrderIndex:    input.OrderIndex,
+		OrderIndex:    orderIndex,
 		Title:         input.Title,
 		Category:      input.Category,
 		Lat:           input.Lat,
@@ -138,20 +158,11 @@ func (s *ActivityService) Update(id, userID string, input UpdateActivityInput) (
 		if *input.PlaceID == "" {
 			updates["place_id"] = nil
 		} else {
-			parsedPlaceID, err := uuid.Parse(*input.PlaceID)
+			resolved, err := s.resolveOptionalPlaceID(input.PlaceID)
 			if err != nil {
-				return nil, errors.New("invalid place_id")
-			}
-
-			var count int64
-			if err := s.db.Model(&models.Place{}).Where("id = ?", parsedPlaceID).Count(&count).Error; err != nil {
 				return nil, err
 			}
-			if count == 0 {
-				return nil, errors.New("place not found")
-			}
-
-			updates["place_id"] = parsedPlaceID
+			updates["place_id"] = resolved
 		}
 	}
 	if input.DayNumber != nil {
