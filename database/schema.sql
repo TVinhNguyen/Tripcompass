@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;
 -- Enums
 CREATE TYPE "budget_category" AS ENUM ('BUDGET', 'MODERATE', 'LUXURY');
 
-CREATE TYPE "category" AS ENUM ('FOOD', 'LODGING', 'TRANSPORT', 'ATTRACTION');
+CREATE TYPE "category" AS ENUM ('FOOD', 'LODGING', 'TRANSPORT', 'ATTRACTION', 'ACTIVITY', 'STAY');
 
 CREATE TYPE "provider" AS ENUM ('local', 'google', 'facebook');
 

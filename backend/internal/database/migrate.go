@@ -659,6 +659,38 @@ END $$;`,
 				`).Error
 			},
 		},
+		{
+			// The `category` enum was created with only {FOOD, LODGING, TRANSPORT,
+			// ATTRACTION}, but the editor frontend maps two additional activity
+			// types: "activity" → ACTIVITY and "accommodation" → STAY. Any POST
+			// /activities containing either value hits a Postgres 22P02 error
+			// ("invalid input value for enum category") which the handler surfaces
+			// as a 500. Adding the missing values to the enum fixes it at the
+			// source.
+			//
+			// ADD VALUE is idempotent in Postgres 12+ (IF NOT EXISTS).
+			// It cannot run inside a multi-statement transaction, so each ADD VALUE
+			// is a separate Exec call.
+			ID: "202606300021_extend_category_enum",
+			Migrate: func(tx *gorm.DB) error {
+				sqls := []string{
+					`ALTER TYPE category ADD VALUE IF NOT EXISTS 'ACTIVITY';`,
+					`ALTER TYPE category ADD VALUE IF NOT EXISTS 'STAY';`,
+				}
+				for _, q := range sqls {
+					if err := tx.Exec(q).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Rollback: func(tx *gorm.DB) error {
+				// PostgreSQL does not support DROP VALUE from enum types.
+				// A rollback would require recreating the type, which is not safe
+				// for a production migration.
+				return nil
+			},
+		},
 	})
 
 	return m.Migrate()
