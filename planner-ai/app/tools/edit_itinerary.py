@@ -94,9 +94,24 @@ def _normalise_op(raw: object) -> dict | None:
     """Validate one op, returning a clean dict or None to drop it."""
     if not isinstance(raw, dict):
         return None
-    op = str(raw.get("op") or "").strip().lower()
+    op = str(raw.get("op") or raw.get("action") or raw.get("type") or "").strip().lower()
+
+    # LLMs frequently omit the "op" key entirely, sending just the fields.
+    # Infer: if there's an activity_id → update (or delete if nothing else),
+    # otherwise → add.
     if op not in _VALID_OPS:
-        return None
+        aid = raw.get("activity_id") or raw.get("id")
+        title = raw.get("title") or raw.get("name")
+        day = raw.get("day_number") or raw.get("day")
+        if aid and not title and not day:
+            op = "delete"
+        elif aid:
+            op = "update"
+        elif title or day:
+            op = "add"
+        else:
+            return None
+        logger.debug(f"[edit_itinerary] inferred op={op!r} (missing 'op' key)")
 
     # The itinerary context labels each activity `id`; small models often echo
     # that key instead of the op's `activity_id`. Accept either so a correct
