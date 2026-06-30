@@ -17,6 +17,7 @@ shapes:
 import json
 
 from langchain_core.tools import tool
+from loguru import logger
 
 # Mirrors the FE API_CATEGORY values (frontend .../edit/_lib/constants.tsx) and
 # the schema_travel.category enum the activity endpoints accept.
@@ -147,6 +148,15 @@ async def edit_itinerary(ops: list[dict]) -> str:
     truyền `id` của nó vào đây để hoạt động liên kết với địa điểm thật.
     """
     if not isinstance(ops, list):
+        logger.warning(f"[edit_itinerary] ops is not a list: {type(ops)} — {ops!r}")
         return json.dumps({"success": False, "error": "ops must be a list", "ops": []}, ensure_ascii=False)
-    normalised = [op for op in (_normalise_op(o) for o in ops) if op]
+    logger.info(f"[edit_itinerary] received {len(ops)} raw op(s): {json.dumps(ops, ensure_ascii=False, default=str)}")
+    normalised = []
+    for i, raw_op in enumerate(ops):
+        result = _normalise_op(raw_op)
+        if result:
+            normalised.append(result)
+        else:
+            logger.warning(f"[edit_itinerary] op[{i}] DROPPED: {json.dumps(raw_op, ensure_ascii=False, default=str)}")
+    logger.info(f"[edit_itinerary] returning {len(normalised)} normalised op(s): {json.dumps(normalised, ensure_ascii=False)}")
     return json.dumps({"success": True, "ops": normalised}, ensure_ascii=False)
