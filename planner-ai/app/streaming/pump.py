@@ -176,15 +176,19 @@ async def stream_chat_response(
                     output = data.get("output", "")
                     if hasattr(output, "content"):
                         output = output.content
+                    logger.info(f"[stream] edit_itinerary raw output type={type(output).__name__}: {str(output)[:500]}")
                     if isinstance(output, dict):
                         output = json.dumps(output, ensure_ascii=False)
                     try:
                         parsed = json.loads(str(output))
                     except (ValueError, TypeError):
                         parsed = None
+                        logger.warning(f"[stream] edit_itinerary parse failed for: {str(output)[:300]}")
                     if isinstance(parsed, dict) and parsed.get("ops"):
                         edit_ops = parsed["ops"]
                         logger.info(f"[stream] captured {len(edit_ops)} edit op(s) from edit_itinerary")
+                    elif parsed:
+                        logger.warning(f"[stream] edit_itinerary parsed but no ops: {parsed}")
 
             # ── LLM token streaming ────────────────────────────────────
             elif kind == "on_chat_model_stream":
